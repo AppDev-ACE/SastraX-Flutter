@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import 'package:confetti/confetti.dart';
 import 'package:provider/provider.dart';
 import '../services/ApiEndpoints.dart';
+import 'FeeDuePage.dart';
 import 'subject_wise_attendance.dart';
 import '../Components/timetable_widget.dart';
 import '../models/theme_model.dart';
@@ -429,12 +430,21 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   Widget _buildGpaFeeTile(ThemeProvider theme) {
     return GestureDetector(
-      onTap: () => setState(() => showFeeDue = !showFeeDue),
+      onDoubleTap: () => setState(() => showFeeDue = !showFeeDue),
+      onTap: () {
+        // Navigate to FeeDuePage only if the container is showing the FeeDueCard
+        if (showFeeDue) {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => FeeDuePage()),
+          );
+        }
+      },
       child: AnimatedSwitcher(
         duration: const Duration(milliseconds: 300),
         child: SizedBox(
           height: 180, // Use the same height as the Assignments container
-          width: 180,  // Use the same width as the Assignments container
+          width: 180, // Use the same width as the Assignments container
           key: ValueKey(showFeeDue), // Important for AnimatedSwitcher to identify children
           child: showFeeDue
               ? FeeDueCard(
