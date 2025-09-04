@@ -324,7 +324,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   ),
                 ),
                 const SizedBox(height: 16),
-
                 // Attendance Chart
                 NeonContainer(
                   borderColor: theme.isDarkMode
@@ -447,7 +446,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           width: 180, // Use the same width as the Assignments container
           key: ValueKey(showFeeDue), // Important for AnimatedSwitcher to identify children
           child: showFeeDue
-              ? FeeDueCard(
+              ? const FeeDueCard(
             key: ValueKey('fee'),
             feeDue: 12000, // Example fee, replace with a dynamic value if available
           )
