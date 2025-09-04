@@ -1,68 +1,44 @@
 import 'package:flutter/material.dart';
+import 'package:percent_indicator/circular_percent_indicator.dart';
 
-class SgpaCalculatorPage extends StatefulWidget {
-  const SgpaCalculatorPage({super.key});
+// Class name changed from CreativeSgpaCalculatorPage to SgpaCalculator
+class SgpaCalculator extends StatefulWidget {
+  const SgpaCalculator({super.key});
 
   @override
-  State<SgpaCalculatorPage> createState() => _SgpaCalculatorPageState();
+  // State class name updated to match
+  State<SgpaCalculator> createState() => _SgpaCalculatorState();
 }
 
-class _SgpaCalculatorPageState extends State<SgpaCalculatorPage> {
+// State class name changed from _CreativeSgpaCalculatorPageState to _SgpaCalculatorState
+class _SgpaCalculatorState extends State<SgpaCalculator> {
+  // Same grade points map
   final Map<String, double> _gradePoints = {
-    'S': 10.0,
-    'A+': 9.0,
-    'A': 8.0,
-    'B+': 7.0,
-    'B': 6.0,
-    'C': 5.0,
-    'D': 4.0,
-    'F': 0.0,
-    'N': 0.0,
+    'S': 10.0, 'A+': 9.0, 'A': 8.0, 'B+': 7.0,
+    'B': 6.0, 'C': 5.0, 'D': 4.0, 'F': 0.0, 'N': 0.0,
   };
 
+  // State variables
   List<Map<String, dynamic>> _subjects = [];
   double _sgpa = 0.0;
 
   @override
   void initState() {
     super.initState();
-    _subjects = List.generate(5, (_) => {'credits': 0, 'grade': ''});
+    // Start with 4 subjects by default
+    _subjects = List.generate(4, (_) => {'credits': 3.0, 'grade': 'A'});
+    _calculateSgpa(); // Calculate initial SGPA
   }
 
-  void _addSubject() {
-    setState(() {
-      _subjects.add({'credits': 0, 'grade': ''});
-    });
-  }
-
-  void _removeSubject(int index) {
-    setState(() {
-      _subjects.removeAt(index);
-      _calculateSgpa();
-    });
-  }
-
-  void _updateCredit(int index, int newCredit) {
-    setState(() {
-      _subjects[index]['credits'] = newCredit;
-      _calculateSgpa();
-    });
-  }
-
-  void _updateGrade(int index, String newGrade) {
-    setState(() {
-      _subjects[index]['grade'] = newGrade;
-      _calculateSgpa();
-    });
-  }
+  // --- Core Logic Methods (largely the same) ---
 
   void _calculateSgpa() {
     double totalGradePoints = 0;
-    int totalCredits = 0;
+    double totalCredits = 0;
 
     for (var subject in _subjects) {
-      if (subject['credits'] != 0 && subject['grade'].isNotEmpty) {
-        final credit = subject['credits'] as int;
+      if (subject['credits'] > 0 && subject['grade'] != null) {
+        final credit = subject['credits'] as double;
         final grade = subject['grade'] as String;
         final gradePoint = _gradePoints[grade] ?? 0.0;
         totalGradePoints += credit * gradePoint;
@@ -75,164 +51,175 @@ class _SgpaCalculatorPageState extends State<SgpaCalculatorPage> {
     });
   }
 
-  Widget _buildSubjectCard(BuildContext context, int index) {
-    final theme = Theme.of(context);
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
-      margin: const EdgeInsets.symmetric(vertical: 8),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.secondary.withOpacity(0.2),
-        borderRadius: BorderRadius.circular(15),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Text(
-              'Subject ${index + 1} ->',
-              style: theme.textTheme.bodyMedium,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-          const SizedBox(width: 10),
-          _buildPickerBox(
-            context,
-            text: _subjects[index]['credits'] == 0
-                ? 'Credits'
-                : _subjects[index]['credits'].toString(),
-            onTap: () => _showCreditPicker(index),
-          ),
-          const SizedBox(width: 10),
-          _buildPickerBox(
-            context,
-            text: _subjects[index]['grade'].isEmpty
-                ? 'Grades'
-                : _subjects[index]['grade'],
-            onTap: () => _showGradePicker(index),
-          ),
-          const SizedBox(width: 10),
-          InkWell(
-            onTap: () => _removeSubject(index),
-            child: Icon(Icons.close, color: theme.colorScheme.onSurface),
-          ),
-        ],
-      ),
-    );
+  void _addSubject() {
+    setState(() {
+      _subjects.add({'credits': 3.0, 'grade': 'A'});
+    });
+    _calculateSgpa();
   }
 
-  Widget _buildPickerBox(BuildContext context,
-      {required String text, required VoidCallback onTap}) {
-    final theme = Theme.of(context);
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        height: 45,
-        width: 70,
-        decoration: BoxDecoration(
-          color: theme.colorScheme.primary.withOpacity(0.3),
-          borderRadius: BorderRadius.circular(10),
-          border:
-          Border.all(color: theme.colorScheme.secondary.withOpacity(0.5)),
-        ),
-        alignment: Alignment.center,
-        child: Text(text, style: theme.textTheme.bodyMedium),
-      ),
-    );
+  void _removeSubject(int index) {
+    setState(() {
+      _subjects.removeAt(index);
+    });
+    _calculateSgpa();
   }
 
-  Future<void> _showCreditPicker(int index) async {
-    final selectedCredit = await showDialog<int>(
-      context: context,
-      builder: (BuildContext context) {
-        final theme = Theme.of(context);
-        return AlertDialog(
-          backgroundColor: theme.dialogBackgroundColor,
-          title: Text('Select Credits', style: theme.textTheme.bodyLarge),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [1, 2, 3, 4, 5, 6]
-                .map((credit) => ListTile(
-              title: Text(credit.toString(),
-                  style: theme.textTheme.bodyMedium),
-              onTap: () => Navigator.of(context).pop(credit),
-            ))
-                .toList(),
-          ),
-        );
-      },
-    );
-    if (selectedCredit != null) _updateCredit(index, selectedCredit);
+  void _resetAll() {
+    setState(() {
+      _subjects = List.generate(4, (_) => {'credits': 3.0, 'grade': 'A'});
+    });
+    _calculateSgpa();
   }
 
-  Future<void> _showGradePicker(int index) async {
-    final selectedGrade = await showDialog<String>(
-      context: context,
-      builder: (BuildContext context) {
-        final theme = Theme.of(context);
-        return AlertDialog(
-          backgroundColor: theme.dialogBackgroundColor,
-          title: Text('Select Grade', style: theme.textTheme.bodyLarge),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: _gradePoints.keys
-                .map((grade) => ListTile(
-              title: Text(grade, style: theme.textTheme.bodyMedium),
-              onTap: () => Navigator.of(context).pop(grade),
-            ))
-                .toList(),
-          ),
-        );
-      },
-    );
-    if (selectedGrade != null) _updateGrade(index, selectedGrade);
+  void _updateSubject(int index, {double? newCredit, String? newGrade}) {
+    setState(() {
+      if (newCredit != null) _subjects[index]['credits'] = newCredit;
+      if (newGrade != null) _subjects[index]['grade'] = newGrade;
+    });
+    _calculateSgpa();
   }
+
+  // --- UI Builder Methods ---
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     return Scaffold(
       appBar: AppBar(
-        title: Text('SGPA Calculator', style: theme.textTheme.titleLarge),
+        // Updated AppBar title for simplicity
+        title: const Text('SGPA Calculator'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            onPressed: _resetAll,
+            tooltip: 'Reset All',
+          ),
+        ],
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          children: [
+            _buildSgpaDisplay(),
+            const SizedBox(height: 24),
+            // Use AnimatedList for smoother add/remove animations in a real app
+            ..._subjects.asMap().entries.map((entry) {
+              int index = entry.key;
+              return _buildSubjectCard(index);
+            }).toList(),
+          ],
+        ),
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: _addSubject,
+        icon: const Icon(Icons.add),
+        label: const Text('Add Subject'),
+      ),
+    );
+  }
+
+  /// Builds the main SGPA display gauge.
+  Widget _buildSgpaDisplay() {
+    final theme = Theme.of(context);
+    return CircularPercentIndicator(
+      radius: 90.0,
+      lineWidth: 12.0,
+      percent: _sgpa / 10.0,
+      center: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Text(
+            _sgpa.toStringAsFixed(2),
+            style: theme.textTheme.displayMedium?.copyWith(
+              fontWeight: FontWeight.bold,
+              color: theme.colorScheme.primary,
+            ),
+          ),
+          Text(
+            'Your SGPA',
+            style: theme.textTheme.bodyMedium,
+          ),
+        ],
+      ),
+      progressColor: theme.colorScheme.primary,
+      backgroundColor: theme.colorScheme.primary.withOpacity(0.1),
+      circularStrokeCap: CircularStrokeCap.round,
+      animation: true,
+      animationDuration: 800,
+    );
+  }
+
+  /// Builds a card for a single subject with interactive controls.
+  Widget _buildSubjectCard(int index) {
+    final theme = Theme.of(context);
+    final subject = _subjects[index];
+
+    return Card(
+      elevation: 2,
+      margin: const EdgeInsets.symmetric(vertical: 8.0),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('SGPA Predictor', style: theme.textTheme.headlineSmall),
-            const SizedBox(height: 5),
-            Text(
-              'Calculate your SGPA based on credits and expected grade.',
-              style: theme.textTheme.bodySmall,
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Subject ${index + 1}',
+                  style: theme.textTheme.titleMedium
+                      ?.copyWith(fontWeight: FontWeight.bold),
+                ),
+                IconButton(
+                  icon: Icon(Icons.delete_outline, color: theme.colorScheme.error),
+                  onPressed: () => _removeSubject(index),
+                  tooltip: 'Remove Subject',
+                ),
+              ],
             ),
-            const SizedBox(height: 20),
-            ListView.builder(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              itemCount: _subjects.length,
-              itemBuilder: (context, index) =>
-                  _buildSubjectCard(context, index),
+            const SizedBox(height: 12),
+            // Credit Slider
+            Row(
+              children: [
+                const Icon(Icons.school_outlined, size: 20),
+                const SizedBox(width: 8),
+                Text('Credits: ${subject['credits'].toInt()}', style: theme.textTheme.bodyMedium),
+              ],
             ),
-            const SizedBox(height: 20),
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: theme.colorScheme.secondary.withOpacity(0.2),
-                borderRadius: BorderRadius.circular(15),
-              ),
-              child: Text(
-                'Expected SGPA: ${_sgpa.toStringAsFixed(4)}',
-                textAlign: TextAlign.center,
-                style: theme.textTheme.titleMedium,
-              ),
+            Slider(
+              value: subject['credits'],
+              min: 1.0,
+              max: 6.0,
+              divisions: 5,
+              label: subject['credits'].round().toString(),
+              onChanged: (newCredit) {
+                _updateSubject(index, newCredit: newCredit);
+              },
             ),
-            const SizedBox(height: 20),
-            Center(
-              child: ElevatedButton.icon(
-                onPressed: _addSubject,
-                icon: const Icon(Icons.add),
-                label: const Text('Add subject'),
+            const SizedBox(height: 8),
+            // Grade Dropdown
+            DropdownButtonFormField<String>(
+              value: subject['grade'],
+              decoration: InputDecoration(
+                labelText: 'Grade',
+                prefixIcon: const Icon(Icons.star_border_rounded),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               ),
+              items: _gradePoints.keys.map((String grade) {
+                return DropdownMenuItem<String>(
+                  value: grade,
+                  child: Text(grade),
+                );
+              }).toList(),
+              onChanged: (String? newGrade) {
+                if (newGrade != null) {
+                  _updateSubject(index, newGrade: newGrade);
+                }
+              },
             ),
           ],
         ),

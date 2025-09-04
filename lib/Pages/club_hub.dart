@@ -12,7 +12,7 @@ class ClubHubPage extends StatelessWidget {
     {
       "name": "Association of Computing Engineers (ACE)",
       "logo": "assets/images/ACE-bgless.png",
-      "url": "https://codingclub.example.com"
+      "url": "https://ace-sastra.vercel.app/"
     },
   ];
 

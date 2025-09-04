@@ -1,8 +1,12 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:image_picker/image_picker.dart';
-import 'package:provider/provider.dart';
-import '../models/theme_model.dart';
+import 'package:intl/intl.dart';
+
+
+import 'post_model.dart';
+import 'compose_post_page.dart';
+import 'comments_page.dart';
+
 
 class CommunityPage extends StatefulWidget {
   const CommunityPage({super.key});
@@ -12,285 +16,252 @@ class CommunityPage extends StatefulWidget {
 }
 
 class _CommunityPageState extends State<CommunityPage> {
-  final TextEditingController _postController = TextEditingController();
-
-
-  final List<Map<String, dynamic>> _posts = [
-    {
-      'sender': 'Alice',
-      'handle': '@alice_wonder',
-      'avatarInitial': 'A',
-      'message': 'Hey everyone! Anyone up for a study group tonight? We could cover the last two chapters of calculus.',
-      'time': '15m',
-      'likes': 12,
-      'reposts': 2,
-      'views': 156,
-      'imageFile': null,
-    },
-    {
-      'sender': 'Bob the Builder',
-      'handle': '@bob_builds',
-      'avatarInitial': 'B',
-      'message': 'Just a heads-up, the library just got a new shipment of programming books. Saw some great titles on Flutter and Dart!',
-      'time': '45m',
-      'likes': 34,
-      'reposts': 9,
-      'views': 432,
-      'imageFile': null,
-    },
+  final List<Post> _posts = [
+    Post(
+      sender: 'Alice',
+      handle: '@alice_wonder',
+      avatarInitial: 'A',
+      message: 'Hey everyone! Anyone up for a study group tonight? We could cover the last two chapters of calculus.',
+      timestamp: DateTime.now().subtract(const Duration(minutes: 15)),
+      likes: 12,
+      reposts: 2,
+    ),
+    Post(
+      sender: 'Bob the Builder',
+      handle: '@bob_builds',
+      avatarInitial: 'B',
+      message: 'Just a heads-up, the library just got a new shipment of programming books. Saw some great titles on Flutter and Dart!',
+      timestamp: DateTime.now().subtract(const Duration(hours: 1)),
+      likes: 34,
+      reposts: 9,
+    ),
   ];
 
+  void _navigateToComposePage() async {
+    final newPost = await Navigator.push<Post>(
+      context,
+      MaterialPageRoute(builder: (context) => const ComposePostPage()),
+    );
 
-  Future<XFile?> _pickImage() async {
-    final ImagePicker picker = ImagePicker();
-
-    final XFile? image = await picker.pickImage(source: ImageSource.gallery);
-    return image;
+    if (newPost != null) {
+      setState(() {
+        _posts.insert(0, newPost);
+      });
+    }
   }
 
+  void _navigateToCommentsPage(Post post) async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => CommentsPage(post: post)),
+    );
+    // Refresh the state when returning to update comment/like counts
+    setState(() {});
+  }
 
-  void _openComposePostDialog() {
-    final themeProvider = Provider.of<ThemeProvider>(context, listen: false);
-    XFile? selectedImageFile;
+  void _toggleLike(Post post) {
+    setState(() {
+      if (post.isLiked) {
+        post.likes--;
+        post.isLiked = false;
+      } else {
+        post.likes++;
+        post.isLiked = true;
+      }
+    });
+  }
 
+  void _repost(Post post) {
     showDialog(
       context: context,
-      builder: (context) {
-
-        return StatefulBuilder(
-          builder: (context, setDialogState) {
-            return AlertDialog(
-              backgroundColor: themeProvider.cardBackgroundColor,
-              title: Text('Compose Post', style: TextStyle(color: themeProvider.textColor)),
-              content: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    TextField(
-                      controller: _postController,
-                      autofocus: true,
-                      maxLength: 280,
-                      maxLines: null,
-                      style: TextStyle(color: themeProvider.textColor),
-                      decoration: InputDecoration(
-                        hintText: "What's happening?",
-                        hintStyle: TextStyle(color: themeProvider.textSecondaryColor),
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-
-                    if (selectedImageFile != null)
-                      Stack(
-                        children: [
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(12),
-                            child: Image.file(
-                              File(selectedImageFile!.path),
-                              fit: BoxFit.cover,
-                            ),
-                          ),
-                          Positioned(
-                            top: 4,
-                            right: 4,
-                            child: GestureDetector(
-                              onTap: () {
-                                setDialogState(() {
-                                  selectedImageFile = null;
-                                });
-                              },
-                              child: Container(
-                                padding: const EdgeInsets.all(2),
-                                decoration: const BoxDecoration(
-                                  color: Colors.black54,
-                                  shape: BoxShape.circle,
-                                ),
-                                child: const Icon(Icons.close, color: Colors.white, size: 18),
-                              ),
-                            ),
-                          ),
-                        ],
-                      )
-                  ],
-                ),
-              ),
-              actions: [
-
-                IconButton(
-                  icon: Icon(Icons.photo_library_outlined, color: themeProvider.primaryColor),
-                  onPressed: () async {
-                    final image = await _pickImage();
-                    if (image != null) {
-                      setDialogState(() {
-                        selectedImageFile = image;
-                      });
-                    }
-                  },
-                ),
-                const Spacer(),
-                TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text('Cancel'),
-                ),
-                ElevatedButton(
-                  onPressed: () {
-                    if (_postController.text.trim().isNotEmpty || selectedImageFile != null) {
-                      setState(() {
-                        _posts.insert(0, {
-                          'sender': 'You',
-                          'handle': '@me',
-                          'avatarInitial': 'Y',
-                          'message': _postController.text.trim(),
-                          'time': 'Just now',
-                          'likes': 0,
-                          'reposts': 0,
-                          'views': 0,
-                          'imageFile': selectedImageFile,
-                        });
-                      });
-                      _postController.clear();
-                      Navigator.pop(context);
-                    }
-                  },
-                  child: const Text('Post'),
-                ),
-              ],
-            );
-          },
-        );
-      },
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Consumer<ThemeProvider>(
-      builder: (context, themeProvider, child) {
-        return Scaffold(
-          backgroundColor: themeProvider.backgroundColor,
-          appBar: AppBar(
-            // ### KEY CHANGE IS HERE ###
-            title: Text(
-              'Community',
-              style: TextStyle(
-                // If it's dark mode, use the default theme color (null),
-                // otherwise (in light mode), use blue.
-                color: themeProvider.isDarkMode ? null : Colors.indigo,
-              ),
-            ),
-            backgroundColor: themeProvider.backgroundColor,
-            elevation: 0,
-            scrolledUnderElevation: 1,
+      builder: (context) => AlertDialog(
+        title: const Text('Repost?'),
+        content: const Text('This will share the post on your profile.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
           ),
-          floatingActionButton: FloatingActionButton(
-            onPressed: _openComposePostDialog,
-            child: const Icon(Icons.add),
-          ),
-          body: ListView.separated(
-            padding: const EdgeInsets.symmetric(vertical: 8),
-            itemCount: _posts.length,
-            itemBuilder: (context, index) {
-              return _buildPostCard(_posts[index], themeProvider);
+          TextButton(
+            onPressed: () {
+              setState(() {
+                post.reposts++;
+                final repost = Post(
+                  sender: 'You',
+                  handle: '@me',
+                  avatarInitial: 'Y',
+                  message: '',
+                  timestamp: DateTime.now(),
+                  originalPost: post,
+                );
+                _posts.insert(0, repost);
+              });
+              Navigator.pop(context);
             },
-            separatorBuilder: (context, index) => Divider(
-              height: 1,
-              color: themeProvider.isDarkMode ? Colors.grey[800] : Colors.grey[200],
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildPostCard(Map<String, dynamic> post, ThemeProvider themeProvider) {
-
-    final XFile? imageFile = post['imageFile'];
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          CircleAvatar(
-            radius: 22,
-            backgroundColor: themeProvider.primaryColor.withOpacity(0.2),
-            child: Text(
-              post['avatarInitial'],
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                color: themeProvider.primaryColor,
-              ),
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Text(
-                      post['sender'],
-                      style: TextStyle(fontWeight: FontWeight.bold, color: themeProvider.textColor),
-                    ),
-                    const SizedBox(width: 4),
-                    Expanded(
-                      child: Text(
-                        '${post['handle']} · ${post['time']}',
-                        style: TextStyle(color: themeProvider.textSecondaryColor),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                  ],
-                ),
-
-                if (post['message'].isNotEmpty)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 4.0),
-                    child: Text(
-                      post['message'],
-                      style: TextStyle(color: themeProvider.textColor, fontSize: 15, height: 1.4),
-                    ),
-                  ),
-                const SizedBox(height: 12),
-
-
-                if (imageFile != null)
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(12.0),
-                    child: Image.file(
-                      File(imageFile.path),
-                      fit: BoxFit.cover,
-                      width: double.infinity,
-                    ),
-                  ),
-
-                if (imageFile != null) const SizedBox(height: 12),
-
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    _buildActionButton(Icons.chat_bubble_outline, 'Reply', themeProvider),
-                    _buildActionButton(Icons.repeat, post['reposts'].toString(), themeProvider),
-                    _buildActionButton(Icons.favorite_border, post['likes'].toString(), themeProvider),
-                    _buildActionButton(Icons.bar_chart, post['views'].toString(), themeProvider),
-                  ],
-                ),
-              ],
-            ),
+            child: const Text('Repost'),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildActionButton(IconData icon, String text, ThemeProvider themeProvider) {
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        // The `title` property is removed to remove the 'Community' title.
+        // The `automaticallyImplyLeading` property is set to `false` to remove the back button.
+        automaticallyImplyLeading: false,
+
+      ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: _navigateToComposePage,
+        child: const Icon(Icons.add),
+      ),
+      body: ListView.separated(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        itemCount: _posts.length,
+        itemBuilder: (context, index) {
+          return _buildPostCard(_posts[index]);
+        },
+        separatorBuilder: (context, index) => Divider(
+          height: 1,
+          color: Colors.grey.shade200,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPostCard(Post post) {
+    return InkWell(
+      onTap: () => _navigateToCommentsPage(post),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (post.originalPost != null)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8.0),
+                child: Row(
+                  children: [
+                    const Icon(Icons.repeat, size: 16, color: Colors.grey),
+                    const SizedBox(width: 8),
+                    Text('${post.sender} reposted', style: const TextStyle(color: Colors.grey, fontWeight: FontWeight.bold)),
+                  ],
+                ),
+              ),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                CircleAvatar(
+                  radius: 22,
+                  child: Text(post.originalPost?.avatarInitial ?? post.avatarInitial),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _buildPostHeader(post.originalPost ?? post),
+                      if ((post.originalPost ?? post).message.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 4.0),
+                          child: Text((post.originalPost ?? post).message),
+                        ),
+                      if (post.originalPost != null)
+                        Container(
+                          margin: const EdgeInsets.only(top: 12),
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            border: Border.all(color: Colors.grey.shade300),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              _buildPostHeader(post.originalPost!),
+                              if (post.originalPost!.message.isNotEmpty)
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 8.0),
+                                  child: Text(post.originalPost!.message),
+                                ),
+                              if (post.originalPost!.imageFile != null)
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 12.0),
+                                  child: ClipRRect(
+                                    borderRadius: BorderRadius.circular(12.0),
+                                    child: Image.file(File(post.originalPost!.imageFile!.path)),
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                      if (post.originalPost == null && post.imageFile != null)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 12.0),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(12.0),
+                            child: Image.file(File(post.imageFile!.path)),
+                          ),
+                        ),
+                      const SizedBox(height: 12),
+                      _buildActionButtons(post),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPostHeader(Post post) {
     return Row(
       children: [
-        Icon(icon, size: 18, color: themeProvider.textSecondaryColor),
+        Text(post.sender, style: const TextStyle(fontWeight: FontWeight.bold)),
         const SizedBox(width: 4),
-        if(text != 'Reply')
-          Text(text, style: TextStyle(color: themeProvider.textSecondaryColor, fontSize: 13)),
+        Expanded(
+          child: Text(
+            '${post.handle} · ${DateFormat.jm().format(post.timestamp)}',
+            style: TextStyle(color: Colors.grey.shade600),
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
       ],
+    );
+  }
+
+  Widget _buildActionButtons(Post post) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        _buildActionButton(Icons.chat_bubble_outline, post.comments.length.toString(), () => _navigateToCommentsPage(post)),
+        _buildActionButton(Icons.repeat, post.reposts.toString(), () => _repost(post)),
+        _buildActionButton(
+          post.isLiked ? Icons.favorite : Icons.favorite_border,
+          post.likes.toString(),
+              () => _toggleLike(post),
+          activeColor: post.isLiked ? Colors.pink : null,
+        ),
+        _buildActionButton(Icons.bar_chart, '156', () {}),
+      ],
+    );
+  }
+
+  Widget _buildActionButton(IconData icon, String text, VoidCallback onPressed, {Color? activeColor}) {
+    final color = activeColor ?? Colors.grey.shade600;
+    return GestureDetector(
+      onTap: onPressed,
+      child: Row(
+        children: [
+          Icon(icon, size: 18, color: color),
+          const SizedBox(width: 4),
+          Text(text, style: TextStyle(color: color, fontSize: 13)),
+        ],
+      ),
     );
   }
 }
