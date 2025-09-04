@@ -1,16 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:http/http.dart' as http;
 import 'dart:convert';
 
 import '../models/theme_model.dart';
 import '../models/student_profile.dart';
+import '../services/ApiEndpoints.dart';
 import '../services/api_service.dart';
 import 'loginpage.dart';
 
 class ProfilePage extends StatefulWidget {
   final String regNo;
-  const ProfilePage({super.key, required this.regNo});
+  final String url; // Add url as a parameter
+  const ProfilePage({super.key, required this.regNo, required this.url});
 
   @override
   State<ProfilePage> createState() => _ProfilePageState();
@@ -19,27 +20,15 @@ class ProfilePage extends StatefulWidget {
 class _ProfilePageState extends State<ProfilePage> {
   late Future<StudentProfile> profileFuture;
   late Future<String?> picUrlFuture;
+  late final ApiService _apiService; // Create a variable for the service
 
   @override
   void initState() {
     super.initState();
-    profileFuture = ApiService.fetchStudentProfile(widget.regNo);
-    picUrlFuture = fetchProfilePicUrl(widget.regNo);
-  }
-
-  // Fetches the Cloudinary profile pic URL
-  Future<String?> fetchProfilePicUrl(String regNo) async {
-    final response = await http.post(
-      Uri.parse('https://bulletin-screenshot-islamic-lead.trycloudflare.com/profilePic'),
-      headers: {'Content-Type': 'application/json'},
-      body: json.encode({'regNo': regNo}),
-    );
-    if (response.statusCode == 200) {
-      final jsonBody = json.decode(response.body);
-      // Cloudinary URL should be in either 'profilePic' or 'imageUrl'
-      return jsonBody['profilePic'] ?? jsonBody['imageUrl'];
-    }
-    return null;
+    // Initialize the API service with the URL from the widget
+    _apiService = ApiService(ApiEndpoints(widget.url));
+    profileFuture = _apiService.fetchStudentProfile(widget.regNo);
+    picUrlFuture = _apiService.fetchProfilePicUrl(widget.regNo);
   }
 
   @override
@@ -146,7 +135,7 @@ class _ProfilePageState extends State<ProfilePage> {
                             ElevatedButton.icon(
                               onPressed: () {
                                 Navigator.pushReplacement(
-                                    context, MaterialPageRoute(builder: (context) => LoginPage()));
+                                    context, MaterialPageRoute(builder: (context) => LoginPage(url: widget.url)));
                               },
                               icon: const Icon(Icons.logout, color: Colors.white),
                               label: const Text('Log Out', style: TextStyle(color: Colors.white)),

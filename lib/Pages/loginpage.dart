@@ -8,8 +8,12 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
 import '../models/theme_model.dart';
+import '../services/ApiEndpoints.dart';
 
 class LoginPage extends StatefulWidget {
+  final String url;
+  const LoginPage({super.key, required this.url});
+
   @override
   _LoginPageState createState() => _LoginPageState();
 }
@@ -23,12 +27,13 @@ class _LoginPageState extends State<LoginPage> {
   String? passwordErrorMessage;
   String? captchaErrorMessage;
 
-  String captchaBaseUrl = 'https://computing-sticky-rolling-mild.trycloudflare.com';
   late String captchaUrl;
+  late final ApiEndpoints api; // Add a field for the API class
 
   @override
   void initState() {
     super.initState();
+    api = ApiEndpoints(widget.url); // Initialize the API class
     _refreshCaptcha();
 
     userController.addListener(() {
@@ -52,7 +57,8 @@ class _LoginPageState extends State<LoginPage> {
 
   void _refreshCaptcha() {
     setState(() {
-      captchaUrl = '$captchaBaseUrl/captcha?ts=${DateTime.now().millisecondsSinceEpoch}';
+      // Use the API endpoint property
+      captchaUrl = '${api.captcha}?ts=${DateTime.now().millisecondsSinceEpoch}';
     });
   }
 
@@ -70,7 +76,8 @@ class _LoginPageState extends State<LoginPage> {
 
     try {
       final response = await http.post(
-        Uri.parse('$captchaBaseUrl/login'),
+        // Use the API endpoint property
+        Uri.parse(api.login),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
           'regno': userController.text.trim(),
@@ -83,7 +90,7 @@ class _LoginPageState extends State<LoginPage> {
         Navigator.pop(context); // Close dialog
         Navigator.push(
           context,
-          MaterialPageRoute(builder: (_) => HomePage(regNo: userController.text)),
+          MaterialPageRoute(builder: (_) => HomePage(regNo: userController.text, url: widget.url)),
         );
       } else {
         final result = jsonDecode(response.body);
@@ -137,11 +144,8 @@ class _LoginPageState extends State<LoginPage> {
                               child: SizedBox(
                                 width: 180,
                                 height: 50,
-                                child:
-                                // You can test with Image.network too
-                                // Image.network(captchaUrl),
-                                CachedNetworkImage(
-                                  key: ValueKey(captchaUrl), // Forces refresh
+                                child: CachedNetworkImage(
+                                  key: ValueKey(captchaUrl),
                                   imageUrl: captchaUrl,
                                   fit: BoxFit.contain,
                                   placeholder: (context, url) => const Center(
@@ -180,7 +184,7 @@ class _LoginPageState extends State<LoginPage> {
                                 onPressed: () {
                                   captchaController.clear();
                                   setDialogState(() {
-                                    captchaUrl = '$captchaBaseUrl/captcha?ts=${DateTime.now().millisecondsSinceEpoch}';
+                                    captchaUrl = '${api.captcha}?ts=${DateTime.now().millisecondsSinceEpoch}';
                                   });
                                 },
                               ),
@@ -292,7 +296,7 @@ class _LoginPageState extends State<LoginPage> {
               child: FloatingActionButton(
                 onPressed: () {
                   Navigator.push(context,
-                      MaterialPageRoute(builder: (context) => HomePage(regNo: userController.text)));
+                      MaterialPageRoute(builder: (context) => HomePage(regNo: userController.text, url: widget.url)));
                 },
                 mini: true,
                 child: const Icon(Icons.arrow_forward),

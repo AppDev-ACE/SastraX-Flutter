@@ -4,10 +4,12 @@ import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../models/theme_model.dart';
+import '../services/ApiEndpoints.dart';
 
 class TimetableWidget extends StatefulWidget {
   final String regNo;
-  const TimetableWidget({super.key, required this.regNo});
+  final String url; // Add url as a parameter
+  const TimetableWidget({super.key, required this.regNo, required this.url});
 
   @override
   _TimetableWidgetState createState() => _TimetableWidgetState();
@@ -15,6 +17,7 @@ class TimetableWidget extends StatefulWidget {
 
 class _TimetableWidgetState extends State<TimetableWidget> {
   final ScrollController _scrollController = ScrollController();
+  late final ApiEndpoints api; // Add a field for the API class
   List<Map<String, String>> timetable = [];
   int? currentIndex;
   bool isLoading = true;
@@ -22,6 +25,7 @@ class _TimetableWidgetState extends State<TimetableWidget> {
   @override
   void initState() {
     super.initState();
+    api = ApiEndpoints(widget.url); // Initialize the API class
     fetchTimetable();
   }
 
@@ -38,7 +42,7 @@ class _TimetableWidgetState extends State<TimetableWidget> {
       final dayIndex = today.weekday - 1; // 0 = Monday, 6 = Sunday
 
       final res = await http.post(
-        Uri.parse("https://computing-sticky-rolling-mild.trycloudflare.com/timetable"),
+        Uri.parse(api.timetable), // Use the timetable endpoint
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({'refresh': false, 'regNo': widget.regNo}),
       );
@@ -89,7 +93,7 @@ class _TimetableWidgetState extends State<TimetableWidget> {
 
           final parts = slot.split(' - ');
           final startTime24 = DateFormat('HH:mm').parse(parts[0]); // 24h parse
-          final endTime24   = DateFormat('HH:mm').parse(parts[1]);
+          final endTime24 = DateFormat('HH:mm').parse(parts[1]);
 
           final formattedTime =
               '${DateFormat('h:mm a').format(startTime24)} - ${DateFormat('h:mm a').format(endTime24)}';
@@ -146,7 +150,6 @@ class _TimetableWidgetState extends State<TimetableWidget> {
     return null;
   }
 
-
   bool _isCurrentSlot(Map<String, String> item) {
     try {
       final now = DateTime.now();
@@ -161,8 +164,6 @@ class _TimetableWidgetState extends State<TimetableWidget> {
       return false;
     }
   }
-
-
 
   @override
   Widget build(BuildContext context) {

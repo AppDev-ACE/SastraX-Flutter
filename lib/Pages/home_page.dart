@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 import 'package:confetti/confetti.dart';
 import 'package:provider/provider.dart';
+import '../services/ApiEndpoints.dart';
 import 'subject_wise_attendance.dart';
 import '../Components/timetable_widget.dart';
 import '../models/theme_model.dart';
@@ -19,7 +20,8 @@ import 'more_options_page.dart';
 
 class HomePage extends StatefulWidget {
   final String regNo;
-  const HomePage({super.key, required this.regNo});
+  final String url; // Add this line
+  const HomePage({super.key, required this.regNo, required this.url});
 
   @override
   State<HomePage> createState() => _HomePageState();
@@ -28,29 +30,40 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> {
   int _currentIndex = 0;
   late final List<Widget> _pages;
+  late final ApiEndpoints api; // Add a field for the API class
 
   @override
   void initState() {
     super.initState();
+    api = ApiEndpoints(widget.url); // Initialize the API class
     _pages = [
-      DashboardScreen(regNo: widget.regNo),
+      DashboardScreen(regNo: widget.regNo, url: widget.url), // Pass url here
       CalendarPage(regNo: widget.regNo),
-      CommunityPage(),
-      MessMenuPage(),
+      const CommunityPage(),
+      MessMenuPage(url: widget.url), // Pass url here
       const MoreOptionsScreen(),
     ];
   }
 
   @override
   Widget build(BuildContext context) {
+    // Correctly placed inside the build method
+    final screenWidth = MediaQuery.of(context).size.width;
+    final double appBarHeight = screenWidth * 0.2; // Adjusted height for a larger logo
+
     return Consumer<ThemeProvider>(
       builder: (_, theme, __) => Scaffold(
         backgroundColor: theme.isDarkMode
             ? AppTheme.darkBackground
             : Colors.white,
         appBar: AppBar(
+          toolbarHeight: appBarHeight, // Set the AppBar's height dynamically
           automaticallyImplyLeading: false,
-          leading: Image.asset('assets/icon/LogoIcon.png'),
+          leading: SizedBox(
+            height: appBarHeight, // Use the same dynamic height here
+            width: appBarHeight, // And here
+            child: Image.asset('assets/icon/Logo.png'),
+          ),
           title: const Text('SastraX',
               style: TextStyle(fontWeight: FontWeight.bold)),
           centerTitle: true,
@@ -94,7 +107,8 @@ class _HomePageState extends State<HomePage> {
 
 class DashboardScreen extends StatefulWidget {
   final String regNo;
-  const DashboardScreen({super.key, required this.regNo});
+  final String url;
+  const DashboardScreen({super.key, required this.regNo, required this.url});
 
   @override
   State<DashboardScreen> createState() => _DashboardScreenState();
@@ -109,12 +123,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
   bool isCgpaLoading = true;
   bool isBirthday = false;
   bool _birthdayChecked = false;
+  late final ApiEndpoints api; // Add a field for the API class
 
   late ConfettiController _confettiController;
 
   @override
   void initState() {
     super.initState();
+    api = ApiEndpoints(widget.url); // Initialize the API class
     _fetchAttendance();
     _fetchCGPA();
     _confettiController =
@@ -139,9 +155,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Future<void> _checkBirthday() async {
     try {
       final res = await http.get(
-        Uri.parse(
-          'https://bulletin-screenshot-islamic-lead.trycloudflare.com/dob?regNo=${widget.regNo}',
-        ),
+        // URL updated with widget.url
+        Uri.parse('${api.baseUrl}/dob?regNo=${widget.regNo}'),
       );
 
       if (res.statusCode == 200) {
@@ -171,8 +186,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
     try {
       final res = await http.post(
-        Uri.parse(
-            'https://computing-sticky-rolling-mild.trycloudflare.com/attendance'),
+        // URL updated with widget.url
+        Uri.parse(api.attendance),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({'refresh': false, 'regNo': widget.regNo}),
       );
@@ -207,8 +222,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
     try {
       final res = await http.post(
-        Uri.parse(
-            'https://bulletin-screenshot-islamic-lead.trycloudflare.com/cgpa'),
+        // URL updated with widget.url
+        Uri.parse(api.cgpa),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({'refresh': false}),
       );
@@ -252,7 +267,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   onTap: () => Navigator.push(
                     context,
                     MaterialPageRoute(
-                        builder: (_) => ProfilePage(regNo: widget.regNo)),
+                        builder: (_) => ProfilePage(regNo: widget.regNo, url: widget.url)), // Pass url here
                   ),
                   child: NeonContainer(
                     borderColor: theme.isDarkMode
@@ -354,7 +369,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       ? AppTheme.neonBlue
                       : AppTheme.primaryBlue,
                   padding: EdgeInsets.zero,
-                  child: TimetableWidget(regNo: widget.regNo),
+                  child: TimetableWidget(regNo: widget.regNo, url: widget.url),
                 ),
               ],
             ),
@@ -412,7 +427,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  // home_page.dart
   Widget _buildGpaFeeTile(ThemeProvider theme) {
     return GestureDetector(
       onTap: () => setState(() => showFeeDue = !showFeeDue),

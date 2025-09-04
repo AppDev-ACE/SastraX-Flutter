@@ -3,8 +3,12 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
 import '../models/theme_model.dart';
+import '../services/ApiEndpoints.dart'; // Make sure this path is correct
 
 class MessMenuPage extends StatefulWidget {
+  final String url;
+  const MessMenuPage({super.key, required this.url});
+
   @override
   State<MessMenuPage> createState() => _MessMenuPageState();
 }
@@ -13,6 +17,7 @@ class _MessMenuPageState extends State<MessMenuPage> {
   final List<String> weekDays = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
 
   late final PageController _pageController;
+  late final ApiEndpoints api; // Declare the ApiEndpoints variable
   List<dynamic> _fullMenu = [];
   List<dynamic> _filtered = [];
   bool isLoading = true;
@@ -23,6 +28,8 @@ class _MessMenuPageState extends State<MessMenuPage> {
   @override
   void initState() {
     super.initState();
+    // Initialize the API endpoints class with the URL from the widget
+    api = ApiEndpoints(widget.url);
     final now = DateTime.now();
     final todayIdx = now.weekday % 7; // Sunday = 0
     selectedDayAbbr = weekDays[todayIdx];
@@ -40,8 +47,8 @@ class _MessMenuPageState extends State<MessMenuPage> {
 
   Future<void> _fetchMenu() async {
     try {
-      final res = await http.get(Uri.parse(
-          'https://bulletin-screenshot-islamic-lead.trycloudflare.com/messMenu'));
+      // Use the api.messMenu property to get the URL
+      final res = await http.get(Uri.parse(api.messMenu));
       if (res.statusCode != 200) throw Exception('HTTP ${res.statusCode}');
       _fullMenu = jsonDecode(res.body);
       _applyWeekFilter();
@@ -303,4 +310,3 @@ class _MessMenuPageState extends State<MessMenuPage> {
     );
   }
 }
-

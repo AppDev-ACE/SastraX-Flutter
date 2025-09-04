@@ -12,8 +12,6 @@ import 'pages/home_page.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 void main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-  await NotificationService.init();
   runApp(MyApp());
 }
 
@@ -27,7 +25,7 @@ class MyApp extends StatelessWidget {
           return MaterialApp(
             title: 'SASTRAX Student App',
             theme: themeProvider.currentTheme,
-            home: HomePage(regNo: '127014015'),
+            home: LoginPage(url: ''),
             debugShowCheckedModeBanner: false,
           );
         },

@@ -1,13 +1,15 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../models/student_profile.dart';
+import 'ApiEndpoints.dart';
 
 class ApiService {
-  static const String baseUrl = 'https://computing-sticky-rolling-mild.trycloudflare.com';
+  final ApiEndpoints api;
+  ApiService(this.api);
 
-  static Future<StudentProfile> fetchStudentProfile(String regNo) async {
+  Future<StudentProfile> fetchStudentProfile(String regNo) async {
     final response = await http.post(
-      Uri.parse('$baseUrl/profile'),
+      Uri.parse(api.profile),
       headers: {"Content-Type": "application/json"},
       body: jsonEncode({'regNo': regNo}),
     );
@@ -22,5 +24,18 @@ class ApiService {
     } else {
       throw Exception('Failed to load profile: ${response.statusCode}');
     }
+  }
+
+  Future<String?> fetchProfilePicUrl(String regNo) async {
+    final response = await http.post(
+      Uri.parse(api.profilePic), // Use the profilePic endpoint
+      headers: {'Content-Type': 'application/json'},
+      body: json.encode({'regNo': regNo}),
+    );
+    if (response.statusCode == 200) {
+      final jsonBody = json.decode(response.body);
+      return jsonBody['profilePic'] ?? jsonBody['imageUrl'];
+    }
+    return null;
   }
 }

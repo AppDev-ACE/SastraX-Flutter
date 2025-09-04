@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'ApiEndpoints.dart'; // Import your ApiEndpoints class
 
 class AttendanceSnapshot {
   final double percentage;
@@ -23,10 +24,13 @@ class AttendanceSnapshot {
 }
 
 class AttendanceService {
-  static const _base = 'https://computing-sticky-rolling-mild.trycloudflare.com';
+  final ApiEndpoints api; // Add a field to hold the ApiEndpoints instance
 
-  static Future<AttendanceSnapshot> fetch() async {
-    final res = await http.get(Uri.parse('$_base/attendance'));
+  AttendanceService(this.api); // Constructor to receive the ApiEndpoints instance
+
+  Future<AttendanceSnapshot> fetch() async {
+    // Use the API endpoint property instead of a hardcoded URL
+    final res = await http.get(Uri.parse(api.attendance));
     if (res.statusCode != 200) {
       throw Exception('HTTP ${res.statusCode}');
     }
