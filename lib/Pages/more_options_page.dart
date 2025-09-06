@@ -90,6 +90,20 @@ class MoreOptionsScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Theme.of(context).colorScheme.background,
+      appBar: AppBar(
+        title: const Text('More Options'),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () {
+            // Replace the current screen with the HomePage
+            Navigator.pushReplacement(
+              context,
+              // THIS IS THE FIX: Changed MoreOptionsScreen() to HomePage()
+              MaterialPageRoute(builder: (context) => const HomePage(regNo: "regNo", url: '',)),
+            );
+          },
+        ),
+      ),
       body: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 20),
         child: GridView.builder(
@@ -121,7 +135,7 @@ class MoreOptionsScreen extends StatelessWidget {
         break;
       case 'sgpa':
         Navigator.push(
-            ctx, MaterialPageRoute(builder: (_) => const SgpaCalculatorPage()));
+            ctx, MaterialPageRoute(builder: (_) => const SgpaCalculator()));
         break;
       case 'about_team':
         Navigator.push(
