@@ -108,12 +108,6 @@ class _CommunityPageState extends State<CommunityPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        // The `title` property is removed to remove the 'Community' title.
-        // The `automaticallyImplyLeading` property is set to `false` to remove the back button.
-        automaticallyImplyLeading: false,
-
-      ),
       floatingActionButton: FloatingActionButton(
         onPressed: _navigateToComposePage,
         child: const Icon(Icons.add),

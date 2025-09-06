@@ -164,7 +164,7 @@ class _CalendarPageState extends State<CalendarPage> {
       tz.TZDateTime.from(scheduledTime, tz.local),
       platformDetails,
       uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
-      androidAllowWhileIdle: true,
+      androidScheduleMode: AndroidScheduleMode.exact,
     );
   }
 

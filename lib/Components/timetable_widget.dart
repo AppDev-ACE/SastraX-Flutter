@@ -8,7 +8,7 @@ import '../services/ApiEndpoints.dart';
 
 class TimetableWidget extends StatefulWidget {
   final String regNo;
-  final String url; // Add url as a parameter
+  final String url;
   const TimetableWidget({super.key, required this.regNo, required this.url});
 
   @override
@@ -17,7 +17,7 @@ class TimetableWidget extends StatefulWidget {
 
 class _TimetableWidgetState extends State<TimetableWidget> {
   final ScrollController _scrollController = ScrollController();
-  late final ApiEndpoints api; // Add a field for the API class
+  late final ApiEndpoints api;
   List<Map<String, String>> timetable = [];
   int? currentIndex;
   bool isLoading = true;
@@ -25,7 +25,7 @@ class _TimetableWidgetState extends State<TimetableWidget> {
   @override
   void initState() {
     super.initState();
-    api = ApiEndpoints(widget.url); // Initialize the API class
+    api = ApiEndpoints(widget.url);
     fetchTimetable();
   }
 
@@ -39,10 +39,10 @@ class _TimetableWidgetState extends State<TimetableWidget> {
   Future<void> fetchTimetable() async {
     try {
       final today = DateTime.now();
-      final dayIndex = today.weekday - 1; // 0 = Monday, 6 = Sunday
+      final dayIndex = today.weekday - 1;
 
       final res = await http.post(
-        Uri.parse(api.timetable), // Use the timetable endpoint
+        Uri.parse(api.timetable),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({'refresh': false, 'regNo': widget.regNo}),
       );
@@ -92,15 +92,14 @@ class _TimetableWidgetState extends State<TimetableWidget> {
           }
 
           final parts = slot.split(' - ');
-          final startTime24 = DateFormat('HH:mm').parse(parts[0]); // 24h parse
+          final startTime24 = DateFormat('HH:mm').parse(parts[0]);
           final endTime24 = DateFormat('HH:mm').parse(parts[1]);
 
-          final formattedTime =
-              '${DateFormat('h:mm a').format(startTime24)} - ${DateFormat('h:mm a').format(endTime24)}';
+          final formattedTime = '${DateFormat('h:mm a').format(startTime24)} - ${DateFormat('h:mm a').format(endTime24)}';
 
           transformedTimetable.add({
-            'time': formattedTime,       // For UI
-            'start': startTime24.toIso8601String(), // For logic
+            'time': formattedTime,
+            'start': startTime24.toIso8601String(),
             'end': endTime24.toIso8601String(),
             'subject': cleanSubject,
             'room': room,
@@ -170,8 +169,7 @@ class _TimetableWidgetState extends State<TimetableWidget> {
     return Consumer<ThemeProvider>(
       builder: (context, themeProvider, _) {
         return Container(
-          margin: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
+          decoration: BoxDecoration( // Removed the margin property
             color: themeProvider.cardBackgroundColor,
             borderRadius: BorderRadius.circular(20),
             border: Border.all(color: AppTheme.neonBlue.withOpacity(0.3)),
@@ -186,7 +184,7 @@ class _TimetableWidgetState extends State<TimetableWidget> {
                 decoration: BoxDecoration(
                   gradient: themeProvider.isDarkMode
                       ? const LinearGradient(colors: [Colors.black, Color(0xFF1A1A1A)])
-                      : const LinearGradient(colors: [AppTheme.navyBlue, Color(0xFF3b82f6)]),
+                      : const LinearGradient(colors: [AppTheme.navyBlue, const Color(0xFF3b82f6)]),
                   borderRadius: const BorderRadius.only(
                     topLeft: Radius.circular(20),
                     topRight: Radius.circular(20),
@@ -194,15 +192,23 @@ class _TimetableWidgetState extends State<TimetableWidget> {
                 ),
                 child: Row(
                   children: [
-                    Icon(Icons.schedule,
-                        color: themeProvider.isDarkMode ? AppTheme.neonBlue : Colors.white),
+                    Icon(
+                      Icons.schedule,
+                      color: themeProvider.isDarkMode ? AppTheme.neonBlue : Colors.white,
+                    ),
                     const SizedBox(width: 12),
-                    Text(
-                      'Today\'s Timetable',
-                      style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                        color: themeProvider.isDarkMode ? AppTheme.neonBlue : Colors.white,
+                    Expanded(
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          'Today\'s Timetable',
+                          style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                            color: themeProvider.isDarkMode ? AppTheme.neonBlue : Colors.white,
+                          ),
+                        ),
                       ),
                     ),
                   ],
@@ -219,8 +225,7 @@ class _TimetableWidgetState extends State<TimetableWidget> {
                   child: Text('No timetable available today.'),
                 )
               else
-                SizedBox(
-                  height: 300,
+                Flexible(
                   child: ListView.builder(
                     controller: _scrollController,
                     padding: const EdgeInsets.all(16),
@@ -236,8 +241,8 @@ class _TimetableWidgetState extends State<TimetableWidget> {
                           gradient: LinearGradient(
                             colors: themeProvider.isDarkMode
                                 ? (isBreak
-                                ? [Color(0xFF2A1810), Color(0xFF3A2418)]
-                                : [Color(0xFF0A1A2A), Color(0xFF152A3A)])
+                                ? [const Color(0xFF2A1810), const Color(0xFF3A2418)]
+                                : [const Color(0xFF0A1A2A), const Color(0xFF152A3A)])
                                 : (isBreak
                                 ? [Colors.orange[50]!, Colors.orange[100]!]
                                 : [Colors.blue[50]!, Colors.blue[100]!]),
@@ -256,7 +261,7 @@ class _TimetableWidgetState extends State<TimetableWidget> {
                               gradient: LinearGradient(
                                 colors: themeProvider.isDarkMode
                                     ? (isBreak
-                                    ? [Color(0xFFFFD93D), Color(0xFFFFE55C)]
+                                    ? [const Color(0xFFFFD93D), const Color(0xFFFFE55C)]
                                     : [AppTheme.neonBlue, AppTheme.electricBlue])
                                     : (isBreak
                                     ? [Colors.orange[400]!, Colors.orange[600]!]
@@ -306,12 +311,8 @@ class _TimetableWidgetState extends State<TimetableWidget> {
                           trailing: Icon(
                             isBreak ? Icons.free_breakfast : Icons.book,
                             color: isBreak
-                                ? (themeProvider.isDarkMode
-                                ? Color(0xFFFFD93D)
-                                : Colors.orange[600])
-                                : (themeProvider.isDarkMode
-                                ? AppTheme.neonBlue
-                                : Colors.blue[600]),
+                                ? (themeProvider.isDarkMode ? const Color(0xFFFFD93D) : Colors.orange[600])
+                                : (themeProvider.isDarkMode ? AppTheme.neonBlue : Colors.blue[600]),
                           ),
                         ),
                       );

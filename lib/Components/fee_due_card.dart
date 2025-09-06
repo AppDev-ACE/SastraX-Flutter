@@ -13,7 +13,7 @@ class FeeDueCard extends StatelessWidget {
     return Consumer<ThemeProvider>(
       builder: (context, themeProvider, child) {
         return Container(
-          padding: const EdgeInsets.all(15),
+          padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
             color: themeProvider.cardBackgroundColor,
             borderRadius: BorderRadius.circular(20),
@@ -80,57 +80,32 @@ class FeeDueCard extends StatelessWidget {
                   color: themeProvider.isDarkMode ? Colors.black : Colors.white,
                 ),
               ),
-              const SizedBox(height: 12),
-              Text(
-                'Fee Status',
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.bold,
-                  // Now using the primary color
-                  color: themeProvider.primaryColor,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                feeDue > 0 ? '₹${feeDue.toInt()}' : 'Paid',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: feeDue > 0
-                      ? (themeProvider.isDarkMode
-                      ? const Color(0xFFFF6B6B)
-                      : Colors.red)
-                  // Now using the primary color
-                      : themeProvider.primaryColor,
-                ),
-              ),
-              if (feeDue > 0)
-                Container(
-                  margin: const EdgeInsets.only(top: 8),
-                  padding:
-                  const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                  decoration: BoxDecoration(
-                    color: themeProvider.isDarkMode
-                        ? const Color(0xFFFF6B6B).withOpacity(0.2)
-                        : Colors.red[50],
-                    borderRadius: BorderRadius.circular(15),
-                    border: Border.all(
-                      color: themeProvider.isDarkMode
-                          ? const Color(0xFFFF6B6B)
-                          : Colors.red[200]!,
-                    ),
-                  ),
-                  child: Text(
-                    'Due Soon',
-                    style: TextStyle(
-                      fontSize: 9,
-                      color: themeProvider.isDarkMode
-                          ? const Color(0xFFFF6B6B)
-                          : Colors.red,
-                      fontWeight: FontWeight.w600,
-                    ),
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  'Fee Status',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                    color: themeProvider.primaryColor,
                   ),
                 ),
+              ),
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  feeDue > 0 ? '₹${feeDue.toInt()}' : 'Paid',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: feeDue > 0
+                        ? (themeProvider.isDarkMode
+                        ? const Color(0xFFFF6B6B)
+                        : Colors.red)
+                        : themeProvider.primaryColor,
+                  ),
+                ),
+              ),
             ],
           ),
         );

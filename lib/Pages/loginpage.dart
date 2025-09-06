@@ -238,17 +238,26 @@ class _LoginPageState extends State<LoginPage> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const LoginUI(),
+            // The following Padding and Text are wrapped in a Row with Flexible
             Padding(
               padding: const EdgeInsets.all(8.0),
-              child: Text(
-                'Enter your Login Credentials',
-                style: GoogleFonts.lato(
-                  textStyle: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w900,
-                    color: themeProvider.isDarkMode ? Colors.white : Colors.black,
+              child: Row(
+                children: [
+                  Flexible(
+                    child: Text(
+                      'Enter your Login Credentials',
+                      style: GoogleFonts.lato(
+                        textStyle: TextStyle(
+                          fontSize: 12, // You might need to adjust this size
+                          fontWeight: FontWeight.w900,
+                          color: themeProvider.isDarkMode ? Colors.white : Colors.black,
+                        ),
+                      ),
+                      overflow: TextOverflow.ellipsis, // Prevents overflow
+                      softWrap: true, // Allows wrapping to next line
+                    ),
                   ),
-                ),
+                ],
               ),
             ),
             TextUserPassField(

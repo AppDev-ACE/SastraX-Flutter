@@ -26,7 +26,7 @@ class MyApp extends StatelessWidget {
           return MaterialApp(
             title: 'SASTRAX Student App',
             theme: themeProvider.currentTheme,
-            home: HomePage(regNo: '127014015', url: '',),
+            home: LoginPage(url: 'https://gst-bacteria-responded-senators.trycloudflare.com'),
             debugShowCheckedModeBanner: false,
           );
         },

@@ -6,6 +6,7 @@ import 'package:confetti/confetti.dart';
 import 'package:provider/provider.dart';
 import '../services/ApiEndpoints.dart';
 import 'FeeDuePage.dart';
+import 'more_options_page.dart';
 import 'subject_wise_attendance.dart';
 import '../Components/timetable_widget.dart';
 import '../models/theme_model.dart';
@@ -17,11 +18,10 @@ import 'profile_page.dart';
 import 'calendar_page.dart';
 import 'community_page.dart';
 import 'mess_menu_page.dart';
-import 'more_options_page.dart';
 
 class HomePage extends StatefulWidget {
   final String regNo;
-  final String url; // Add this line
+  final String url;
   const HomePage({super.key, required this.regNo, required this.url});
 
   @override
@@ -31,26 +31,25 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> {
   int _currentIndex = 0;
   late final List<Widget> _pages;
-  late final ApiEndpoints api; // Add a field for the API class
+  late final ApiEndpoints api;
 
   @override
   void initState() {
     super.initState();
-    api = ApiEndpoints(widget.url); // Initialize the API class
+    api = ApiEndpoints(widget.url);
     _pages = [
-      DashboardScreen(regNo: widget.regNo, url: widget.url), // Pass url here
+      DashboardScreen(regNo: widget.regNo, url: widget.url),
       CalendarPage(regNo: widget.regNo),
       const CommunityPage(),
-      MessMenuPage(url: widget.url), // Pass url here
+      MessMenuPage(url: widget.url),
       const MoreOptionsScreen(),
     ];
   }
 
   @override
   Widget build(BuildContext context) {
-    // Correctly placed inside the build method
     final screenWidth = MediaQuery.of(context).size.width;
-    final double appBarHeight = screenWidth * 0.2; // Adjusted height for a larger logo
+    final double appBarHeight = screenWidth * 0.2;
 
     return Consumer<ThemeProvider>(
       builder: (_, theme, __) => Scaffold(
@@ -58,18 +57,18 @@ class _HomePageState extends State<HomePage> {
             ? AppTheme.darkBackground
             : Colors.white,
         appBar: AppBar(
-          toolbarHeight: appBarHeight, // Set the AppBar's height dynamically
+          toolbarHeight: appBarHeight,
           automaticallyImplyLeading: false,
-          leading: SizedBox(
-            height: appBarHeight, // Use the same dynamic height here
-            width: appBarHeight, // And here
+          leading: Padding(
+            padding: const EdgeInsets.all(8.0),
             child: Image.asset('assets/icon/Logo.png'),
           ),
-          title: const Text('SastraX',
-              style: TextStyle(fontWeight: FontWeight.bold)),
+          title: const FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text('SastraX', style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
           centerTitle: true,
-          backgroundColor:
-          theme.isDarkMode ? AppTheme.darkBackground : AppTheme.primaryBlue,
+          backgroundColor: theme.isDarkMode ? AppTheme.darkBackground : AppTheme.primaryBlue,
           elevation: 0,
           actions: [
             Padding(
@@ -86,19 +85,15 @@ class _HomePageState extends State<HomePage> {
           currentIndex: _currentIndex,
           onTap: (i) => setState(() => _currentIndex = i),
           type: BottomNavigationBarType.fixed,
-          backgroundColor:
-          theme.isDarkMode ? AppTheme.darkSurface : Colors.white,
-          selectedItemColor:
-          theme.isDarkMode ? AppTheme.neonBlue : AppTheme.primaryBlue,
+          backgroundColor: theme.isDarkMode ? AppTheme.darkSurface : Colors.white,
+          selectedItemColor: theme.isDarkMode ? AppTheme.neonBlue : AppTheme.primaryBlue,
           unselectedItemColor: Colors.grey,
           items: const [
             BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
-            BottomNavigationBarItem(
-                icon: Icon(Icons.calendar_today), label: 'Calendar'),
+            BottomNavigationBarItem(icon: Icon(Icons.calendar_today), label: 'Calendar'),
             BottomNavigationBarItem(icon: Icon(Icons.people), label: 'Community'),
             BottomNavigationBarItem(icon: Icon(Icons.restaurant), label: 'Mess'),
-            BottomNavigationBarItem(
-                icon: Icon(Icons.more_horiz_outlined), label: 'More'),
+            BottomNavigationBarItem(icon: Icon(Icons.more_horiz_outlined), label: 'More'),
           ],
         ),
       ),
@@ -124,18 +119,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
   bool isCgpaLoading = true;
   bool isBirthday = false;
   bool _birthdayChecked = false;
-  late final ApiEndpoints api; // Add a field for the API class
+  String? studentName;
+  late final ApiEndpoints api;
 
   late ConfettiController _confettiController;
 
   @override
   void initState() {
     super.initState();
-    api = ApiEndpoints(widget.url); // Initialize the API class
+    api = ApiEndpoints(widget.url);
+    _fetchProfile();
     _fetchAttendance();
     _fetchCGPA();
-    _confettiController =
-        ConfettiController(duration: const Duration(seconds: 3));
+    _confettiController = ConfettiController(duration: const Duration(seconds: 3));
   }
 
   @override
@@ -153,10 +149,32 @@ class _DashboardScreenState extends State<DashboardScreen> {
     super.dispose();
   }
 
+  Future<void> _fetchProfile() async {
+    try {
+      final res = await http.post(
+        Uri.parse(api.profile),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'refresh': false, 'regNo': widget.regNo}),
+      );
+
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body);
+        if (data['success'] == true) {
+          setState(() {
+            studentName = data['profileData']?['name'] ?? data['profile']?['name'];
+          });
+        }
+      }
+    } catch (_) {
+      setState(() {
+        studentName = null;
+      });
+    }
+  }
+
   Future<void> _checkBirthday() async {
     try {
       final res = await http.get(
-        // URL updated with widget.url
         Uri.parse('${api.baseUrl}/dob?regNo=${widget.regNo}'),
       );
 
@@ -187,7 +205,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
     try {
       final res = await http.post(
-        // URL updated with widget.url
         Uri.parse(api.attendance),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({'refresh': false, 'regNo': widget.regNo}),
@@ -198,12 +215,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
         final raw = data['attendanceHTML'] ?? data['attendance'] ?? '0%';
         final percentMatch = RegExp(r'(\d+(?:\.\d+)?)\s*%').firstMatch(raw);
-        final pairMatch =
-        RegExp(r'\(\s*(\d+)\s*/\s*(\d+)\s*\)').firstMatch(raw);
+        final pairMatch = RegExp(r'\(\s*(\d+)\s*/\s*(\d+)\s*\)').firstMatch(raw);
 
         setState(() {
-          attendancePercent =
-              double.tryParse(percentMatch?[1] ?? '0') ?? 0.0;
+          attendancePercent = double.tryParse(percentMatch?[1] ?? '0') ?? 0.0;
           attendedClasses = int.tryParse(pairMatch?[1] ?? '0') ?? 0;
           totalClasses = int.tryParse(pairMatch?[2] ?? '0') ?? 0;
         });
@@ -223,7 +238,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
     try {
       final res = await http.post(
-        // URL updated with widget.url
         Uri.parse(api.cgpa),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({'refresh': false}),
@@ -250,11 +264,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Provider.of<ThemeProvider>(context);
-    final bunkLeft = totalClasses == 0
-        ? 0
-        : (attendancePercent / 100 * totalClasses - 0.75 * totalClasses)
-        .floor()
-        .clamp(0, totalClasses);
+    final bunkLeft = totalClasses == 0 ? 0 : (attendancePercent / 100 * totalClasses - 0.75 * totalClasses).floor().clamp(0, totalClasses);
 
     return Stack(
       children: [
@@ -267,24 +277,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 GestureDetector(
                   onTap: () => Navigator.push(
                     context,
-                    MaterialPageRoute(
-                        builder: (_) => ProfilePage(regNo: widget.regNo, url: widget.url)), // Pass url here
+                    MaterialPageRoute(builder: (_) => ProfilePage(regNo: widget.regNo, url: widget.url)),
                   ),
                   child: NeonContainer(
-                    borderColor: theme.isDarkMode
-                        ? AppTheme.neonBlue
-                        : AppTheme.primaryBlue,
+                    borderColor: theme.isDarkMode ? AppTheme.neonBlue : AppTheme.primaryBlue,
                     child: Row(
                       children: [
                         CircleAvatar(
                           radius: 28,
-                          backgroundColor: theme.isDarkMode
-                              ? AppTheme.neonBlue
-                              : AppTheme.primaryBlue,
-                          child: Icon(Icons.person,
-                              color: theme.isDarkMode
-                                  ? Colors.black
-                                  : Colors.white),
+                          backgroundColor: theme.isDarkMode ? AppTheme.neonBlue : AppTheme.primaryBlue,
+                          child: Icon(Icons.person, color: theme.isDarkMode ? Colors.black : Colors.white),
                         ),
                         const SizedBox(width: 16),
                         Expanded(
@@ -292,30 +294,37 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               if (isBirthday)
-                                const Text(
-                                  '🎉 Happy Birthday! 🎉',
-                                  style: TextStyle(
-                                    fontSize: 20,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.amber,
+                                const FittedBox(
+                                  fit: BoxFit.scaleDown,
+                                  child: Text(
+                                    '🎉 Happy Birthday! 🎉',
+                                    style: TextStyle(
+                                      fontSize: 20,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.amber,
+                                    ),
                                   ),
                                 )
                               else
-                                Text(
-                                  'Welcome Back!',
-                                  style: TextStyle(
-                                    fontSize: 20,
-                                    fontWeight: FontWeight.bold,
-                                    color: theme.isDarkMode
-                                        ? AppTheme.neonBlue
-                                        : AppTheme.primaryBlue,
+                                FittedBox(
+                                  fit: BoxFit.scaleDown,
+                                  child: Text(
+                                    studentName != null ? 'Welcome, $studentName!' : 'Welcome Back!',
+                                    style: TextStyle(
+                                      fontSize: 20,
+                                      fontWeight: FontWeight.bold,
+                                      color: theme.isDarkMode ? AppTheme.neonBlue : AppTheme.primaryBlue,
+                                    ),
                                   ),
                                 ),
-                              Text('Student Dashboard',
-                                  style: TextStyle(
-                                      color: theme.isDarkMode
-                                          ? Colors.white70
-                                          : Colors.grey[600]))
+                              FittedBox(
+                                fit: BoxFit.scaleDown,
+                                child: Text('Student Dashboard',
+                                    style: TextStyle(
+                                        color: theme.isDarkMode
+                                            ? Colors.white70
+                                            : Colors.grey[600])),
+                              )
                             ],
                           ),
                         ),
@@ -326,18 +335,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 const SizedBox(height: 16),
                 // Attendance Chart
                 NeonContainer(
-                  borderColor: theme.isDarkMode
-                      ? AppTheme.neonBlue
-                      : AppTheme.primaryBlue,
-                  padding:
-                  const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
+                  borderColor: theme.isDarkMode ? AppTheme.neonBlue : AppTheme.primaryBlue,
+                  padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
                   child: attendancePercent < 0
                       ? const Center(child: CircularProgressIndicator())
                       : GestureDetector(
                     onTap: () => Navigator.push(
                       context,
-                      MaterialPageRoute(
-                          builder: (_) => SubjectWiseAttendancePage()),
+                      MaterialPageRoute(builder: (_) => SubjectWiseAttendancePage()),
                     ),
                     child: AttendancePieChart(
                       attendancePercentage: attendancePercent,
@@ -351,6 +356,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
                 // Assignments and GPA/Fee Dues containers
                 Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Expanded(
                       child: _buildAssignmentsTile(theme),
@@ -364,13 +370,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 const SizedBox(height: 16),
 
                 // Timetable
-                NeonContainer(
-                  borderColor: theme.isDarkMode
-                      ? AppTheme.neonBlue
-                      : AppTheme.primaryBlue,
-                  padding: EdgeInsets.zero,
-                  child: TimetableWidget(regNo: widget.regNo, url: widget.url),
-                ),
+                TimetableWidget(regNo: widget.regNo, url: widget.url),
               ],
             ),
           ),
@@ -381,8 +381,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               alignment: Alignment.topCenter,
               child: ConfettiWidget(
                 confettiController: _confettiController,
-                blastDirectionality:
-                BlastDirectionality.explosive,
+                blastDirectionality: BlastDirectionality.explosive,
                 emissionFrequency: 0.05,
                 numberOfParticles: 30,
                 maxBlastForce: 25,
@@ -396,42 +395,49 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
+  // home_page.dart
   Widget _buildAssignmentsTile(ThemeProvider theme) {
     return SizedBox(
-      height: 180, // Increased height for a larger, uniform container
+      width: 180,
+      height: 150,
       child: NeonContainer(
-        borderColor: theme.isDarkMode
-            ? AppTheme.neonBlue
-            : AppTheme.primaryBlue,
+        borderColor: theme.isDarkMode ? AppTheme.neonBlue : AppTheme.primaryBlue,
         padding: const EdgeInsets.all(12),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(Icons.assignment_turned_in,
-                size: 40, // Slightly larger icon
-                color: theme.isDarkMode
-                    ? AppTheme.neonBlue
-                    : AppTheme.primaryBlue),
+                size: 40,
+                color: theme.isDarkMode ? AppTheme.neonBlue : AppTheme.primaryBlue),
             const SizedBox(height: 10),
-            const Text('Assignments',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-            Text('12 Pending',
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              child: const Text(
+                'Assignments',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+              ),
+            ),
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(
+                '12 Pending',
                 style: TextStyle(
-                    fontSize: 14,
-                    color: theme.isDarkMode
-                        ? Colors.white70
-                        : Colors.grey[600])),
+                  fontSize: 14,
+                  color: theme.isDarkMode ? Colors.white70 : Colors.grey[600],
+                ),
+              ),
+            ),
           ],
         ),
       ),
     );
   }
 
+  // home_page.dart
   Widget _buildGpaFeeTile(ThemeProvider theme) {
     return GestureDetector(
       onDoubleTap: () => setState(() => showFeeDue = !showFeeDue),
       onTap: () {
-        // Navigate to FeeDuePage only if the container is showing the FeeDueCard
         if (showFeeDue) {
           Navigator.push(
             context,
@@ -441,20 +447,21 @@ class _DashboardScreenState extends State<DashboardScreen> {
       },
       child: AnimatedSwitcher(
         duration: const Duration(milliseconds: 300),
-        child: SizedBox(
-          height: 180, // Use the same height as the Assignments container
-          width: 180, // Use the same width as the Assignments container
-          key: ValueKey(showFeeDue), // Important for AnimatedSwitcher to identify children
-          child: showFeeDue
-              ? const FeeDueCard(
+        child: showFeeDue
+            ? SizedBox(
+          width: 180,
+          height: 150,
+          child: const FeeDueCard(
             key: ValueKey('fee'),
-            feeDue: 12000, // Example fee, replace with a dynamic value if available
-          )
-              : NeonContainer(
-            key: ValueKey('gpa'),
-            borderColor: theme.isDarkMode
-                ? AppTheme.neonBlue
-                : AppTheme.primaryBlue,
+            feeDue: 12000,
+          ),
+        )
+            : SizedBox(
+          width: 180,
+          height: 150,
+          child: NeonContainer(
+            key: const ValueKey('gpa'),
+            borderColor: theme.isDarkMode ? AppTheme.neonBlue : AppTheme.primaryBlue,
             padding: const EdgeInsets.all(12),
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
@@ -465,9 +472,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   color: theme.isDarkMode ? AppTheme.electricBlue : Colors.orange,
                 ),
                 const SizedBox(height: 10),
-                const Text(
-                  'GPA',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: const Text(
+                    'GPA',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                  ),
                 ),
                 isCgpaLoading
                     ? const SizedBox(
@@ -475,11 +485,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   width: 20,
                   child: CircularProgressIndicator(strokeWidth: 2),
                 )
-                    : Text(
-                  '$cgpa / 10',
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: theme.isDarkMode ? Colors.white70 : Colors.grey[600],
+                    : FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    '$cgpa / 10',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: theme.isDarkMode ? Colors.white70 : Colors.grey[600],
+                    ),
                   ),
                 ),
               ],

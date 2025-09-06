@@ -17,7 +17,7 @@ class _MessMenuPageState extends State<MessMenuPage> {
   final List<String> weekDays = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
 
   late final PageController _pageController;
-  late final ApiEndpoints api; // Declare the ApiEndpoints variable
+  late final ApiEndpoints api;
   List<dynamic> _fullMenu = [];
   List<dynamic> _filtered = [];
   bool isLoading = true;
@@ -28,13 +28,12 @@ class _MessMenuPageState extends State<MessMenuPage> {
   @override
   void initState() {
     super.initState();
-    // Initialize the API endpoints class with the URL from the widget
     api = ApiEndpoints(widget.url);
     final now = DateTime.now();
     final todayIdx = now.weekday % 7; // Sunday = 0
     selectedDayAbbr = weekDays[todayIdx];
     _pageController = PageController(initialPage: todayIdx);
-    selectedWeek = weekOfMonth(now).toString(); // 1-4
+    selectedWeek = weekOfMonth(now).toString();
     _fetchMenu();
   }
 
@@ -47,7 +46,6 @@ class _MessMenuPageState extends State<MessMenuPage> {
 
   Future<void> _fetchMenu() async {
     try {
-      // Use the api.messMenu property to get the URL
       final res = await http.get(Uri.parse(api.messMenu));
       if (res.statusCode != 200) throw Exception('HTTP ${res.statusCode}');
       _fullMenu = jsonDecode(res.body);
@@ -79,40 +77,38 @@ class _MessMenuPageState extends State<MessMenuPage> {
     });
   }
 
-  int _dayIndex(String day) => weekDays.indexOf(day.substring(0, 3).toUpperCase());
+  int _dayIndex(String day) =>
+      weekDays.indexOf(day.substring(0, 3).toUpperCase());
 
   @override
   Widget build(BuildContext context) {
     return Consumer<ThemeProvider>(
       builder: (_, theme, __) => Scaffold(
         backgroundColor: theme.backgroundColor,
-        body: isLoading
-            ? const Center(child: CircularProgressIndicator())
-            : _filtered.isEmpty
-            ? const Center(child: Text('No menu found for this week'))
-            : Column(
-          children: [
-            const SizedBox(height: 50),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Column(
-                children: [
-                  _dayRow(theme, 0, 4),
-                  const SizedBox(height: 10),
-                  _dayRow(theme, 4, 7),
-                ],
+        body: SafeArea(
+          child: isLoading
+              ? const Center(child: CircularProgressIndicator())
+              : _filtered.isEmpty
+              ? const Center(child: Text('No menu found for this week'))
+              : Column(
+            children: [
+              const SizedBox(height: 12), // small space at top
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                child: _dayRow(theme),
               ),
-            ),
-            const SizedBox(height: 10),
-            Expanded(
-              child: PageView.builder(
-                controller: _pageController,
-                physics: const NeverScrollableScrollPhysics(),
-                itemCount: _filtered.length,
-                itemBuilder: (_, idx) => _buildDayMenu(idx, theme),
+              const SizedBox(height: 8),
+              Expanded(
+                child: PageView.builder(
+                  controller: _pageController,
+                  physics: const NeverScrollableScrollPhysics(),
+                  itemCount: _filtered.length,
+                  itemBuilder: (_, idx) =>
+                      _buildDayMenu(idx, theme),
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -131,9 +127,11 @@ class _MessMenuPageState extends State<MessMenuPage> {
     );
   }
 
-  Widget _dayRow(ThemeProvider theme, int start, int end) {
+  /// ✅ All days shown in a single row
+  Widget _dayRow(ThemeProvider theme) {
     return Row(
-      children: weekDays.sublist(start, end).map((abbr) {
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: weekDays.map((abbr) {
         final isSel = selectedDayAbbr == abbr;
         return Expanded(
           child: GestureDetector(
@@ -148,18 +146,21 @@ class _MessMenuPageState extends State<MessMenuPage> {
               }
             },
             child: Container(
-              margin: const EdgeInsets.symmetric(horizontal: 4),
-              padding: const EdgeInsets.symmetric(vertical: 10),
+              margin: const EdgeInsets.symmetric(horizontal: 3),
+              padding: const EdgeInsets.symmetric(vertical: 8),
               decoration: BoxDecoration(
                 color: isSel
-                    ? (theme.isDarkMode ? Colors.amber[300] : Colors.blueAccent)
+                    ? (theme.isDarkMode
+                    ? Colors.amber[300]
+                    : Colors.blueAccent)
                     : theme.cardBackgroundColor,
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: BorderRadius.circular(8),
               ),
               child: Center(
                 child: Text(
                   abbr,
                   style: TextStyle(
+                    fontSize: 12,
                     fontWeight: FontWeight.bold,
                     color: isSel
                         ? (theme.isDarkMode ? Colors.black : Colors.white)
@@ -186,26 +187,32 @@ class _MessMenuPageState extends State<MessMenuPage> {
 
     switch (mealName) {
       case 'Breakfast':
-        return inRange(const TimeOfDay(hour: 7, minute: 30),
+        return inRange(
+            const TimeOfDay(hour: 7, minute: 30),
             const TimeOfDay(hour: 9, minute: 0));
       case 'Lunch':
-        return inRange(const TimeOfDay(hour: 11, minute: 45),
-            const TimeOfDay(hour: 14, minute: 30));
+        return inRange(
+            const TimeOfDay(hour: 12, minute: 0),
+            const TimeOfDay(hour: 14, minute: 0));
       case 'Snacks':
-        return inRange(const TimeOfDay(hour: 17, minute: 30),
+        return inRange(
+            const TimeOfDay(hour: 17, minute: 30),
             const TimeOfDay(hour: 18, minute: 30));
       case 'Dinner':
-      // Adjust this if dinner is served till later or starts earlier
-        return inRange(const TimeOfDay(hour: 19, minute: 0),
-            const TimeOfDay(hour: 21, minute: 40));
+        return inRange(
+            const TimeOfDay(hour: 19, minute: 30),
+            const TimeOfDay(hour: 21, minute: 0));
       default:
         return false;
     }
   }
+
   Widget _mealCard(String title, String menu, ThemeProvider theme) {
     final palette = {
       'Breakfast': {
-        'color': theme.isDarkMode ? const Color(0xFFFFD93D) : Colors.orange.shade300,
+        'color': theme.isDarkMode
+            ? const Color(0xFFFFD93D)
+            : Colors.orange.shade300,
         'icon': Icons.wb_sunny,
         'gradient': LinearGradient(
           colors: [Colors.orange.shade100, Colors.orange.shade300],
@@ -214,7 +221,9 @@ class _MessMenuPageState extends State<MessMenuPage> {
         ),
       },
       'Lunch': {
-        'color': theme.isDarkMode ? AppTheme.neonBlue : Colors.green.shade300,
+        'color': theme.isDarkMode
+            ? AppTheme.neonBlue
+            : Colors.green.shade300,
         'icon': Icons.lunch_dining,
         'gradient': LinearGradient(
           colors: [Colors.green.shade100, Colors.green.shade300],
@@ -223,7 +232,9 @@ class _MessMenuPageState extends State<MessMenuPage> {
         ),
       },
       'Snacks': {
-        'color': theme.isDarkMode ? const Color(0xFFFF6B6B) : Colors.purple.shade300,
+        'color': theme.isDarkMode
+            ? const Color(0xFFFF6B6B)
+            : Colors.purple.shade300,
         'icon': Icons.local_cafe,
         'gradient': LinearGradient(
           colors: [Colors.purple.shade100, Colors.purple.shade300],
@@ -232,7 +243,9 @@ class _MessMenuPageState extends State<MessMenuPage> {
         ),
       },
       'Dinner': {
-        'color': theme.isDarkMode ? AppTheme.electricBlue : Colors.blue.shade300,
+        'color': theme.isDarkMode
+            ? AppTheme.electricBlue
+            : Colors.blue.shade300,
         'icon': Icons.dinner_dining,
         'gradient': LinearGradient(
           colors: [Colors.blue.shade100, Colors.blue.shade300],
@@ -242,8 +255,7 @@ class _MessMenuPageState extends State<MessMenuPage> {
       },
     }[title]!;
 
-    // For testing, treat every meal as current
-    final isCurrent = true;
+    final isCurrent = _isCurrentMeal(title);
 
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 10),
@@ -258,7 +270,11 @@ class _MessMenuPageState extends State<MessMenuPage> {
           width: isCurrent ? 3 : 1,
         ),
         boxShadow: const [
-          BoxShadow(color: Colors.black26, blurRadius: 10, offset: Offset(0, 5)),
+          BoxShadow(
+            color: Colors.black26,
+            blurRadius: 10,
+            offset: Offset(0, 5),
+          ),
         ],
         gradient: palette['gradient'] as LinearGradient,
       ),
