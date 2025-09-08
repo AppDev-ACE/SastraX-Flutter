@@ -53,22 +53,33 @@ class _HomePageState extends State<HomePage> {
 
     return Consumer<ThemeProvider>(
       builder: (_, theme, __) => Scaffold(
-        backgroundColor: theme.isDarkMode
-            ? AppTheme.darkBackground
-            : Colors.white,
+        backgroundColor:
+        theme.isDarkMode ? AppTheme.darkBackground : Colors.white,
         appBar: AppBar(
+          leadingWidth: appBarHeight,
           toolbarHeight: appBarHeight,
           automaticallyImplyLeading: false,
           leading: Padding(
             padding: const EdgeInsets.all(8.0),
-            child: Image.asset('assets/icon/Logo.png'),
+            child: SizedBox(
+              height: appBarHeight * 0.9,
+              width: appBarHeight * 0.9,
+              child: Image.asset(
+                'assets/icon/Logo.png',
+                fit: BoxFit.contain,
+              ),
+            ),
           ),
           title: const FittedBox(
             fit: BoxFit.scaleDown,
-            child: Text('SastraX', style: TextStyle(fontWeight: FontWeight.bold)),
+            child: Text(
+              'SastraX',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
           ),
           centerTitle: true,
-          backgroundColor: theme.isDarkMode ? AppTheme.darkBackground : AppTheme.primaryBlue,
+          backgroundColor:
+          theme.isDarkMode ? AppTheme.darkBackground : AppTheme.primaryBlue,
           elevation: 0,
           actions: [
             Padding(
@@ -85,15 +96,19 @@ class _HomePageState extends State<HomePage> {
           currentIndex: _currentIndex,
           onTap: (i) => setState(() => _currentIndex = i),
           type: BottomNavigationBarType.fixed,
-          backgroundColor: theme.isDarkMode ? AppTheme.darkSurface : Colors.white,
-          selectedItemColor: theme.isDarkMode ? AppTheme.neonBlue : AppTheme.primaryBlue,
+          backgroundColor:
+          theme.isDarkMode ? AppTheme.darkSurface : Colors.white,
+          selectedItemColor:
+          theme.isDarkMode ? AppTheme.neonBlue : AppTheme.primaryBlue,
           unselectedItemColor: Colors.grey,
           items: const [
             BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
-            BottomNavigationBarItem(icon: Icon(Icons.calendar_today), label: 'Calendar'),
+            BottomNavigationBarItem(
+                icon: Icon(Icons.calendar_today), label: 'Calendar'),
             BottomNavigationBarItem(icon: Icon(Icons.people), label: 'Community'),
             BottomNavigationBarItem(icon: Icon(Icons.restaurant), label: 'Mess'),
-            BottomNavigationBarItem(icon: Icon(Icons.more_horiz_outlined), label: 'More'),
+            BottomNavigationBarItem(
+                icon: Icon(Icons.more_horiz_outlined), label: 'More'),
           ],
         ),
       ),
@@ -118,35 +133,67 @@ class _DashboardScreenState extends State<DashboardScreen> {
   String? cgpa;
   bool isCgpaLoading = true;
   bool isBirthday = false;
-  bool _birthdayChecked = false;
   String? studentName;
-  late final ApiEndpoints api;
+  int feeDue = 0; // tuition + hostel combined
+  int bunks = 0; // total bunk hours
+  List assignments = [];
+  bool isTimetableLoading = true;
+  List timetableData = [];
 
+  late final ApiEndpoints api;
   late ConfettiController _confettiController;
 
   @override
   void initState() {
     super.initState();
     api = ApiEndpoints(widget.url);
-    _fetchProfile();
-    _fetchAttendance();
-    _fetchCGPA();
     _confettiController = ConfettiController(duration: const Duration(seconds: 3));
-  }
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    if (!_birthdayChecked) {
-      _checkBirthday();
-      _birthdayChecked = true;
-    }
+    // Refactored to fetch data sequentially
+    _fetchDashboardDataSequentially();
   }
 
   @override
   void dispose() {
     _confettiController.dispose();
     super.dispose();
+  }
+
+  Future<void> _fetchDashboardDataSequentially() async {
+    // Fetch Profile first, as it's the most common entry point.
+    await _fetchProfile();
+
+    // Add a short delay to give the backend time to stabilize its session.
+    await Future.delayed(const Duration(seconds: 1));
+
+    // Fetch Attendance.
+    await _fetchAttendance();
+
+    // Add another short delay.
+    await Future.delayed(const Duration(seconds: 1));
+
+    // Fetch CGPA.
+    await _fetchCGPA();
+
+    // Add another short delay.
+    await Future.delayed(const Duration(seconds: 1));
+
+    // Fetch Fee Due (which includes two sub-calls).
+    await _fetchFeeDue();
+
+    // Add another short delay.
+    await Future.delayed(const Duration(seconds: 1));
+
+    // Fetch Bunks.
+    await _fetchBunks();
+
+    // Add another short delay.
+    await Future.delayed(const Duration(seconds: 1));
+
+    // Fetch Timetable.
+    await _fetchTimetable();
+
+    // Check birthday last, as it does not rely on the Puppeteer session.
+    await _checkBirthday();
   }
 
   Future<void> _fetchProfile() async {
@@ -161,30 +208,29 @@ class _DashboardScreenState extends State<DashboardScreen> {
         final data = jsonDecode(res.body);
         if (data['success'] == true) {
           setState(() {
-            studentName = data['profileData']?['name'] ?? data['profile']?['name'];
+            studentName = data['profile']?['name'] ?? data['profileData']?['name'];
           });
         }
       }
     } catch (_) {
-      setState(() {
-        studentName = null;
-      });
+      setState(() => studentName = null);
     }
   }
 
   Future<void> _checkBirthday() async {
     try {
-      final res = await http.get(
-        Uri.parse('${api.baseUrl}/dob?regNo=${widget.regNo}'),
+      final res = await http.post(
+        Uri.parse(api.dob),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'refresh': false, 'regNo': widget.regNo}),
       );
 
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
-        final dob = data['dobData']?[0]?['dob'];
+        final dob = data['dob']?[0]?['dob'];
         if (dob != null && dob.isNotEmpty) {
           final parsed = DateFormat('dd-MM-yyyy').parse(dob);
           final today = DateTime.now();
-
           if (parsed.day == today.day && parsed.month == today.month) {
             setState(() => isBirthday = true);
             WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -201,8 +247,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Future<void> _fetchAttendance() async {
-    if (attendancePercent >= 0 && totalClasses > 0) return;
-
     try {
       final res = await http.post(
         Uri.parse(api.attendance),
@@ -212,43 +256,39 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
-
-        final raw = data['attendanceHTML'] ?? data['attendance'] ?? '0%';
-        final percentMatch = RegExp(r'(\d+(?:\.\d+)?)\s*%').firstMatch(raw);
-        final pairMatch = RegExp(r'\(\s*(\d+)\s*/\s*(\d+)\s*\)').firstMatch(raw);
+        final raw = data['attendance'] ?? "0%";
+        final percentMatch = RegExp(r'(\d+(?:\.\d+)?)%').firstMatch(raw);
+        final pairMatch = RegExp(r'\((\d+)/(\d+)\)').firstMatch(raw);
 
         setState(() {
-          attendancePercent = double.tryParse(percentMatch?[1] ?? '0') ?? 0.0;
+          attendancePercent = double.tryParse(percentMatch?[1] ?? '0') ?? 0;
           attendedClasses = int.tryParse(pairMatch?[1] ?? '0') ?? 0;
           totalClasses = int.tryParse(pairMatch?[2] ?? '0') ?? 0;
         });
-      } else {
-        setState(() => attendancePercent = 0);
       }
     } catch (_) {
-      setState(() => attendancePercent = 0);
+      setState(() {
+        attendancePercent = 0;
+        attendedClasses = 0;
+        totalClasses = 0;
+      });
     }
   }
 
   Future<void> _fetchCGPA() async {
-    if (cgpa != null && cgpa != 'N/A') {
-      setState(() => isCgpaLoading = false);
-      return;
-    }
-
     try {
       final res = await http.post(
         Uri.parse(api.cgpa),
         headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'refresh': false}),
+        body: jsonEncode({'refresh': false, 'regNo': widget.regNo}),
       );
 
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
-        final cgpaList = data['cgpaData'] ?? data['cgpa'];
+        final cgpaList = data['cgpa'] ?? data['cgpaData'];
         if (cgpaList != null && cgpaList.isNotEmpty) {
           setState(() {
-            cgpa = cgpaList[0]['cgpa'];
+            cgpa = cgpaList[0]['cgpa'] ?? "N/A";
             isCgpaLoading = false;
           });
           return;
@@ -256,15 +296,109 @@ class _DashboardScreenState extends State<DashboardScreen> {
       }
     } catch (_) {}
     setState(() {
-      cgpa = 'N/A';
+      cgpa = "N/A";
       isCgpaLoading = false;
     });
+  }
+
+  Future<void> _fetchFeeDue() async {
+    try {
+      // Fetch Sastra due first, then hostel due.
+      final sastraRes = await http.post(
+        Uri.parse(api.sastraDue),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'refresh': false, 'regNo': widget.regNo}),
+      );
+
+      await Future.delayed(const Duration(milliseconds: 500));
+
+      final hostelRes = await http.post(
+        Uri.parse(api.hostelDue),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'refresh': false, 'regNo': widget.regNo}),
+      );
+
+      if (sastraRes.statusCode == 200 && hostelRes.statusCode == 200) {
+        final sastraData = jsonDecode(sastraRes.body);
+        final hostelData = jsonDecode(hostelRes.body);
+
+        if (sastraData['success'] == true && hostelData['success'] == true) {
+          final sastraDueStr = (sastraData['sastraDue'] ?? sastraData['totalSastraDue'] ?? "0")
+              .toString()
+              .replaceAll(RegExp(r'[^0-9]'), '');
+          final hostelDueStr = (hostelData['hostelDue'] ?? hostelData['totalHostelDue'] ?? "0")
+              .toString()
+              .replaceAll(RegExp(r'[^0-9]'), '');
+
+          final sastraDue = int.tryParse(sastraDueStr) ?? 0;
+          final hostelDue = int.tryParse(hostelDueStr) ?? 0;
+
+          setState(() {
+            feeDue = sastraDue + hostelDue;
+          });
+        }
+      }
+    } catch (_) {
+      setState(() => feeDue = 0);
+    }
+  }
+
+  Future<void> _fetchBunks() async {
+    try {
+      final res = await http.get(
+        Uri.parse(api.bunk),
+      );
+
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body);
+        if (data['success'] == true) {
+          final bunkData = data['bunkdata'];
+          final total = (bunkData as Map).values.fold<int>(
+            0,
+                (sum, val) => sum + (val as int),
+          );
+
+          setState(() {
+            bunks = total;
+          });
+        }
+      }
+    } catch (_) {
+      setState(() => bunks = 0);
+    }
+  }
+
+  Future<void> _fetchTimetable() async {
+    setState(() {
+      isTimetableLoading = true;
+    });
+    try {
+      final res = await http.post(
+        Uri.parse(api.timetable),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'refresh': false, 'regNo': widget.regNo}),
+      );
+
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body);
+        if (data['success'] == true) {
+          setState(() {
+            timetableData = data['timetable'];
+          });
+        }
+      }
+    } catch (_) {
+      // Handle error if necessary
+    } finally {
+      setState(() {
+        isTimetableLoading = false;
+      });
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Provider.of<ThemeProvider>(context);
-    final bunkLeft = totalClasses == 0 ? 0 : (attendancePercent / 100 * totalClasses - 0.75 * totalClasses).floor().clamp(0, totalClasses);
 
     return Stack(
       children: [
@@ -277,16 +411,26 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 GestureDetector(
                   onTap: () => Navigator.push(
                     context,
-                    MaterialPageRoute(builder: (_) => ProfilePage(regNo: widget.regNo, url: widget.url)),
+                    MaterialPageRoute(
+                      builder: (_) =>
+                          ProfilePage(regNo: widget.regNo, url: widget.url),
+                    ),
                   ),
                   child: NeonContainer(
-                    borderColor: theme.isDarkMode ? AppTheme.neonBlue : AppTheme.primaryBlue,
+                    borderColor: theme.isDarkMode
+                        ? AppTheme.neonBlue
+                        : AppTheme.primaryBlue,
                     child: Row(
                       children: [
                         CircleAvatar(
                           radius: 28,
-                          backgroundColor: theme.isDarkMode ? AppTheme.neonBlue : AppTheme.primaryBlue,
-                          child: Icon(Icons.person, color: theme.isDarkMode ? Colors.black : Colors.white),
+                          backgroundColor: theme.isDarkMode
+                              ? AppTheme.neonBlue
+                              : AppTheme.primaryBlue,
+                          child: Icon(Icons.person,
+                              color: theme.isDarkMode
+                                  ? Colors.black
+                                  : Colors.white),
                         ),
                         const SizedBox(width: 16),
                         Expanded(
@@ -309,11 +453,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                 FittedBox(
                                   fit: BoxFit.scaleDown,
                                   child: Text(
-                                    studentName != null ? 'Welcome, $studentName!' : 'Welcome Back!',
+                                    studentName != null
+                                        ? 'Welcome, $studentName!'
+                                        : 'Welcome Back!',
                                     style: TextStyle(
                                       fontSize: 20,
                                       fontWeight: FontWeight.bold,
-                                      color: theme.isDarkMode ? AppTheme.neonBlue : AppTheme.primaryBlue,
+                                      color: theme.isDarkMode
+                                          ? AppTheme.neonBlue
+                                          : AppTheme.primaryBlue,
                                     ),
                                   ),
                                 ),
@@ -334,22 +482,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 ),
                 const SizedBox(height: 16),
                 // Attendance Chart
-                NeonContainer(
-                  borderColor: theme.isDarkMode ? AppTheme.neonBlue : AppTheme.primaryBlue,
-                  padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
-                  child: attendancePercent < 0
-                      ? const Center(child: CircularProgressIndicator())
-                      : GestureDetector(
-                    onTap: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (_) => SubjectWiseAttendancePage()),
-                    ),
-                    child: AttendancePieChart(
-                      attendancePercentage: attendancePercent,
-                      attendedClasses: attendedClasses,
-                      totalClasses: totalClasses,
-                      bunkingDaysLeft: bunkLeft,
-                    ),
+                attendancePercent < 0
+                    ? const Center(child: CircularProgressIndicator())
+                    : GestureDetector(
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                        builder: (_) => SubjectWiseAttendancePage()),
+                  ),
+                  child: AttendancePieChart(
+                    attendancePercentage: attendancePercent,
+                    attendedClasses: attendedClasses,
+                    totalClasses: totalClasses,
+                    bunkingDaysLeft: bunks,
                   ),
                 ),
                 const SizedBox(height: 16),
@@ -357,19 +502,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Expanded(
-                      child: _buildAssignmentsTile(theme),
-                    ),
+                    Expanded(child: _buildAssignmentsTile(theme)),
                     const SizedBox(width: 12),
-                    Expanded(
-                      child: _buildGpaFeeTile(theme),
-                    ),
+                    Expanded(child: _buildGpaFeeTile(theme)),
                   ],
                 ),
                 const SizedBox(height: 16),
-
                 // Timetable
-                TimetableWidget(regNo: widget.regNo, url: widget.url),
+                TimetableWidget(timetable: timetableData, isLoading: isTimetableLoading),
               ],
             ),
           ),
@@ -394,24 +534,26 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  // home_page.dart
   Widget _buildAssignmentsTile(ThemeProvider theme) {
     return SizedBox(
       width: 180,
       height: 150,
       child: NeonContainer(
-        borderColor: theme.isDarkMode ? AppTheme.neonBlue : AppTheme.primaryBlue,
+        borderColor:
+        theme.isDarkMode ? AppTheme.neonBlue : AppTheme.primaryBlue,
         padding: const EdgeInsets.all(12),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(Icons.assignment_turned_in,
                 size: 40,
-                color: theme.isDarkMode ? AppTheme.neonBlue : AppTheme.primaryBlue),
+                color: theme.isDarkMode
+                    ? AppTheme.neonBlue
+                    : AppTheme.primaryBlue),
             const SizedBox(height: 10),
-            FittedBox(
+            const FittedBox(
               fit: BoxFit.scaleDown,
-              child: const Text(
+              child: Text(
                 'Assignments',
                 style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
               ),
@@ -419,7 +561,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             FittedBox(
               fit: BoxFit.scaleDown,
               child: Text(
-                '12 Pending',
+                '${assignments.length} Pending',
                 style: TextStyle(
                   fontSize: 14,
                   color: theme.isDarkMode ? Colors.white70 : Colors.grey[600],
@@ -432,7 +574,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  // home_page.dart
   Widget _buildGpaFeeTile(ThemeProvider theme) {
     return GestureDetector(
       onDoubleTap: () => setState(() => showFeeDue = !showFeeDue),
@@ -450,9 +591,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ? SizedBox(
           width: 180,
           height: 150,
-          child: const FeeDueCard(
-            key: ValueKey('fee'),
-            feeDue: 12000,
+          child: FeeDueCard(
+            key: const ValueKey('fee'),
+            feeDue: feeDue.toDouble(),
           ),
         )
             : SizedBox(
@@ -460,7 +601,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
           height: 150,
           child: NeonContainer(
             key: const ValueKey('gpa'),
-            borderColor: theme.isDarkMode ? AppTheme.neonBlue : AppTheme.primaryBlue,
+            borderColor: theme.isDarkMode
+                ? AppTheme.neonBlue
+                : AppTheme.primaryBlue,
             padding: const EdgeInsets.all(12),
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
@@ -468,14 +611,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 Icon(
                   Icons.grade,
                   size: 40,
-                  color: theme.isDarkMode ? AppTheme.electricBlue : Colors.orange,
+                  color: theme.isDarkMode
+                      ? AppTheme.electricBlue
+                      : Colors.orange,
                 ),
                 const SizedBox(height: 10),
-                FittedBox(
+                const FittedBox(
                   fit: BoxFit.scaleDown,
-                  child: const Text(
-                    'GPA',
-                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                  child: Text(
+                    'CGPA',
+                    style: TextStyle(
+                        fontWeight: FontWeight.bold, fontSize: 16),
                   ),
                 ),
                 isCgpaLoading
@@ -490,7 +636,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     '$cgpa / 10',
                     style: TextStyle(
                       fontSize: 14,
-                      color: theme.isDarkMode ? Colors.white70 : Colors.grey[600],
+                      color: theme.isDarkMode
+                          ? Colors.white70
+                          : Colors.grey[600],
                     ),
                   ),
                 ),

@@ -14,8 +14,8 @@ class AttendancePieChart extends StatelessWidget {
     required this.attendancePercentage,
     required this.attendedClasses,
     required this.totalClasses,
-    required this.bunkingDaysLeft,
-  });
+    required int bunkingDaysLeft,
+  }) : bunkingDaysLeft = bunkingDaysLeft < 0 ? 0 : bunkingDaysLeft;
 
   @override
   Widget build(BuildContext context) {
@@ -24,7 +24,7 @@ class AttendancePieChart extends StatelessWidget {
         final isDark = themeProvider.isDarkMode;
 
         return Container(
-          padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 8),
+          padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
           decoration: BoxDecoration(
             color: isDark ? AppTheme.darkSurface : Colors.white,
             borderRadius: BorderRadius.circular(20),
@@ -45,68 +45,82 @@ class AttendancePieChart extends StatelessWidget {
             ],
           ),
           child: Column(
-            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              // Move attendance text up
-              Padding(
-                padding: const EdgeInsets.only(bottom: 40),
-                child: Text(
-                  'Attendance',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: isDark ? AppTheme.neonBlue : AppTheme.primaryBlue,
-                  ),
+              Text(
+                'Attendance',
+                style: TextStyle(
+                  fontSize: 18, // Slightly increased from 16
+                  fontWeight: FontWeight.bold,
+                  color: isDark ? AppTheme.neonBlue : AppTheme.primaryBlue,
                 ),
               ),
-
-              // Pie chart
-              SizedBox(
-                height: 80,
-                width: 80,
-                child: PieChart(
-                  PieChartData(
-                    pieTouchData: PieTouchData(enabled: false),
-                    borderData: FlBorderData(show: false),
-                    sectionsSpace: 0,
-                    centerSpaceRadius: 25,
-                    sections: [
-                      PieChartSectionData(
-                        color: attendancePercentage < 80
-                            ? Colors.red
-                            : (isDark ? AppTheme.neonBlue : Colors.green),
-                        value: attendancePercentage,
-                        title: '${attendancePercentage.toInt()}%',
-                        radius: 50,
-                        titleStyle: const TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
-                        ),
+              const SizedBox(height: 20),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                children: [
+                  // Left Column: Pie Chart
+                  SizedBox(
+                    height: 100,
+                    width: 100,
+                    child: PieChart(
+                      PieChartData(
+                        pieTouchData: PieTouchData(enabled: false),
+                        borderData: FlBorderData(show: false),
+                        sectionsSpace: 0,
+                        centerSpaceRadius: 35,
+                        sections: [
+                          PieChartSectionData(
+                            color: attendancePercentage < 80
+                                ? Colors.red
+                                : (isDark ? AppTheme.neonBlue : Colors.green),
+                            value: attendancePercentage,
+                            title: '${attendancePercentage.toInt()}%',
+                            radius: 50,
+                            titleStyle: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                            ),
+                          ),
+                          PieChartSectionData(
+                            color: isDark ? Colors.grey[800]! : Colors.grey[300]!,
+                            value: 100 - attendancePercentage,
+                            title: '',
+                            radius: 45,
+                          ),
+                        ],
                       ),
-                      PieChartSectionData(
-                        color: isDark ? Colors.grey[800]! : Colors.grey[300]!,
-                        value: 100 - attendancePercentage,
-                        title: '',
-                        radius: 45,
+                    ),
+                  ),
+
+                  // Right Column: Attended, Total, Can Skip stats
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      _buildStat(
+                        'Attended',
+                        '$attendedClasses',
+                        isDark ? AppTheme.neonBlue : AppTheme.primaryBlue,
+                        isDark,
+                      ),
+                      const SizedBox(height: 12),
+                      _buildStat(
+                        'Total',
+                        '$totalClasses',
+                        isDark ? Colors.white : Colors.black,
+                        isDark,
+                      ),
+                      const SizedBox(height: 12),
+                      _buildStat(
+                        'Can Skip',
+                        '$bunkingDaysLeft',
+                        isDark ? AppTheme.electricBlue : Colors.orange,
+                        isDark,
                       ),
                     ],
                   ),
-                ),
-              ),
-
-              // Push stats slightly downward
-              const SizedBox(height: 55),
-
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                children: [
-                  _buildStat('Attended', '$attendedClasses',
-                      isDark ? AppTheme.neonBlue : AppTheme.primaryBlue, isDark),
-                  _buildStat('Total', '$totalClasses',
-                      isDark ? Colors.white : Colors.black, isDark),
-                  _buildStat('Can Skip', '$bunkingDaysLeft',
-                      isDark ? AppTheme.electricBlue : Colors.orange, isDark),
                 ],
               ),
             ],
@@ -115,24 +129,23 @@ class AttendancePieChart extends StatelessWidget {
       },
     );
   }
-
   Widget _buildStat(String label, String value, Color valueColor, bool dark) {
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          value,
-          style: TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.bold,
-            color: valueColor,
-          ),
-        ),
-        const SizedBox(height: 2),
         Text(
           label,
           style: TextStyle(
-            fontSize: 11,
+            fontSize: 13,
             color: dark ? Colors.white70 : Colors.grey[600],
+          ),
+        ),
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 24,
+            fontWeight: FontWeight.bold,
+            color: valueColor,
           ),
         ),
       ],

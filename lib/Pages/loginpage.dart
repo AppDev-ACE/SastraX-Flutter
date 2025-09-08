@@ -55,10 +55,15 @@ class _LoginPageState extends State<LoginPage> {
     });
   }
 
+  // Refresh captcha and include regno param when available
   void _refreshCaptcha() {
+    final regNo = userController.text.trim();
     setState(() {
-      // Use the API endpoint property
-      captchaUrl = '${api.captcha}?ts=${DateTime.now().millisecondsSinceEpoch}';
+      if (regNo.isEmpty) {
+        captchaUrl = '${api.captcha}?ts=${DateTime.now().millisecondsSinceEpoch}';
+      } else {
+        captchaUrl = '${api.captcha}?regno=$regNo&ts=${DateTime.now().millisecondsSinceEpoch}';
+      }
     });
   }
 
@@ -112,6 +117,7 @@ class _LoginPageState extends State<LoginPage> {
   }
 
   void _showCaptchaDialog() {
+    // Refresh captcha using current register number (if any)
     _refreshCaptcha();
     captchaController.clear();
 
@@ -184,7 +190,12 @@ class _LoginPageState extends State<LoginPage> {
                                 onPressed: () {
                                   captchaController.clear();
                                   setDialogState(() {
-                                    captchaUrl = '${api.captcha}?ts=${DateTime.now().millisecondsSinceEpoch}';
+                                    final regNo = userController.text.trim();
+                                    if (regNo.isEmpty) {
+                                      captchaUrl = '${api.captcha}?ts=${DateTime.now().millisecondsSinceEpoch}';
+                                    } else {
+                                      captchaUrl = '${api.captcha}?regno=$regNo&ts=${DateTime.now().millisecondsSinceEpoch}';
+                                    }
                                   });
                                 },
                               ),
@@ -310,7 +321,7 @@ class _LoginPageState extends State<LoginPage> {
                 mini: true,
                 child: const Icon(Icons.arrow_forward),
               ),
-            )
+            ),
           ],
         ),
       ),

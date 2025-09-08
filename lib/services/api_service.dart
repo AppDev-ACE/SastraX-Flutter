@@ -7,11 +7,11 @@ class ApiService {
   final ApiEndpoints api;
   ApiService(this.api);
 
-  Future<StudentProfile> fetchStudentProfile(String regNo) async {
+  Future<StudentProfile> fetchStudentProfile(String token) async {
     final response = await http.post(
       Uri.parse(api.profile),
       headers: {"Content-Type": "application/json"},
-      body: jsonEncode({'regNo': regNo}),
+      body: jsonEncode({'token': token}),
     );
 
     if (response.statusCode == 200) {
@@ -26,11 +26,11 @@ class ApiService {
     }
   }
 
-  Future<String?> fetchProfilePicUrl(String regNo) async {
+  Future<String?> fetchProfilePicUrl(String token) async {
     final response = await http.post(
       Uri.parse(api.profilePic), // Use the profilePic endpoint
       headers: {'Content-Type': 'application/json'},
-      body: json.encode({'regNo': regNo}),
+      body: json.encode({'token': token}),
     );
     if (response.statusCode == 200) {
       final jsonBody = json.decode(response.body);

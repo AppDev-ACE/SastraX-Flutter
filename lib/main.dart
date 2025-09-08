@@ -26,7 +26,7 @@ class MyApp extends StatelessWidget {
           return MaterialApp(
             title: 'SASTRAX Student App',
             theme: themeProvider.currentTheme,
-            home: LoginPage(url: 'https://quantity-plastic-shore-malawi.trycloudflare.com'),
+            home: const LoginPage(url: 'https://berkeley-comedy-sydney-olympic.trycloudflare.com'),
             debugShowCheckedModeBanner: false,
           );
         },

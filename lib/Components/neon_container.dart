@@ -19,7 +19,7 @@ class NeonContainer extends StatelessWidget {
     this.height,
     this.color,
     required this.borderColor,
-    this.boxShadow, // 💡 And in the constructor.
+    this.boxShadow,
   }) : super(key: key);
 
   @override
@@ -37,29 +37,31 @@ class NeonContainer extends StatelessWidget {
                     : Colors.white),
             borderRadius: BorderRadius.circular(15),
             border: Border.all(
-              color: borderColor.withOpacity(themeProvider.isDarkMode ? 0.6 : 0.3),
-              width: 1.5,
+              color: borderColor.withOpacity(
+                  themeProvider.isDarkMode ? 0.5 : 0.2), // softer border
+              width: 1.2,
             ),
-            boxShadow: boxShadow ?? (themeProvider.isDarkMode
-                ? [
-              BoxShadow(
-                color: borderColor.withOpacity(0.6),
-                blurRadius: 12,
-                spreadRadius: 2,
-              ),
-              BoxShadow(
-                color: Colors.black.withOpacity(0.4),
-                blurRadius: 6,
-                offset: const Offset(0, 2),
-              ),
-            ]
-                : [
-              BoxShadow(
-                color: Colors.black12,
-                blurRadius: 8,
-                offset: const Offset(0, 2),
-              ),
-            ]),
+            boxShadow: boxShadow ??
+                (themeProvider.isDarkMode
+                    ? [
+                  BoxShadow(
+                    color: borderColor.withOpacity(0.25), // much softer glow
+                    blurRadius: 6,
+                    spreadRadius: 1,
+                  ),
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.25), // lighter inner shadow
+                    blurRadius: 4,
+                    offset: const Offset(0, 2),
+                  ),
+                ]
+                    : [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.1),
+                    blurRadius: 4,
+                    offset: const Offset(0, 2),
+                  ),
+                ]),
           ),
           child: child,
         );

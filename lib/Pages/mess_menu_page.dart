@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
 import '../models/theme_model.dart';
-import '../services/ApiEndpoints.dart'; // Make sure this path is correct
+import '../services/ApiEndpoints.dart';
 
 class MessMenuPage extends StatefulWidget {
   final String url;
@@ -22,7 +22,7 @@ class _MessMenuPageState extends State<MessMenuPage> {
   List<dynamic> _filtered = [];
   bool isLoading = true;
 
-  late String selectedWeek; // "1".."4"
+  late String selectedWeek;
   late String selectedDayAbbr;
 
   @override
@@ -30,7 +30,7 @@ class _MessMenuPageState extends State<MessMenuPage> {
     super.initState();
     api = ApiEndpoints(widget.url);
     final now = DateTime.now();
-    final todayIdx = now.weekday % 7; // Sunday = 0
+    final todayIdx = now.weekday % 7;
     selectedDayAbbr = weekDays[todayIdx];
     _pageController = PageController(initialPage: todayIdx);
     selectedWeek = weekOfMonth(now).toString();
@@ -92,7 +92,7 @@ class _MessMenuPageState extends State<MessMenuPage> {
               ? const Center(child: Text('No menu found for this week'))
               : Column(
             children: [
-              const SizedBox(height: 12), // small space at top
+              const SizedBox(height: 12),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 8),
                 child: _dayRow(theme),
@@ -127,7 +127,6 @@ class _MessMenuPageState extends State<MessMenuPage> {
     );
   }
 
-  /// ✅ All days shown in a single row
   Widget _dayRow(ThemeProvider theme) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -208,51 +207,18 @@ class _MessMenuPageState extends State<MessMenuPage> {
   }
 
   Widget _mealCard(String title, String menu, ThemeProvider theme) {
+    final Map<String, Color> mealColors = {
+      'Breakfast': Colors.amber.shade300,
+      'Lunch': Colors.lightGreen.shade300,
+      'Snacks': Colors.deepOrange.shade300,
+      'Dinner': Colors.blue.shade300,
+    };
+
     final palette = {
-      'Breakfast': {
-        'color': theme.isDarkMode
-            ? const Color(0xFFFFD93D)
-            : Colors.orange.shade300,
-        'icon': Icons.wb_sunny,
-        'gradient': LinearGradient(
-          colors: [Colors.orange.shade100, Colors.orange.shade300],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-      },
-      'Lunch': {
-        'color': theme.isDarkMode
-            ? AppTheme.neonBlue
-            : Colors.green.shade300,
-        'icon': Icons.lunch_dining,
-        'gradient': LinearGradient(
-          colors: [Colors.green.shade100, Colors.green.shade300],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-      },
-      'Snacks': {
-        'color': theme.isDarkMode
-            ? const Color(0xFFFF6B6B)
-            : Colors.purple.shade300,
-        'icon': Icons.local_cafe,
-        'gradient': LinearGradient(
-          colors: [Colors.purple.shade100, Colors.purple.shade300],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-      },
-      'Dinner': {
-        'color': theme.isDarkMode
-            ? AppTheme.electricBlue
-            : Colors.blue.shade300,
-        'icon': Icons.dinner_dining,
-        'gradient': LinearGradient(
-          colors: [Colors.blue.shade100, Colors.blue.shade300],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-      },
+      'Breakfast': {'icon': Icons.wb_sunny},
+      'Lunch': {'icon': Icons.lunch_dining},
+      'Snacks': {'icon': Icons.local_cafe},
+      'Dinner': {'icon': Icons.dinner_dining},
     }[title]!;
 
     final isCurrent = _isCurrentMeal(title);
@@ -265,8 +231,8 @@ class _MessMenuPageState extends State<MessMenuPage> {
           color: isCurrent
               ? AppTheme.neonBlue
               : (theme.isDarkMode
-              ? (palette['color'] as Color).withOpacity(0.3)
-              : AppTheme.neonBlue.withOpacity(0.3)),
+              ? AppTheme.neonBlue.withOpacity(0.3)
+              : AppTheme.primaryBlue.withOpacity(0.3)),
           width: isCurrent ? 3 : 1,
         ),
         boxShadow: const [
@@ -276,7 +242,7 @@ class _MessMenuPageState extends State<MessMenuPage> {
             offset: Offset(0, 5),
           ),
         ],
-        gradient: palette['gradient'] as LinearGradient,
+        color: mealColors[title]!,
       ),
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -287,12 +253,13 @@ class _MessMenuPageState extends State<MessMenuPage> {
               width: 50,
               height: 50,
               decoration: BoxDecoration(
-                color: palette['color'] as Color,
+                // Use the base color with a slightly higher opacity
+                color: mealColors[title]!.withOpacity(0.8),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Icon(
                 palette['icon'] as IconData,
-                color: theme.isDarkMode ? Colors.black : Colors.white,
+                color: Colors.white, // A white icon color works well against the solid background
                 size: 25,
               ),
             ),
