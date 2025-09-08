@@ -353,7 +353,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   ),
                 ),
                 const SizedBox(height: 16),
-
                 // Assignments and GPA/Fee Dues containers
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.start,

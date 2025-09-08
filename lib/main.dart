@@ -26,7 +26,7 @@ class MyApp extends StatelessWidget {
           return MaterialApp(
             title: 'SASTRAX Student App',
             theme: themeProvider.currentTheme,
-            home: LoginPage(url: 'https://gst-bacteria-responded-senators.trycloudflare.com'),
+            home: LoginPage(url: 'https://quantity-plastic-shore-malawi.trycloudflare.com'),
             debugShowCheckedModeBanner: false,
           );
         },
