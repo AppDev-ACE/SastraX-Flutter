@@ -180,6 +180,10 @@ class ThemeProvider extends ChangeNotifier {
 
   bool get isDarkMode => _isDarkMode;
 
+  //added as getter
+  ThemeData get lightTheme => AppTheme.lightTheme;
+  ThemeData get darkTheme => AppTheme.darkTheme;
+
   ThemeData get currentTheme =>
       _isDarkMode ? AppTheme.darkTheme : AppTheme.lightTheme;
 
@@ -206,6 +210,7 @@ class ThemeProvider extends ChangeNotifier {
   Color get textSecondaryColor =>
       _isDarkMode ? Colors.white70 : Colors.grey[600]!;
   Color get iconColor => _isDarkMode ? Colors.grey : Colors.grey[600]!;
+
 
   void toggleTheme() async {
     _isDarkMode = !_isDarkMode;
