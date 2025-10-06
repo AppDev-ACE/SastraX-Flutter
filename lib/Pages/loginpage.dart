@@ -289,29 +289,38 @@ class _LoginPageState extends State<LoginPage> {
               hintColor: themeProvider.isDarkMode ? Colors.white70 : Colors.grey,
             ),
             const SizedBox(height: 20),
-            Center(
-              child: FloatingActionButton(
-                onPressed: () {
-                  FocusScope.of(context).unfocus();
-                  if (userController.text.isEmpty || passwordController.text.isEmpty) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Please enter Register Number and Password'),
-                        backgroundColor: Colors.redAccent,
-                      ),
-                    );
-                    return;
-                  }
-                  _showCaptchaDialog();
-                },
-                backgroundColor: Colors.blue,
-                splashColor: Colors.blue,
-                child: Text(
-                  "L O G I N ",
-                  style: GoogleFonts.lato(fontWeight: FontWeight.w900, fontSize: 10),
-                ),
-              ),
-            ),
+              Center(
+                child: ElevatedButton(
+                    onPressed: () {
+      FocusScope.of(context).unfocus();
+      if (userController.text.isEmpty || passwordController.text.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Please enter Register Number and Password'),
+            backgroundColor: Colors.redAccent,
+          ),
+        );
+        return;
+      }
+      _showCaptchaDialog();
+    },
+    style: ElevatedButton.styleFrom(
+      backgroundColor: Colors.blue,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(8),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+    ),
+    child: Text(
+      "L O G I N ",
+      style: GoogleFonts.lato(
+        fontWeight: FontWeight.w900,
+        fontSize: 15,
+      ),
+    ),
+  ),
+),
+
             Center(
               child: FloatingActionButton(
                 onPressed: () {
