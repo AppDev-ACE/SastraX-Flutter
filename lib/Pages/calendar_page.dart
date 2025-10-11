@@ -8,8 +8,8 @@ import 'package:timezone/data/latest_all.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
 
 class CalendarPage extends StatefulWidget {
-  final String regNo;
-  const CalendarPage({required this.regNo, super.key});
+  final String token; // ✅ changed from regNo
+  const CalendarPage({required this.token, super.key});
 
   @override
   _CalendarPageState createState() => _CalendarPageState();
@@ -39,7 +39,9 @@ class _CalendarPageState extends State<CalendarPage> {
   @override
   void initState() {
     super.initState();
-    _storageKey = 'calendar_events_${widget.regNo}';
+    // Ensure token is never null
+    final safeToken = widget.token ?? '';
+    _storageKey = 'calendar_events_$safeToken';
     _loadEvents();
     _initNotifications();
   }
@@ -59,11 +61,14 @@ class _CalendarPageState extends State<CalendarPage> {
 
   Future<void> _loadEvents() async {
     _prefs = await SharedPreferences.getInstance();
-    final rawJson = _prefs.getString(_storageKey);
-    if (rawJson != null) {
+    // Use empty JSON if nothing is stored
+    final rawJson = _prefs.getString(_storageKey) ?? '{}';
+    try {
       final decoded = jsonDecode(rawJson) as Map<String, dynamic>;
-      _events = decoded.map((key, value) => MapEntry(key, List<String>.from(value as List)));
-    } else {
+      _events = decoded.map((key, value) =>
+          MapEntry(key, List<String>.from(value as List)));
+    } catch (e) {
+      // If decoding fails, initialize with default events
       _events = {
         '2024-01-15': ['Assignment Due - Mathematics'],
         '2024-01-20': ['Project Presentation - Physics'],
@@ -106,8 +111,18 @@ class _CalendarPageState extends State<CalendarPage> {
       a.year == b.year && a.month == b.month && a.day == b.day;
 
   String _monthName(int m) => const [
-    'January', 'February', 'March', 'April', 'May', 'June',
-    'July', 'August', 'September', 'October', 'November', 'December'
+    'January',
+    'February',
+    'March',
+    'April',
+    'May',
+    'June',
+    'July',
+    'August',
+    'September',
+    'October',
+    'November',
+    'December'
   ][m - 1];
 
   Future<void> _requestNotificationPermissionAndSchedule(String note) async {
@@ -131,7 +146,8 @@ class _CalendarPageState extends State<CalendarPage> {
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Notification permission denied', style: TextStyle(color: _white)),
+          content:
+          Text('Notification permission denied', style: TextStyle(color: _white)),
           backgroundColor: Colors.red,
         ),
       );
@@ -163,7 +179,8 @@ class _CalendarPageState extends State<CalendarPage> {
       note,
       tz.TZDateTime.from(scheduledTime, tz.local),
       platformDetails,
-      uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
+      uiLocalNotificationDateInterpretation:
+      UILocalNotificationDateInterpretation.absoluteTime,
       androidScheduleMode: AndroidScheduleMode.exact,
     );
   }

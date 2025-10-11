@@ -20,9 +20,10 @@ import 'community_page.dart';
 import 'mess_menu_page.dart';
 
 class HomePage extends StatefulWidget {
-  final String regNo;
+  final String token; // ✅ changed from regNo
   final String url;
-  const HomePage({super.key, required this.regNo, required this.url});
+
+  const HomePage({super.key, required this.token, required this.url});
 
   @override
   State<HomePage> createState() => _HomePageState();
@@ -38,8 +39,8 @@ class _HomePageState extends State<HomePage> {
     super.initState();
     api = ApiEndpoints(widget.url);
     _pages = [
-      DashboardScreen(regNo: widget.regNo, url: widget.url),
-      CalendarPage(regNo: widget.regNo),
+      DashboardScreen(token: widget.token, url: widget.url),
+      CalendarPage(token: widget.token), // make sure CalendarPage constructor matches token
       const CommunityPage(),
       MessMenuPage(url: widget.url),
       const MoreOptionsScreen(),
@@ -116,10 +117,11 @@ class _HomePageState extends State<HomePage> {
   }
 }
 
+// -------------------- DashboardScreen --------------------
 class DashboardScreen extends StatefulWidget {
-  final String regNo;
+  final String token;
   final String url;
-  const DashboardScreen({super.key, required this.regNo, required this.url});
+  const DashboardScreen({super.key, required this.token, required this.url});
 
   @override
   State<DashboardScreen> createState() => _DashboardScreenState();
@@ -134,8 +136,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
   bool isCgpaLoading = true;
   bool isBirthday = false;
   String? studentName;
-  int feeDue = 0; // tuition + hostel combined
-  int bunks = 0; // total bunk hours
+  int feeDue = 0;
+  int bunks = 0;
   List assignments = [];
   bool isTimetableLoading = true;
   List timetableData = [];
@@ -148,7 +150,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     super.initState();
     api = ApiEndpoints(widget.url);
     _confettiController = ConfettiController(duration: const Duration(seconds: 3));
-    // Refactored to fetch data sequentially
     _fetchDashboardDataSequentially();
   }
 
@@ -159,40 +160,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Future<void> _fetchDashboardDataSequentially() async {
-    // Fetch Profile first, as it's the most common entry point.
     await _fetchProfile();
-
-    // Add a short delay to give the backend time to stabilize its session.
     await Future.delayed(const Duration(seconds: 1));
-
-    // Fetch Attendance.
     await _fetchAttendance();
-
-    // Add another short delay.
     await Future.delayed(const Duration(seconds: 1));
-
-    // Fetch CGPA.
     await _fetchCGPA();
-
-    // Add another short delay.
     await Future.delayed(const Duration(seconds: 1));
-
-    // Fetch Fee Due (which includes two sub-calls).
     await _fetchFeeDue();
-
-    // Add another short delay.
     await Future.delayed(const Duration(seconds: 1));
-
-    // Fetch Bunks.
     await _fetchBunks();
-
-    // Add another short delay.
     await Future.delayed(const Duration(seconds: 1));
-
-    // Fetch Timetable.
     await _fetchTimetable();
-
-    // Check birthday last, as it does not rely on the Puppeteer session.
     await _checkBirthday();
   }
 
@@ -201,9 +179,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
       final res = await http.post(
         Uri.parse(api.profile),
         headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'refresh': false, 'regNo': widget.regNo}),
+        body: jsonEncode({'refresh': false, 'regNo': widget.token}),
       );
-
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
         if (data['success'] == true) {
@@ -222,9 +199,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
       final res = await http.post(
         Uri.parse(api.dob),
         headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'refresh': false, 'regNo': widget.regNo}),
+        body: jsonEncode({'refresh': false, 'regNo': widget.token}),
       );
-
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
         final dob = data['dob']?[0]?['dob'];
@@ -251,7 +227,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       final res = await http.post(
         Uri.parse(api.attendance),
         headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'refresh': false, 'regNo': widget.regNo}),
+        body: jsonEncode({'refresh': false, 'regNo': widget.token}),
       );
 
       if (res.statusCode == 200) {
@@ -276,38 +252,46 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Future<void> _fetchCGPA() async {
+    setState(() {
+      isCgpaLoading = true;
+      cgpa = "N/A";
+    });
+
     try {
       final res = await http.post(
         Uri.parse(api.cgpa),
         headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'refresh': false, 'regNo': widget.regNo}),
+        body: jsonEncode({'refresh': false, 'token': widget.token}), // use 'token' not 'regNo'
       );
 
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
+        // Backend returns either 'cgpa' or 'cgpaData'
         final cgpaList = data['cgpa'] ?? data['cgpaData'];
-        if (cgpaList != null && cgpaList.isNotEmpty) {
-          setState(() {
-            cgpa = cgpaList[0]['cgpa'] ?? "N/A";
-            isCgpaLoading = false;
-          });
-          return;
+        if (cgpaList != null && cgpaList is List && cgpaList.isNotEmpty) {
+          final fetchedCgpa = cgpaList[0]['cgpa'];
+          if (fetchedCgpa != null && fetchedCgpa.toString().isNotEmpty) {
+            setState(() {
+              cgpa = fetchedCgpa.toString();
+            });
+          }
         }
       }
-    } catch (_) {}
-    setState(() {
-      cgpa = "N/A";
-      isCgpaLoading = false;
-    });
+    } catch (_) {
+      // Ignore errors, cgpa stays "N/A"
+    } finally {
+      setState(() {
+        isCgpaLoading = false;
+      });
+    }
   }
 
   Future<void> _fetchFeeDue() async {
     try {
-      // Fetch Sastra due first, then hostel due.
       final sastraRes = await http.post(
         Uri.parse(api.sastraDue),
         headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'refresh': false, 'regNo': widget.regNo}),
+        body: jsonEncode({'refresh': false, 'regNo': widget.token}),
       );
 
       await Future.delayed(const Duration(milliseconds: 500));
@@ -315,7 +299,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       final hostelRes = await http.post(
         Uri.parse(api.hostelDue),
         headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'refresh': false, 'regNo': widget.regNo}),
+        body: jsonEncode({'refresh': false, 'regNo': widget.token}),
       );
 
       if (sastraRes.statusCode == 200 && hostelRes.statusCode == 200) {
@@ -345,10 +329,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   Future<void> _fetchBunks() async {
     try {
-      final res = await http.get(
-        Uri.parse(api.bunk),
-      );
-
+      final res = await http.get(Uri.parse(api.bunk));
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
         if (data['success'] == true) {
@@ -357,7 +338,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
             0,
                 (sum, val) => sum + (val as int),
           );
-
           setState(() {
             bunks = total;
           });
@@ -376,7 +356,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       final res = await http.post(
         Uri.parse(api.timetable),
         headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'refresh': false, 'regNo': widget.regNo}),
+        body: jsonEncode({'refresh': false, 'token': widget.token}), // <- fixed
       );
 
       if (res.statusCode == 200) {
@@ -386,15 +366,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
             timetableData = data['timetable'];
           });
         }
+      } else {
+        print('Failed to fetch timetable: ${res.statusCode}');
       }
-    } catch (_) {
-      // Handle error if necessary
+    } catch (e) {
+      print('Error fetching timetable: $e');
     } finally {
       setState(() {
         isTimetableLoading = false;
       });
     }
   }
+
 
   @override
   Widget build(BuildContext context) {
@@ -412,8 +395,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   onTap: () => Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (_) =>
-                          ProfilePage(regNo: widget.regNo, url: widget.url),
+                      builder: (_) => ProfilePage(token: widget.token, url: widget.url),
                     ),
                   ),
                   child: NeonContainer(

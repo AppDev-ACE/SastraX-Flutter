@@ -1,17 +1,17 @@
 import 'dart:convert';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:sastra_x/Components/TextUserPassField.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:sastra_x/Pages/home_page.dart';
 import 'package:sastra_x/UI/LoginUI.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
 import '../models/theme_model.dart';
 import '../services/ApiEndpoints.dart';
 
 class LoginPage extends StatefulWidget {
-  final String url;
+  final String url; // Base backend URL (e.g., http://your-server.com:3000)
   const LoginPage({super.key, required this.url});
 
   @override
@@ -27,52 +27,21 @@ class _LoginPageState extends State<LoginPage> {
   String? passwordErrorMessage;
   String? captchaErrorMessage;
 
-  late String captchaUrl;
-  late final ApiEndpoints api; // Add a field for the API class
+  Uint8List? captchaBytes;
+  late final ApiEndpoints api;
 
   @override
   void initState() {
     super.initState();
-    api = ApiEndpoints(widget.url); // Initialize the API class
-    _refreshCaptcha();
-
-    userController.addListener(() {
-      if (userController.text.isNotEmpty) {
-        setState(() => userErrorMessage = null);
-      }
-    });
-
-    passwordController.addListener(() {
-      if (passwordController.text.isNotEmpty) {
-        setState(() => passwordErrorMessage = null);
-      }
-    });
-
-    captchaController.addListener(() {
-      if (captchaController.text.isNotEmpty) {
-        setState(() => captchaErrorMessage = null);
-      }
-    });
+    api = ApiEndpoints(widget.url);
   }
 
-  // Refresh captcha and include regno param when available
-  void _refreshCaptcha() {
+  Future<void> _getCaptcha() async {
     final regNo = userController.text.trim();
-    setState(() {
-      if (regNo.isEmpty) {
-        captchaUrl = '${api.captcha}?ts=${DateTime.now().millisecondsSinceEpoch}';
-      } else {
-        captchaUrl = '${api.captcha}?regno=$regNo&ts=${DateTime.now().millisecondsSinceEpoch}';
-      }
-    });
-  }
-
-  Future<void> _validateCaptcha() async {
-    FocusScope.of(context).unfocus();
-    if (captchaController.text.isEmpty) {
+    if (regNo.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Please enter CAPTCHA'),
+          content: Text('Enter Register Number first'),
           backgroundColor: Colors.redAccent,
         ),
       );
@@ -81,27 +50,20 @@ class _LoginPageState extends State<LoginPage> {
 
     try {
       final response = await http.post(
-        // Use the API endpoint property
-        Uri.parse(api.login),
+        Uri.parse(api.captcha),
         headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'regno': userController.text.trim(),
-          'pwd': passwordController.text.trim(),
-          'captcha': captchaController.text.trim(),
-        }),
+        body: jsonEncode({'regNo': regNo}),
       );
 
       if (response.statusCode == 200) {
-        Navigator.pop(context); // Close dialog
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (_) => HomePage(regNo: userController.text, url: widget.url)),
-        );
+        setState(() {
+          captchaBytes = response.bodyBytes;
+        });
       } else {
-        final result = jsonDecode(response.body);
+        final err = jsonDecode(response.body);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(result['message'] ?? 'Captcha verification failed'),
+            content: Text(err['message'] ?? 'Failed to fetch captcha'),
             backgroundColor: Colors.redAccent,
           ),
         );
@@ -116,116 +78,139 @@ class _LoginPageState extends State<LoginPage> {
     }
   }
 
-  void _showCaptchaDialog() {
-    // Refresh captcha using current register number (if any)
-    _refreshCaptcha();
+  Future<void> _login() async {
+    final regNo = userController.text.trim();
+    final pwd = passwordController.text.trim();
+    final captcha = captchaController.text.trim();
+
+    if (regNo.isEmpty || pwd.isEmpty || captcha.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please fill all fields'),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+      return;
+    }
+
+    try {
+      final response = await http.post(
+        Uri.parse(api.login),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'regNo': regNo,
+          'pwd': pwd,
+          'captcha': captcha,
+        }),
+      );
+
+      final result = jsonDecode(response.body);
+
+      if (response.statusCode == 200 && result['success'] == true) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Login Successful!'),
+            backgroundColor: Colors.green,
+          ),
+        );
+
+        Navigator.pop(context); // Close captcha dialog
+
+        // ✅ Correctly pass token to HomePage
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (_) => HomePage(token: regNo, url: widget.url),
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(result['message'] ?? 'Login failed'),
+            backgroundColor: Colors.redAccent,
+          ),
+        );
+        await _getCaptcha(); // Refresh captcha on failure
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error: $e'),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+    }
+  }
+
+  void _showCaptchaDialog() async {
     captchaController.clear();
+    await _getCaptcha();
+
+    if (captchaBytes == null) return;
 
     showDialog(
       context: context,
       builder: (BuildContext context) {
         return StatefulBuilder(
-          builder: (BuildContext context, StateSetter setDialogState) {
+          builder: (context, setDialogState) {
             return Center(
               child: Material(
-                borderRadius: BorderRadius.circular(20),
+                borderRadius: BorderRadius.circular(16),
                 child: Container(
                   constraints: const BoxConstraints(maxWidth: 330),
                   padding: const EdgeInsets.all(20),
                   decoration: BoxDecoration(
-                    color: Colors.blue[100],
-                    borderRadius: BorderRadius.circular(20),
+                    color: Colors.blue[50],
+                    borderRadius: BorderRadius.circular(16),
                   ),
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const SizedBox(height: 10),
-                      SizedBox(
-                        height: 60,
-                        width: double.infinity,
-                        child: Stack(
-                          alignment: Alignment.center,
-                          children: [
-                            Center(
-                              child: SizedBox(
-                                width: 180,
-                                height: 50,
-                                child: CachedNetworkImage(
-                                  key: ValueKey(captchaUrl),
-                                  imageUrl: captchaUrl,
-                                  fit: BoxFit.contain,
-                                  placeholder: (context, url) => const Center(
-                                    child: SizedBox(
-                                      height: 20,
-                                      width: 20,
-                                      child: CircularProgressIndicator(strokeWidth: 2),
-                                    ),
-                                  ),
-                                  errorWidget: (context, url, error) => Container(
-                                    color: Colors.red,
-                                    child: const Center(
-                                      child: Text(
-                                        "Error",
-                                        style: TextStyle(color: Colors.white),
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
-                            Positioned(
-                              left: 0,
-                              child: IconButton(
-                                icon: const Icon(Icons.arrow_back_ios_new),
-                                onPressed: () {
-                                  captchaController.clear();
-                                  Navigator.pop(context);
-                                },
-                              ),
-                            ),
-                            Positioned(
-                              right: 0,
-                              child: IconButton(
-                                icon: const Icon(Icons.refresh),
-                                onPressed: () {
-                                  captchaController.clear();
-                                  setDialogState(() {
-                                    final regNo = userController.text.trim();
-                                    if (regNo.isEmpty) {
-                                      captchaUrl = '${api.captcha}?ts=${DateTime.now().millisecondsSinceEpoch}';
-                                    } else {
-                                      captchaUrl = '${api.captcha}?regno=$regNo&ts=${DateTime.now().millisecondsSinceEpoch}';
-                                    }
-                                  });
-                                },
-                              ),
-                            ),
-                          ],
-                        ),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          IconButton(
+                            icon: const Icon(Icons.close),
+                            onPressed: () => Navigator.pop(context),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.refresh),
+                            onPressed: () async {
+                              await _getCaptcha();
+                              setDialogState(() {});
+                            },
+                          ),
+                        ],
                       ),
+                      captchaBytes != null
+                          ? Image.memory(captchaBytes!, height: 60, fit: BoxFit.contain)
+                          : const CircularProgressIndicator(),
                       const SizedBox(height: 15),
                       TextField(
                         controller: captchaController,
                         decoration: InputDecoration(
                           hintText: "Enter CAPTCHA",
-                          hintStyle: const TextStyle(fontSize: 12),
                           contentPadding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
                           filled: true,
                           fillColor: Colors.white,
                           border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(10),
-                            borderSide: BorderSide(color: Colors.grey.shade300),
+                            borderRadius: BorderRadius.circular(8),
                           ),
                         ),
                       ),
                       const SizedBox(height: 20),
-                      FloatingActionButton.extended(
-                        onPressed: _validateCaptcha,
-                        label: const Text(
-                          "S U B M I T",
-                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                      ElevatedButton(
+                        onPressed: _login,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.blue,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
                         ),
-                        backgroundColor: Colors.blue.shade400,
+                        child: const Text(
+                          "Submit",
+                          style: TextStyle(fontWeight: FontWeight.bold),
+                        ),
                       ),
                     ],
                   ),
@@ -248,27 +233,18 @@ class _LoginPageState extends State<LoginPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const LoginUI(),
-            // The following Padding and Text are wrapped in a Row with Flexible
+            const LoginUI(), // ✅ Your UI remains intact
             Padding(
               padding: const EdgeInsets.all(8.0),
-              child: Row(
-                children: [
-                  Flexible(
-                    child: Text(
-                      'Enter your Login Credentials',
-                      style: GoogleFonts.lato(
-                        textStyle: TextStyle(
-                          fontSize: 12, // You might need to adjust this size
-                          fontWeight: FontWeight.w900,
-                          color: themeProvider.isDarkMode ? Colors.white : Colors.black,
-                        ),
-                      ),
-                      overflow: TextOverflow.ellipsis, // Prevents overflow
-                      softWrap: true, // Allows wrapping to next line
-                    ),
+              child: Text(
+                'Enter your Login Credentials',
+                style: GoogleFonts.lato(
+                  textStyle: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w900,
+                    color: themeProvider.isDarkMode ? Colors.white : Colors.black,
                   ),
-                ],
+                ),
               ),
             ),
             TextUserPassField(
@@ -289,46 +265,34 @@ class _LoginPageState extends State<LoginPage> {
               hintColor: themeProvider.isDarkMode ? Colors.white70 : Colors.grey,
             ),
             const SizedBox(height: 20),
-              Center(
-                child: ElevatedButton(
-                    onPressed: () {
-      FocusScope.of(context).unfocus();
-      if (userController.text.isEmpty || passwordController.text.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Please enter Register Number and Password'),
-            backgroundColor: Colors.redAccent,
-          ),
-        );
-        return;
-      }
-      _showCaptchaDialog();
-    },
-    style: ElevatedButton.styleFrom(
-      backgroundColor: Colors.blue,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(8),
-      ),
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-    ),
-    child: Text(
-      "L O G I N ",
-      style: GoogleFonts.lato(
-        fontWeight: FontWeight.w900,
-        fontSize: 15,
-      ),
-    ),
-  ),
-),
-
             Center(
-              child: FloatingActionButton(
+              child: ElevatedButton(
                 onPressed: () {
-                  Navigator.push(context,
-                      MaterialPageRoute(builder: (context) => HomePage(regNo: userController.text, url: widget.url)));
+                  if (userController.text.isEmpty || passwordController.text.isEmpty) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Please enter Register Number and Password'),
+                        backgroundColor: Colors.redAccent,
+                      ),
+                    );
+                    return;
+                  }
+                  _showCaptchaDialog();
                 },
-                mini: true,
-                child: const Icon(Icons.arrow_forward),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.blue,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                ),
+                child: Text(
+                  "LOGIN",
+                  style: GoogleFonts.lato(
+                    fontWeight: FontWeight.w900,
+                    fontSize: 15,
+                  ),
+                ),
               ),
             ),
           ],
