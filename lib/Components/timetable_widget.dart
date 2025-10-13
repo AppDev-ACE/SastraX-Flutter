@@ -15,9 +15,9 @@ class TimetableWidget extends StatelessWidget {
 
   bool _isEmptySchedule(List<dynamic> schedule) {
     if (schedule.isEmpty) return true;
-
     final today = DateTime.now();
     final dayIndex = today.weekday - 1;
+
     if (dayIndex >= schedule.length) return true;
 
     final todayData = schedule[dayIndex] as Map<String, dynamic>;
@@ -30,10 +30,10 @@ class TimetableWidget extends StatelessWidget {
   int? _getCurrentIndex(List<dynamic> schedule) {
     final now = DateTime.now();
     final dayIndex = now.weekday - 1;
+
     if (dayIndex >= schedule.length) return null;
 
     final todayData = schedule[dayIndex] as Map<String, dynamic>;
-
     final timeSlots = [
       '08:45 - 09:45',
       '09:45 - 10:45',
@@ -67,7 +67,6 @@ class TimetableWidget extends StatelessWidget {
         }
       } catch (_) {}
     }
-
     return null;
   }
 
@@ -75,7 +74,6 @@ class TimetableWidget extends StatelessWidget {
   Widget build(BuildContext context) {
     final themeProvider = Provider.of<ThemeProvider>(context);
 
-    // Loading state
     if (isLoading) {
       return Container(
         padding: const EdgeInsets.all(32),
@@ -91,7 +89,6 @@ class TimetableWidget extends StatelessWidget {
       );
     }
 
-    // Empty timetable
     if (_isEmptySchedule(timetable)) {
       return Container(
         padding: const EdgeInsets.all(32),
@@ -103,39 +100,18 @@ class TimetableWidget extends StatelessWidget {
               ? [BoxShadow(color: AppTheme.neonBlue.withOpacity(0.2), blurRadius: 15)]
               : [BoxShadow(color: Colors.black12, blurRadius: 10, offset: const Offset(0, 5))],
         ),
-        child: const Center(
-          child: Text(
-            'No timetable available today.',
-            style: TextStyle(fontSize: 16),
-          ),
+        child: const Text(
+          'No timetable available today.',
+          style: TextStyle(fontSize: 16),
         ),
       );
     }
 
-    // Prepare today's timetable
     final today = DateTime.now();
     final dayIndex = today.weekday - 1;
-    if (dayIndex >= timetable.length) {
-      return Container(
-        padding: const EdgeInsets.all(32),
-        decoration: BoxDecoration(
-          color: themeProvider.cardBackgroundColor,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: AppTheme.neonBlue.withOpacity(0.3)),
-        ),
-        child: const Center(
-          child: Text(
-            'No timetable available today.',
-            style: TextStyle(fontSize: 16),
-          ),
-        ),
-      );
-    }
-
     final todayData = timetable[dayIndex] as Map<String, dynamic>;
 
-    // Transform timetable for UI
-    final List<Map<String, String>> transformed = [];
+    final List<Map<String, String>> transformedTimetable = [];
     final timeSlots = [
       '08:45 - 09:45',
       '09:45 - 10:45',
@@ -156,20 +132,17 @@ class TimetableWidget extends StatelessWidget {
       final subject = todayData[slot] ?? 'N/A';
       String room = '';
       String cleanSubject = subject;
-
       final roomMatch = RegExp(r'\((.*?)\)').firstMatch(subject);
       if (roomMatch != null) {
         room = roomMatch.group(1)!;
         cleanSubject = subject.replaceAll(roomMatch.group(0)!, '').trim();
       }
-
       final parts = slot.split(' - ');
       final startTime24 = DateFormat('HH:mm').parse(parts[0]);
       final endTime24 = DateFormat('HH:mm').parse(parts[1]);
-      final formattedTime =
-          '${DateFormat('h:mm a').format(startTime24)} - ${DateFormat('h:mm a').format(endTime24)}';
+      final formattedTime = '${DateFormat('h:mm a').format(startTime24)} - ${DateFormat('h:mm a').format(endTime24)}';
 
-      transformed.add({
+      transformedTimetable.add({
         'time': formattedTime,
         'start': startTime24.toIso8601String(),
         'end': endTime24.toIso8601String(),
@@ -191,7 +164,6 @@ class TimetableWidget extends StatelessWidget {
       ),
       child: Column(
         children: [
-          // Header
           Container(
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
@@ -205,8 +177,10 @@ class TimetableWidget extends StatelessWidget {
             ),
             child: Row(
               children: [
-                Icon(Icons.schedule,
-                    color: themeProvider.isDarkMode ? AppTheme.neonBlue : Colors.white),
+                Icon(
+                  Icons.schedule,
+                  color: themeProvider.isDarkMode ? AppTheme.neonBlue : Colors.white,
+                ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: FittedBox(
@@ -225,12 +199,13 @@ class TimetableWidget extends StatelessWidget {
               ],
             ),
           ),
-          Flexible(
+          // Use Expanded instead of Flexible to fix layout warnings
+          Expanded(
             child: ListView.builder(
               padding: const EdgeInsets.all(16),
-              itemCount: transformed.length,
+              itemCount: transformedTimetable.length,
               itemBuilder: (context, index) {
-                final item = transformed[index];
+                final item = transformedTimetable[index];
                 final isBreak = item['subject']!.toLowerCase() == 'break';
                 final isCurrent = index == currentIndex;
 

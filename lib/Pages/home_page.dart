@@ -227,15 +227,21 @@ class _DashboardScreenState extends State<DashboardScreen> {
       final res = await http.post(
         Uri.parse(api.attendance),
         headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'refresh': false, 'regNo': widget.token}),
+        body: jsonEncode({'refresh': false, 'token': widget.token}),
       );
 
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
-        final raw = data['attendance'] ?? "0%";
+
+        // *** FIX: Check for 'attendance', then fall back to 'attendanceHTML'. ***
+        // This makes the client resilient to the two different keys sent by the server.
+        final raw = data['attendance'] ?? data['attendanceHTML'] ?? "0%";
+
+        // Regular expressions to parse the percentage and class counts from the raw string.
         final percentMatch = RegExp(r'(\d+(?:\.\d+)?)%').firstMatch(raw);
         final pairMatch = RegExp(r'\((\d+)/(\d+)\)').firstMatch(raw);
 
+        // Update the state with the parsed values.
         setState(() {
           attendancePercent = double.tryParse(percentMatch?[1] ?? '0') ?? 0;
           attendedClasses = int.tryParse(pairMatch?[1] ?? '0') ?? 0;
@@ -243,6 +249,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         });
       }
     } catch (_) {
+      // On any exception, reset the state to default values.
       setState(() {
         attendancePercent = 0;
         attendedClasses = 0;
