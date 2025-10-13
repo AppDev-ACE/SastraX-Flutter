@@ -51,22 +51,6 @@ class InternalsPage extends StatelessWidget {
             ),
             const SizedBox(height: 20),
 
-            // Replaces the top "Overall Performance" card with a simpler result display
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: theme.colorScheme.secondary.withOpacity(0.2),
-                borderRadius: BorderRadius.circular(15),
-              ),
-              child: Text(
-                'Average Percentage: ${averagePercentage.toStringAsFixed(2)}%',
-                textAlign: TextAlign.center,
-                style: theme.textTheme.titleMedium,
-              ),
-            ),
-            const SizedBox(height: 20),
-
             // List of subjects, each in its own card
             ListView.builder(
               shrinkWrap: true,
@@ -125,9 +109,9 @@ class InternalsPage extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
-              _buildInternalMark(theme, 'IA 1', subject['internal1']),
-              _buildInternalMark(theme, 'IA 2', subject['internal2']),
-              _buildInternalMark(theme, 'IA 3', subject['internal3']),
+              _buildInternalMark(theme, 'CIA 1', subject['internal1']),
+              _buildInternalMark(theme, 'CIA 2', subject['internal2']),
+              _buildInternalMark(theme, 'CIA 3', subject['internal3']),
             ],
           ),
           const SizedBox(height: 16),

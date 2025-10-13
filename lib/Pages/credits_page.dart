@@ -5,9 +5,9 @@ import 'dart:math' as math;
 import '../models/theme_model.dart'; // Using your final theme model
 
 class CreditsScreen extends StatefulWidget {
-  final String url ;
-  final String token ;
-  const CreditsScreen({super.key , required this.url , required this.token});
+  final String url;
+  final String token;
+  const CreditsScreen({super.key, required this.url, required this.token});
 
   @override
   State<CreditsScreen> createState() => _CreditsScreenState();
@@ -189,25 +189,13 @@ class _CreditsScreenState extends State<CreditsScreen>
     const double baseWidth = 375.0;
     final double scaleFactor = screenWidth / baseWidth;
 
-    // KEY CHANGE: Define the original gradient locally to ensure it's always used.
-    const originalHeaderGradient = LinearGradient(
-      begin: Alignment.topLeft,
-      end: Alignment.bottomRight,
-      colors: [
-        Color(0xFF6A1B9A), // The original darker purple
-        Color(0xFF00ACC1), // The original aqua
-      ],
-    );
-
-
     return Scaffold(
       backgroundColor: themeProvider.backgroundColor,
       appBar: AppBar(
-        // The AppBar is solid blue to match the HomePage
         backgroundColor: AppTheme.primaryBlue,
         elevation: 0,
         title: Text(
-          'Credits',
+          'Academic Credits',
           style: TextStyle(
             color: Colors.white,
             fontSize: 22 * scaleFactor.clamp(0.9, 1.2),
@@ -215,65 +203,21 @@ class _CreditsScreenState extends State<CreditsScreen>
         ),
         iconTheme: const IconThemeData(color: Colors.white),
       ),
-      body: Column(
-        children: [
-          // This container now uses the locally defined "original" gradient
-          Container(
-            width: double.infinity,
-            padding: EdgeInsets.all(20 * scaleFactor),
-            decoration: const BoxDecoration(
-              gradient: originalHeaderGradient, // Using the restored gradient
-              borderRadius: BorderRadius.only(
-                bottomLeft: Radius.circular(30),
-                bottomRight: Radius.circular(30),
-              ),
+      body: Padding(
+        padding: EdgeInsets.all(16 * scaleFactor),
+        child: Column(
+          children: [
+            // The circle layout now has a defined height, positioning it at the top.
+            SizedBox(
+              height: MediaQuery.of(context).size.height * 0.4,
+              child: _buildCreditsCircleLayout(),
             ),
-            child: Column(
-              children: [
-                Icon(
-                  Icons.school,
-                  size: 50 * scaleFactor,
-                  color: Colors.white,
-                ).animate().scale(delay: 200.ms, curve: Curves.elasticOut),
-                SizedBox(height: 15 * scaleFactor),
-                Text(
-                  'Academic Credits',
-                  style: TextStyle(
-                    fontSize: (28 * scaleFactor).clamp(24.0, 32.0),
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
-                  ),
-                ).animate().slideY(delay: 400.ms, begin: -0.3, end: 0),
-                SizedBox(height: 8 * scaleFactor),
-                Text(
-                  'Track your semester-wise progress',
-                  style: TextStyle(
-                    fontSize: (16 * scaleFactor).clamp(14.0, 18.0),
-                    color: Colors.white.withOpacity(0.9),
-                  ),
-                ).animate().fadeIn(delay: 600.ms),
-              ],
+            // The details section fills all the remaining space below the circles.
+            Expanded(
+              child: _buildDetailsSection(),
             ),
-          ),
-          // Main Credits Circle Layout
-          Expanded(
-            child: Container(
-              padding: EdgeInsets.all(20 * scaleFactor),
-              child: Column(
-                children: [
-                  Expanded(
-                    flex: 3,
-                    child: _buildCreditsCircleLayout(),
-                  ),
-                  Expanded(
-                    flex: 2,
-                    child: _buildDetailsSection(),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -307,7 +251,8 @@ class _CreditsScreenState extends State<CreditsScreen>
                     ),
                   ).animate().fadeIn(delay: 800.ms),
                   ...List.generate(8, (index) {
-                    final angle = (index * 2 * math.pi / 8) + (_rotationController.value * 2 * math.pi * 0.1);
+                    final angle = (index * 2 * math.pi / 8) +
+                        (_rotationController.value * 2 * math.pi * 0.1);
                     final x = orbitRadius * math.cos(angle);
                     final y = orbitRadius * math.sin(angle);
 
@@ -390,8 +335,14 @@ class _CreditsScreenState extends State<CreditsScreen>
     final semesterData = _semesterData[semester - 1];
     final isSelected = _selectedSemester == semester;
     final colors = [
-      Colors.red, Colors.orange, Colors.yellow.shade700, Colors.green,
-      Colors.blue, Colors.indigo, Colors.purple, Colors.pink,
+      Colors.red,
+      Colors.orange,
+      Colors.yellow.shade700,
+      Colors.green,
+      Colors.blue,
+      Colors.indigo,
+      Colors.purple,
+      Colors.pink,
     ];
     final color = colors[semester - 1];
 
@@ -439,7 +390,6 @@ class _CreditsScreenState extends State<CreditsScreen>
       ),
     ).animate().scale(delay: (semester * 100).ms, curve: Curves.elasticOut);
   }
-
 
   Widget _buildDetailsSection() {
     return AnimatedSwitcher(
@@ -502,15 +452,18 @@ class _CreditsScreenState extends State<CreditsScreen>
           Row(
             children: [
               Expanded(
-                child: _buildStatCard('Total Credits', '${_totalCredits.toInt()}', AppTheme.successGreen),
+                child: _buildStatCard(
+                    'Total Credits', '${_totalCredits.toInt()}', AppTheme.successGreen),
               ),
               SizedBox(width: screenWidth * 0.04),
               Expanded(
-                child: _buildStatCard('Overall CGPA', _overallGPA.toStringAsFixed(2), AppTheme.accentAqua),
+                child: _buildStatCard('Overall CGPA',
+                    _overallGPA.toStringAsFixed(2), AppTheme.accentAqua),
               ),
               SizedBox(width: screenWidth * 0.04),
               Expanded(
-                child: _buildStatCard('Semesters', '${_semesterData.length}', AppTheme.primaryPurple),
+                child: _buildStatCard(
+                    'Semesters', '${_semesterData.length}', AppTheme.primaryPurple),
               ),
             ],
           ),
@@ -574,15 +527,20 @@ class _CreditsScreenState extends State<CreditsScreen>
           Row(
             children: [
               Expanded(
-                child: _buildStatCard('Credits', '${semesterData['earnedCredits']}/${semesterData['totalCredits']}', AppTheme.successGreen),
+                child: _buildStatCard(
+                    'Credits',
+                    '${semesterData['earnedCredits']}/${semesterData['totalCredits']}',
+                    AppTheme.successGreen),
               ),
               const SizedBox(width: 10),
               Expanded(
-                child: _buildStatCard('GPA', '${semesterData['gpa']}', AppTheme.accentAqua),
+                child: _buildStatCard(
+                    'SGPA', '${semesterData['gpa']}', AppTheme.accentAqua),
               ),
               const SizedBox(width: 10),
               Expanded(
-                child: _buildStatCard('Subjects', '${subjects.length}', AppTheme.primaryPurple),
+                child: _buildStatCard(
+                    'Subjects', '${subjects.length}', AppTheme.primaryPurple),
               ),
             ],
           ),
@@ -631,9 +589,11 @@ class _CreditsScreenState extends State<CreditsScreen>
                       ),
                       const SizedBox(width: 8),
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 4),
                         decoration: BoxDecoration(
-                          color: _getGradeColor(subject['grade']).withOpacity(0.1),
+                          color: _getGradeColor(subject['grade'])
+                              .withOpacity(0.1),
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: Text(
