@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 import 'more_options_page.dart'; // Make sure this import is correct
 
 class InternalsPage extends StatelessWidget {
-  InternalsPage({super.key});
+  final String token ;
+  InternalsPage({super.key , required this.token});
 
   // Hardcoded data for student's internal marks
   final List<Map<String, dynamic>> subjects = [

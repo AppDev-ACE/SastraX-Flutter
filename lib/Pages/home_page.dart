@@ -43,7 +43,7 @@ class _HomePageState extends State<HomePage> {
       CalendarPage(token: widget.token), // make sure CalendarPage constructor matches token
       const CommunityPage(),
       MessMenuPage(url: widget.url),
-      const MoreOptionsScreen(),
+      MoreOptionsScreen(token: widget.token, url: widget.url,),
     ];
   }
 
@@ -160,19 +160,24 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Future<void> _fetchDashboardDataSequentially() async {
-    await _fetchProfile();
-    await Future.delayed(const Duration(seconds: 1));
-    await _fetchAttendance();
-    await Future.delayed(const Duration(seconds: 1));
-    await _fetchCGPA();
-    await Future.delayed(const Duration(seconds: 1));
-    await _fetchFeeDue();
-    await Future.delayed(const Duration(seconds: 1));
-    await _fetchBunks();
-    await Future.delayed(const Duration(seconds: 1));
-    await _fetchTimetable();
-    await _checkBirthday();
+    try {
+      await Future.wait([
+        _fetchProfile(),
+        _fetchAttendance(),
+        _fetchSubjectWiseAttendanceAndSum(),
+        _fetchCGPA(),
+        _fetchFeeDue(),
+        _fetchBunks(),
+        _fetchTimetable(),
+        _checkBirthday(),
+      ]);
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error fetching data: $e')),
+      );
+    }
   }
+
 
   Future<void> _fetchProfile() async {
     try {
@@ -233,28 +238,92 @@ class _DashboardScreenState extends State<DashboardScreen> {
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
 
-        // *** FIX: Check for 'attendance', then fall back to 'attendanceHTML'. ***
-        // This makes the client resilient to the two different keys sent by the server.
         final raw = data['attendance'] ?? data['attendanceHTML'] ?? "0%";
 
-        // Regular expressions to parse the percentage and class counts from the raw string.
-        final percentMatch = RegExp(r'(\d+(?:\.\d+)?)%').firstMatch(raw);
-        final pairMatch = RegExp(r'\((\d+)/(\d+)\)').firstMatch(raw);
+        // 👇 Show the raw data in a snackbar for debugging
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Raw: $raw'),
+            duration: const Duration(seconds: 3),
+          ),
+        );
 
-        // Update the state with the parsed values.
+        final percentMatch = RegExp(r'(\d+(?:\.\d+)?)%').firstMatch(raw);
+        final pairMatch = RegExp(r'(\d+)\s*/\s*(\d+)').firstMatch(raw);
+
         setState(() {
           attendancePercent = double.tryParse(percentMatch?[1] ?? '0') ?? 0;
-          attendedClasses = int.tryParse(pairMatch?[1] ?? '0') ?? 0;
-          totalClasses = int.tryParse(pairMatch?[2] ?? '0') ?? 0;
         });
       }
     } catch (_) {
-      // On any exception, reset the state to default values.
       setState(() {
         attendancePercent = 0;
-        attendedClasses = 0;
-        totalClasses = 0;
       });
+
+      // Show error too
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Failed to fetch attendance'),
+          duration: Duration(seconds: 3),
+        ),
+      );
+    }
+  }
+
+  Future<void> _fetchSubjectWiseAttendanceAndSum() async {
+    try {
+      final res = await http.post(
+        Uri.parse('${widget.url}/subjectWiseAttendance'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'token': widget.token, 'refresh': false}),
+      );
+
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body);
+
+        // Try both possible keys from your backend
+        final subjects = data['subjectWiseAttendance'] ?? data['subjectAttendance'];
+        if (subjects != null && subjects is List) {
+          int totalHrs = 0;
+          int attendedHrs = 0;
+
+          for (final subject in subjects) {
+            final total = int.tryParse(subject['totalHrs']?.toString() ?? '0') ?? 0;
+            final present = int.tryParse(subject['presentHrs']?.toString() ?? '0') ?? 0;
+            totalHrs += total;
+            attendedHrs += present;
+          }
+
+          double percent = totalHrs > 0 ? (attendedHrs / totalHrs) * 100 : 0;
+
+          setState(() {
+            totalClasses = totalHrs;
+            attendedClasses = attendedHrs;
+            attendancePercent = double.parse(percent.toStringAsFixed(2));
+          });
+
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'Attendance Updated: ${attendancePercent.toStringAsFixed(2)}% ($attendedClasses/$totalClasses)',
+              ),
+              duration: const Duration(seconds: 2),
+            ),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('No subject-wise attendance data found')),
+          );
+        }
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to fetch subject attendance: ${res.statusCode}')),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error fetching subject-wise attendance: $e')),
+      );
     }
   }
 

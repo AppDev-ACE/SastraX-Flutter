@@ -11,7 +11,17 @@ import 'internals_page.dart';
 
 
 class MoreOptionsScreen extends StatelessWidget {
-  const MoreOptionsScreen({super.key});
+  final String token;
+  final String url;
+  // KEY CHANGE 1: Accept the fetched CGPA from the parent widget (HomePage)
+  final String? cgpa;
+
+  const MoreOptionsScreen({
+    super.key,
+    required this.token,
+    required this.url,
+    this.cgpa, // It's optional as it might be loading initially
+  });
 
   static const List<Map<String, dynamic>> _options = [
     {
@@ -113,28 +123,34 @@ class MoreOptionsScreen extends StatelessWidget {
   void _handleTap(BuildContext ctx, String route) {
     switch (route) {
       case 'internals':
-        Navigator.push(ctx, MaterialPageRoute(builder: (_) => InternalsPage()));
+        Navigator.push(
+            ctx,
+            MaterialPageRoute(
+                builder: (_) => InternalsPage(token: token,)));
         break;
       case 'credits':
-        Navigator.push(
-            ctx, MaterialPageRoute(builder: (_) => const CreditsScreen()));
+      // KEY CHANGE 2: Pass the received CGPA along to the CreditsScreen
+        Navigator.push(ctx,
+            MaterialPageRoute(builder: (_) => CreditsScreen(token: token, url: url)));
         break;
       case 'sgpa':
         Navigator.push(
             ctx, MaterialPageRoute(builder: (_) => const SgpaCalculator()));
         break;
       case 'about_team':
-        Navigator.push(
-            ctx, MaterialPageRoute(builder: (_) => AboutTeamScreen()));
+        Navigator.push(ctx,
+            MaterialPageRoute(builder: (_) => AboutTeamScreen()));
         break;
       case 'clubs':
-        Navigator.push(ctx, MaterialPageRoute(builder: (_) =>  ClubHubPage()));
-
+        Navigator.push(ctx,
+            MaterialPageRoute(builder: (_) => ClubHubPage()));
+        break;
       default:
         break;
     }
   }
 }
+
 
 class _OptionCard extends StatelessWidget {
   const _OptionCard({
