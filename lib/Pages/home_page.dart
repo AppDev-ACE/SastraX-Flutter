@@ -352,31 +352,70 @@ class _DashboardScreenState extends State<DashboardScreen> {
     setState(() {
       isTimetableLoading = true;
     });
+
     try {
       final res = await http.post(
         Uri.parse(api.timetable),
         headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'refresh': false, 'token': widget.token}), // <- fixed
+        body: jsonEncode({'refresh': false, 'token': widget.token}),
       );
 
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
-        if (data['success'] == true) {
+
+        // Handle both 'timetable' and 'timeTable' keys
+        final fetchedTimetable = data['timetable'] ?? data['timeTable'];
+
+        if (fetchedTimetable != null && fetchedTimetable is List) {
           setState(() {
-            timetableData = data['timetable'];
+            timetableData = fetchedTimetable;
+          });
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Timetable Retrieved'),
+            ),
+          );
+        } else {
+          setState(() {
+            timetableData = [];
           });
         }
+      } else if (res.statusCode == 401) {
+        // Session invalid
+        setState(() {
+          timetableData = [];
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Session expired. Please log in again.'),
+          ),
+        );
       } else {
-        print('Failed to fetch timetable: ${res.statusCode}');
+        setState(() {
+          timetableData = [];
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Failed to fetch the timetable'),
+          ),
+        );
       }
     } catch (e) {
-      print('Error fetching timetable: $e');
+      setState(() {
+        timetableData = [];
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Error fetching timetable'),
+        ),
+      );
     } finally {
       setState(() {
         isTimetableLoading = false;
       });
     }
   }
+
 
 
   @override

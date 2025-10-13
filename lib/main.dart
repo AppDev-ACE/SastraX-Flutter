@@ -26,7 +26,7 @@ class MyApp extends StatelessWidget {
           return MaterialApp(
             title: 'SASTRAX Student App',
             theme: themeProvider.currentTheme,
-            home: const LoginPage(url: 'https://b0b3v069-3000.inc1.devtunnels.ms'),
+            home: const LoginPage(url: 'https://sastrax-backend.onrender.com'),
             debugShowCheckedModeBanner: false,
           );
         },

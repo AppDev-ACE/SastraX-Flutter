@@ -36,6 +36,7 @@ class _LoginPageState extends State<LoginPage> {
     api = ApiEndpoints(widget.url);
   }
 
+  /// 🔹 Fetch Captcha Image
   Future<void> _getCaptcha() async {
     final regNo = userController.text.trim();
     if (regNo.isEmpty) {
@@ -78,6 +79,7 @@ class _LoginPageState extends State<LoginPage> {
     }
   }
 
+  /// 🔹 Login API Call
   Future<void> _login() async {
     final regNo = userController.text.trim();
     final pwd = passwordController.text.trim();
@@ -107,6 +109,20 @@ class _LoginPageState extends State<LoginPage> {
       final result = jsonDecode(response.body);
 
       if (response.statusCode == 200 && result['success'] == true) {
+        final token = result['token']; // ✅ Extract the actual token
+
+        if (token == null) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Login response missing token'),
+              backgroundColor: Colors.redAccent,
+            ),
+          );
+          return;
+        }
+
+        print("✅ Received token: $token");
+
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Login Successful!'),
@@ -116,11 +132,11 @@ class _LoginPageState extends State<LoginPage> {
 
         Navigator.pop(context); // Close captcha dialog
 
-        // ✅ Correctly pass token to HomePage
+        // ✅ Navigate with real token
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(
-            builder: (_) => HomePage(token: regNo, url: widget.url),
+            builder: (_) => HomePage(token: token, url: widget.url),
           ),
         );
       } else {
@@ -130,7 +146,7 @@ class _LoginPageState extends State<LoginPage> {
             backgroundColor: Colors.redAccent,
           ),
         );
-        await _getCaptcha(); // Refresh captcha on failure
+        await _getCaptcha(); // Refresh captcha after failure
       }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -142,6 +158,7 @@ class _LoginPageState extends State<LoginPage> {
     }
   }
 
+  /// 🔹 Show Captcha Dialog Box
   void _showCaptchaDialog() async {
     captchaController.clear();
     await _getCaptcha();
@@ -223,6 +240,7 @@ class _LoginPageState extends State<LoginPage> {
     );
   }
 
+  /// 🔹 Main UI
   @override
   Widget build(BuildContext context) {
     final themeProvider = Provider.of<ThemeProvider>(context);
@@ -233,7 +251,7 @@ class _LoginPageState extends State<LoginPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const LoginUI(), // ✅ Your UI remains intact
+            const LoginUI(),
             Padding(
               padding: const EdgeInsets.all(8.0),
               child: Text(
