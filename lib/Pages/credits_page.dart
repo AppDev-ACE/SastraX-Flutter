@@ -4,8 +4,9 @@ import 'package:http/http.dart' as http;
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:provider/provider.dart';
 import 'dart:math' as math;
+import 'package:fl_chart/fl_chart.dart';
 import '../models/theme_model.dart';
-import '../services/ApiEndpoints.dart'; // Make sure this path is correct
+import '../services/ApiEndpoints.dart';
 
 class CreditsScreen extends StatefulWidget {
   final String url;
@@ -18,11 +19,10 @@ class CreditsScreen extends StatefulWidget {
 
 class _CreditsScreenState extends State<CreditsScreen>
     with TickerProviderStateMixin {
-  int _selectedSemester = 0; // 0 for overall
+  int _selectedSemester = 0;
   late AnimationController _rotationController;
   late AnimationController _pulseController;
 
-  // State variables for fetched data
   bool _isLoading = true;
   String? _error;
   List<Map<String, dynamic>> _semesterData = [];
@@ -44,12 +44,11 @@ class _CreditsScreenState extends State<CreditsScreen>
     _fetchAndProcessGrades();
   }
 
-  // --- DATA FETCHING AND PROCESSING ---
   Future<void> _fetchAndProcessGrades() async {
     try {
       final api = ApiEndpoints(widget.url);
       final response = await http.post(
-        Uri.parse(api.semGrades), // Make sure api.semGrades is correct
+        Uri.parse(api.semGrades),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({'token': widget.token, 'refresh': false}),
       );
@@ -137,7 +136,6 @@ class _CreditsScreenState extends State<CreditsScreen>
     });
   }
 
-  // ✅ CORRECTED GRADE POINT LOGIC
   double _getGradePoint(String grade) {
     switch (grade.toUpperCase()) {
       case 'S': return 10.0;
@@ -146,13 +144,12 @@ class _CreditsScreenState extends State<CreditsScreen>
       case 'B': return 7.0;
       case 'C': return 6.0;
       case 'D': return 5.0;
-      case 'F': return 2.0; // F is 2 points for calculation
-      default: return 0.0; // RA, W, U, Absent etc. are 0
+      case 'F': return 2.0;
+      default: return 0.0;
     }
   }
 
   bool _isGradePassed(String grade) {
-    // Only F, U, W, RA, Absent are considered fail/incomplete
     final failedGrades = ['F', 'U', 'RA', 'ABSENT', 'W'];
     return !failedGrades.contains(grade.toUpperCase());
   }
@@ -216,9 +213,10 @@ class _CreditsScreenState extends State<CreditsScreen>
         child: Column(
           children: [
             SizedBox(
-              height: MediaQuery.of(context).size.height * 0.4,
+              height: MediaQuery.of(context).size.height * 0.35,
               child: _buildCreditsCircleLayout(),
             ),
+            const SizedBox(height: 16),
             Expanded(
               child: _buildDetailsSection(),
             ),
@@ -322,12 +320,18 @@ class _CreditsScreenState extends State<CreditsScreen>
                     ),
                   ),
                   SizedBox(height: radius * 0.05),
-                  Text(
-                    'CGPA: ${_overallGPA.toStringAsFixed(4)}',
-                    style: TextStyle(
-                      fontSize: radius * 0.25,
-                      color: Colors.white,
-                      fontWeight: FontWeight.w500,
+                  FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 4.0),
+                      child: Text(
+                        'CGPA: ${_overallGPA.toStringAsFixed(4)}',
+                        style: TextStyle(
+                          fontSize: radius * 0.25,
+                          color: Colors.white,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
                     ),
                   ),
                 ],
@@ -493,7 +497,7 @@ class _CreditsScreenState extends State<CreditsScreen>
             : null,
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Row(
             children: [
@@ -532,8 +536,104 @@ class _CreditsScreenState extends State<CreditsScreen>
               ),
             ],
           ),
+          const SizedBox(height: 20),
+          const Text(
+            'Performance Trend (SGPA)',
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+          ),
+          const SizedBox(height: 16),
+          Expanded(
+            child: _semesterData.length > 1
+                ? LineChart(
+              _buildGraphData(),
+            ).animate().fadeIn(delay: 300.ms)
+                : const Center(
+              child: Text(
+                'More data needed to show a trend.',
+                style: TextStyle(color: Colors.grey),
+              ),
+            ),
+          ),
         ],
       ),
+    );
+  }
+
+  LineChartData _buildGraphData() {
+    final spots = _semesterData.map((sem) {
+      return FlSpot(
+        (sem['semester'] as int).toDouble(),
+        sem['gpa'] as double,
+      );
+    }).toList();
+
+    return LineChartData(
+      lineTouchData: LineTouchData(
+        touchTooltipData: LineTouchTooltipData(
+          tooltipBgColor: Colors.black.withOpacity(0.8),
+          fitInsideHorizontally: true,
+          getTooltipItems: (List<LineBarSpot> touchedBarSpots) {
+            return touchedBarSpots.map((barSpot) {
+              return LineTooltipItem(
+                barSpot.y.toStringAsFixed(4),
+                const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                ),
+              );
+            }).toList();
+          },
+        ),
+      ),
+      gridData: FlGridData(show: false),
+      titlesData: FlTitlesData(
+        leftTitles: AxisTitles(sideTitles: SideTitles(showTitles: true, reservedSize: 32,
+            getTitlesWidget: (value, meta) {
+              if (value % 2 != 0 && value != 9) return const SizedBox.shrink();
+              return Text(value.toInt().toString(), style: const TextStyle(fontSize: 10));
+            }
+        )),
+        bottomTitles: AxisTitles(
+          sideTitles: SideTitles(
+            showTitles: true,
+            reservedSize: 22,
+            interval: 1,
+            getTitlesWidget: (value, meta) {
+              if (value.toInt().toDouble() != value) {
+                return const SizedBox.shrink();
+              }
+              return Text('S${value.toInt()}', style: const TextStyle(fontSize: 10));
+            },
+          ),
+        ),
+        topTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+        rightTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+      ),
+      borderData: FlBorderData(show: false),
+      minX: 1,
+      maxX: _semesterData.length.toDouble(),
+      minY: 0,
+      maxY: 10,
+      lineBarsData: [
+        LineChartBarData(
+          spots: spots,
+          isCurved: true,
+          gradient: AppTheme.primaryGradient,
+          barWidth: 4,
+          isStrokeCapRound: true,
+          dotData: FlDotData(show: true),
+          belowBarData: BarAreaData(
+            show: true,
+            gradient: LinearGradient(
+              colors: AppTheme.primaryGradient.colors
+                  .map((color) => color.withOpacity(0.3))
+                  .toList(),
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+            ),
+          ),
+        ),
+      ],
     );
   }
 

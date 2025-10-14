@@ -50,7 +50,7 @@ class AttendancePieChart extends StatelessWidget {
               Text(
                 'Attendance',
                 style: TextStyle(
-                  fontSize: 18, // Slightly increased from 16
+                  fontSize: 18,
                   fontWeight: FontWeight.bold,
                   color: isDark ? AppTheme.neonBlue : AppTheme.primaryBlue,
                 ),
@@ -71,15 +71,17 @@ class AttendancePieChart extends StatelessWidget {
                         centerSpaceRadius: 35,
                         sections: [
                           PieChartSectionData(
+                            // FIX: Logic updated to be red or green, regardless of theme.
                             color: attendancePercentage < 80
-                                ? Colors.red
-                                : (isDark ? AppTheme.neonBlue : Colors.green),
+                                ? Colors.red.shade400
+                                : Colors.green.shade400,
                             value: attendancePercentage,
                             title: '${attendancePercentage.toInt()}%',
                             radius: 50,
                             titleStyle: const TextStyle(
                               fontSize: 12,
                               fontWeight: FontWeight.bold,
+                              // Changed to white for better contrast on red/green.
                               color: Colors.white,
                             ),
                           ),

@@ -13,7 +13,6 @@ import '../models/theme_model.dart';
 import '../components/theme_toggle_button.dart';
 import '../components/neon_container.dart';
 import '../components/attendance_pie_chart.dart';
-import '../components/fee_due_card.dart';
 import 'profile_page.dart';
 import 'calendar_page.dart';
 import 'community_page.dart';
@@ -112,6 +111,7 @@ class _HomePageState extends State<HomePage> {
   }
 }
 
+
 // -------------------- DashboardScreen --------------------
 class DashboardScreen extends StatefulWidget {
   final String token;
@@ -125,7 +125,7 @@ class DashboardScreen extends StatefulWidget {
 }
 
 class _DashboardScreenState extends State<DashboardScreen> {
-  bool showFeeDue = false;
+  bool showAssignments = false;
   double attendancePercent = -1;
   int attendedClasses = 0;
   int totalClasses = 0;
@@ -138,6 +138,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   List assignments = [];
   bool isTimetableLoading = true;
   List timetableData = [];
+  List hourWiseAttendanceData = [];
 
   late final ApiEndpoints api;
   late ConfettiController _confettiController;
@@ -166,6 +167,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         _fetchFeeDue(),
         _fetchBunks(),
         _fetchTimetable(),
+        _fetchHourWiseAttendance(),
         _checkBirthday(),
       ]);
     } catch (e) {
@@ -177,12 +179,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
   }
 
+  // All fetch methods...
   Future<void> _fetchProfile() async {
     try {
       final res = await http.post(
         Uri.parse(api.profile),
         headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'refresh': false, 'regNo': widget.token}),
+        body: jsonEncode({'refresh': false, 'token': widget.token}),
       );
       if (res.statusCode == 200 && mounted) {
         final data = jsonDecode(res.body);
@@ -202,7 +205,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       final res = await http.post(
         Uri.parse(api.dob),
         headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'refresh': false, 'regNo': widget.token}),
+        body: jsonEncode({'refresh': false, 'token': widget.token}),
       );
       if (res.statusCode == 200 && mounted) {
         final data = jsonDecode(res.body);
@@ -290,31 +293,53 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
   }
 
+  // THIS FUNCTION CONTAINS THE FIX
   Future<void> _fetchFeeDue() async {
     try {
-      final sastraRes = await http.post(
-        Uri.parse(api.sastraDue),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'refresh': false, 'regNo': widget.token}),
-      );
+      final responses = await Future.wait([
+        http.post(
+          Uri.parse(api.sastraDue),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({'refresh': false, 'token': widget.token}),
+        ),
+        http.post(
+          Uri.parse(api.hostelDue),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({'refresh': false, 'token': widget.token}),
+        )
+      ]);
 
-      final hostelRes = await http.post(
-        Uri.parse(api.hostelDue),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'refresh': false, 'regNo': widget.token}),
-      );
+      final sastraRes = responses[0];
+      final hostelRes = responses[1];
 
       if (sastraRes.statusCode == 200 && hostelRes.statusCode == 200 && mounted) {
         final sastraData = jsonDecode(sastraRes.body);
         final hostelData = jsonDecode(hostelRes.body);
 
-        if (sastraData['success'] == true && hostelData['success'] == true) {
-          final sastraDueStr = (sastraData['sastraDue'] ?? sastraData['totalSastraDue'] ?? "0").toString().replaceAll(RegExp(r'[^0-9]'), '');
-          final hostelDueStr = (hostelData['hostelDue'] ?? hostelData['totalHostelDue'] ?? "0").toString().replaceAll(RegExp(r'[^0-9]'), '');
-          final sastraDue = int.tryParse(sastraDueStr) ?? 0;
-          final hostelDue = int.tryParse(hostelDueStr) ?? 0;
-          setState(() => feeDue = sastraDue + hostelDue);
+        int sastraDue = 0;
+        int hostelDue = 0;
+
+        // Helper function to parse the fee strings safely
+        int parseFee(String rawValue) {
+          if (rawValue.toLowerCase().contains('no records found')) {
+            return 0;
+          }
+          // Remove commas, then take the part before the decimal point.
+          final cleanStr = rawValue.replaceAll(',', '').split('.')[0];
+          return int.tryParse(cleanStr) ?? 0;
         }
+
+        if (sastraData['success'] == true) {
+          final rawSastraDue = (sastraData['sastraDue'] ?? sastraData['totalSastraDue'] ?? "0").toString();
+          sastraDue = parseFee(rawSastraDue);
+        }
+
+        if (hostelData['success'] == true) {
+          final rawHostelDue = (hostelData['hostelDue'] ?? hostelData['totalHostelDue'] ?? "0").toString();
+          hostelDue = parseFee(rawHostelDue);
+        }
+
+        setState(() => feeDue = sastraDue + hostelDue);
       }
     } catch (_) {
       if (mounted) setState(() => feeDue = 0);
@@ -374,6 +399,28 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
   }
 
+  Future<void> _fetchHourWiseAttendance() async {
+    if (!mounted) return;
+    try {
+      final res = await http.post(
+        Uri.parse('${widget.url}/hourWiseAttendance'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'refresh': false, 'token': widget.token}),
+      );
+
+      if (res.statusCode == 200 && mounted) {
+        final data = jsonDecode(res.body);
+        final fetchedAttendance = data['hourWiseAttendance'];
+
+        if (fetchedAttendance != null && fetchedAttendance is List) {
+          setState(() => hourWiseAttendanceData = fetchedAttendance);
+        }
+      }
+    } catch (e) {
+      if (mounted) setState(() => hourWiseAttendanceData = []);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Provider.of<ThemeProvider>(context);
@@ -385,7 +432,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
             padding: const EdgeInsets.all(16),
             child: Column(
               children: [
-                // Profile Section
                 GestureDetector(
                   onTap: () => Navigator.push(
                     context,
@@ -440,7 +486,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   ),
                 ),
                 const SizedBox(height: 16),
-                // Attendance Chart
                 attendancePercent < 0
                     ? const Center(child: CircularProgressIndicator())
                     : GestureDetector(
@@ -456,20 +501,22 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   ),
                 ),
                 const SizedBox(height: 16),
-                // Assignments and GPA/Fee Dues containers
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Expanded(child: _buildAssignmentsTile(theme)),
+                    Expanded(child: _buildFeeDueTile(theme)),
                     const SizedBox(width: 12),
-                    Expanded(child: _buildGpaFeeTile(theme)),
+                    Expanded(child: _buildGpaAssignmentTile(theme)),
                   ],
                 ),
                 const SizedBox(height: 16),
-                // Timetable with a fixed height
                 SizedBox(
                   height: 300,
-                  child: TimetableWidget(timetable: timetableData, isLoading: isTimetableLoading),
+                  child: TimetableWidget(
+                    timetable: timetableData,
+                    isLoading: isTimetableLoading,
+                    hourWiseAttendance: hourWiseAttendanceData,
+                  ),
                 ),
               ],
             ),
@@ -495,86 +542,111 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  Widget _buildAssignmentsTile(ThemeProvider theme) {
-    return SizedBox(
-      width: 180,
-      height: 150,
-      child: NeonContainer(
-        borderColor:
-        theme.isDarkMode ? AppTheme.neonBlue : AppTheme.primaryBlue,
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.assignment_turned_in,
-                size: 40,
-                color: theme.isDarkMode
-                    ? AppTheme.neonBlue
-                    : AppTheme.primaryBlue),
-            const SizedBox(height: 10),
-            const FittedBox(
-              fit: BoxFit.scaleDown,
-              child: Text(
-                'Assignments',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-              ),
-            ),
-            FittedBox(
-              fit: BoxFit.scaleDown,
-              child: Text(
-                '${assignments.length} Pending',
-                style: TextStyle(
-                  fontSize: 14,
-                  color: theme.isDarkMode ? Colors.white70 : Colors.grey[600],
+  Widget _buildFeeDueTile(ThemeProvider theme) {
+    final hasDue = feeDue > 0;
+    final isDark = theme.isDarkMode;
+
+    return GestureDetector(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (context) => FeeDuePage()),
+        );
+      },
+      child: SizedBox(
+        width: 180,
+        height: 150,
+        child: NeonContainer(
+          borderColor: hasDue
+              ? Colors.red.shade400
+              : (isDark ? AppTheme.neonBlue : AppTheme.primaryBlue),
+          padding: const EdgeInsets.all(12),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.account_balance_wallet,
+                  size: 40,
+                  color: hasDue
+                      ? Colors.red.shade400
+                      : (isDark ? AppTheme.neonBlue : AppTheme.primaryBlue)),
+              const SizedBox(height: 8),
+              const FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  'Fee Status',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                 ),
               ),
-            ),
-          ],
+              const SizedBox(height: 4),
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  hasDue ? '₹$feeDue' : 'Paid',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: isDark ? Colors.white70 : Colors.grey[600],
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
 
-  Widget _buildGpaFeeTile(ThemeProvider theme) {
+  Widget _buildGpaAssignmentTile(ThemeProvider theme) {
+    final isDark = theme.isDarkMode;
+
     return GestureDetector(
-      onDoubleTap: () => setState(() => showFeeDue = !showFeeDue),
-      onTap: () {
-        if (showFeeDue) {
-          Navigator.push(
-            context,
-            MaterialPageRoute(builder: (context) => FeeDuePage()),
-          );
-        }
-      },
-      child: AnimatedSwitcher(
-        duration: const Duration(milliseconds: 300),
-        child: showFeeDue
-            ? SizedBox(
-          width: 180,
-          height: 150,
-          child: FeeDueCard(
-            key: const ValueKey('fee'),
-            feeDue: feeDue.toDouble(),
-          ),
-        )
-            : SizedBox(
-          width: 180,
-          height: 150,
-          child: NeonContainer(
-            key: const ValueKey('gpa'),
-            borderColor: theme.isDarkMode
-                ? AppTheme.neonBlue
-                : AppTheme.primaryBlue,
-            padding: const EdgeInsets.all(12),
-            child: Column(
+      onDoubleTap: () => setState(() => showAssignments = !showAssignments),
+      child: SizedBox(
+        width: 180,
+        height: 150,
+        child: NeonContainer(
+          borderColor: isDark ? AppTheme.neonBlue : AppTheme.primaryBlue,
+          padding: const EdgeInsets.all(12),
+          child: AnimatedSwitcher(
+            duration: const Duration(milliseconds: 300),
+            child: showAssignments
+                ? Column(
+              key: const ValueKey('assignments'),
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.assignment_turned_in,
+                    size: 40,
+                    color: isDark
+                        ? AppTheme.neonBlue
+                        : AppTheme.primaryBlue),
+                const SizedBox(height: 10),
+                const FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    'Assignments',
+                    style: TextStyle(
+                        fontWeight: FontWeight.bold, fontSize: 16),
+                  ),
+                ),
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    '${assignments.length} Pending',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: isDark ? Colors.white70 : Colors.grey[600],
+                    ),
+                  ),
+                ),
+              ],
+            )
+                : Column(
+              key: const ValueKey('gpa'),
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Icon(
                   Icons.grade,
                   size: 40,
-                  color: theme.isDarkMode
-                      ? AppTheme.electricBlue
-                      : Colors.orange,
+                  color: isDark ? AppTheme.electricBlue : Colors.orange,
                 ),
                 const SizedBox(height: 10),
                 const FittedBox(
@@ -597,7 +669,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     '$cgpa / 10',
                     style: TextStyle(
                       fontSize: 14,
-                      color: theme.isDarkMode
+                      color: isDark
                           ? Colors.white70
                           : Colors.grey[600],
                     ),

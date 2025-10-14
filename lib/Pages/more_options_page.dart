@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:sastra_x/Pages/home_page.dart'; // Make sure this path is correct
 
-// Import the dedicated pages for each option.
 import 'SGPA_calculator.dart';
 import 'about_team_screen.dart';
 import 'club_hub.dart';
@@ -13,7 +12,6 @@ import 'internals_page.dart';
 class MoreOptionsScreen extends StatelessWidget {
   final String token;
   final String url;
-  // KEY CHANGE 1: Accept the fetched CGPA from the parent widget (HomePage)
   final String? cgpa;
 
   const MoreOptionsScreen({

@@ -6,22 +6,49 @@ import '../models/theme_model.dart';
 class TimetableWidget extends StatelessWidget {
   final List<dynamic> timetable;
   final bool isLoading;
+  final List<dynamic> hourWiseAttendance;
 
   const TimetableWidget({
     super.key,
     required this.timetable,
     required this.isLoading,
+    required this.hourWiseAttendance,
   });
+
+  static const List<String> _timeSlots = [
+    '08:45 - 09:45', '09:45 - 10:45', '10:45 - 11:00', '11:00 - 12:00',
+    '12:00 - 01:00', '01:00 - 02:00', '02:00 - 03:00', '03:00 - 03:15',
+    '03:15 - 04:15', '04:15 - 05:15', '05:30 - 06:30', '06:30 - 07:30',
+    '07:30 - 08:30',
+  ];
+
+  static const Map<String, String> _slotToHourKeyMap = {
+    '08:45 - 09:45': 'hour1',
+    '09:45 - 10:45': 'hour2',
+    '11:00 - 12:00': 'hour3',
+    '12:00 - 01:00': 'hour4',
+    '01:00 - 02:00': 'hour5',
+    '02:00 - 03:00': 'hour6',
+    '03:15 - 04:15': 'hour7',
+    '04:15 - 05:15': 'hour8',
+    '05:30 - 06:30': 'hour8',
+  };
+
+  DateTime _parseTime(String timeStr, DateTime now) {
+    final parsedTime = DateFormat('HH:mm').parse(timeStr);
+    int hour = parsedTime.hour;
+    if (hour >= 1 && hour < 8) {
+      hour += 12;
+    }
+    return DateTime(now.year, now.month, now.day, hour, parsedTime.minute);
+  }
 
   bool _isEmptySchedule(List<dynamic> schedule) {
     if (schedule.isEmpty) return true;
-
     final today = DateTime.now();
     if (today.weekday > 5) return true;
     final dayIndex = today.weekday - 1;
-
-    if (dayIndex >= schedule.length) return true;
-
+    if (dayIndex < 0 || dayIndex >= schedule.length) return true;
     final todayData = schedule[dayIndex] as Map<String, dynamic>;
     return todayData.entries.every((entry) {
       if (entry.key.toLowerCase() == 'day') return true;
@@ -32,30 +59,38 @@ class TimetableWidget extends StatelessWidget {
 
   int? _getCurrentIndex() {
     final now = DateTime.now();
-    final timeSlots = [
-      '08:45 - 09:45', '09:45 - 10:45', '10:45 - 11:00', '11:00 - 12:00',
-      '12:00 - 01:00', '01:00 - 02:00', '02:00 - 03:00', '03:00 - 03:15',
-      '03:15 - 04:15', '04:15 - 05:15', '05:30 - 06:30', '06:30 - 07:30',
-      '07:30 - 08:30',
-    ];
-
-    for (int i = 0; i < timeSlots.length; i++) {
-      final slot = timeSlots[i];
+    for (int i = 0; i < _timeSlots.length; i++) {
+      final slot = _timeSlots[i];
       final parts = slot.split(' - ');
       if (parts.length < 2) continue;
-
       try {
-        final start = DateFormat('HH:mm').parse(parts[0]);
-        final end = DateFormat('HH:mm').parse(parts[1]);
-        final startTime = DateTime(now.year, now.month, now.day, start.hour, start.minute);
-        final endTime = DateTime(now.year, now.month, now.day, end.hour, end.minute);
-
+        final startTime = _parseTime(parts[0], now);
+        final endTime = _parseTime(parts[1], now);
         if (now.isAfter(startTime) && now.isBefore(endTime)) {
           return i;
         }
       } catch (_) {}
     }
     return null;
+  }
+
+  Color _getAttendanceColor(String slot, Map<String, dynamic>? todayAttendance) {
+    if (todayAttendance == null) {
+      return Colors.grey.shade400;
+    }
+    final hourKey = _slotToHourKeyMap[slot];
+    if (hourKey == null) {
+      return Colors.transparent;
+    }
+    final status = todayAttendance[hourKey]?.toString().trim().toLowerCase() ?? '';
+
+    if (status == 'p') {
+      return Colors.green.shade400;
+    } else if (status == 'a') {
+      return Colors.red.shade400;
+    } else {
+      return Colors.grey.shade400;
+    }
   }
 
   @override
@@ -87,18 +122,41 @@ class TimetableWidget extends StatelessWidget {
       );
     }
 
-    final dayIndex = DateTime.now().weekday - 1;
+    final today = DateTime.now();
+    final todayDateString = DateFormat('dd-MMM-yyyy').format(today);
+    Map<String, dynamic>? todayAttendance;
+    try {
+      todayAttendance = hourWiseAttendance.firstWhere(
+            (att) {
+          final backendDate = (att['dateDay'] as String).trim();
+          return backendDate.toLowerCase().startsWith(todayDateString.toLowerCase());
+        },
+        orElse: () => null,
+      );
+    } catch (_) {
+      todayAttendance = null;
+    }
+
+    final dayIndex = today.weekday - 1;
+    if (dayIndex < 0 || dayIndex >= timetable.length) {
+      return Container(
+        decoration: BoxDecoration(
+          color: themeProvider.cardBackgroundColor,
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: const Center(
+          child: Padding(
+            padding: EdgeInsets.all(20.0),
+            child: Text('Enjoy your weekend! 🥳', style: TextStyle(fontSize: 16)),
+          ),
+        ),
+      );
+    }
+
     final todayData = timetable[dayIndex] as Map<String, dynamic>;
+    final List<Map<String, dynamic>> transformedTimetable = [];
 
-    final List<Map<String, String>> transformedTimetable = [];
-    final timeSlots = [
-      '08:45 - 09:45', '09:45 - 10:45', '10:45 - 11:00', '11:00 - 12:00',
-      '12:00 - 01:00', '01:00 - 02:00', '02:00 - 03:00', '03:00 - 03:15',
-      '03:15 - 04:15', '04:15 - 05:15', '05:30 - 06:30', '06:30 - 07:30',
-      '07:30 - 08:30',
-    ];
-
-    for (final slot in timeSlots) {
+    for (final slot in _timeSlots) {
       final subject = todayData[slot] ?? 'N/A';
       String room = '';
       String cleanSubject = subject;
@@ -108,14 +166,16 @@ class TimetableWidget extends StatelessWidget {
         cleanSubject = subject.replaceAll(roomMatch.group(0)!, '').trim();
       }
       final parts = slot.split(' - ');
-      final startTime24 = DateFormat('HH:mm').parse(parts[0]);
-      final endTime24 = DateFormat('HH:mm').parse(parts[1]);
-      final formattedTime = '${DateFormat('h:mm a').format(startTime24)} - ${DateFormat('h:mm a').format(endTime24)}';
+      final startTime = _parseTime(parts[0], today);
+      final endTime = _parseTime(parts[1], today);
+      final formattedTime = '${DateFormat('h:mm a').format(startTime)} - ${DateFormat('h:mm a').format(endTime)}';
+      final attendanceColor = _getAttendanceColor(slot, todayAttendance);
 
       transformedTimetable.add({
         'time': formattedTime,
         'subject': cleanSubject,
         'room': room,
+        'attendanceColor': attendanceColor,
       });
     }
 
@@ -186,9 +246,9 @@ class TimetableWidget extends StatelessWidget {
                       color: isCurrent ? AppTheme.neonBlue : Colors.grey.withOpacity(0.2),
                       width: isCurrent ? 2 : 1,
                     ),
-                    boxShadow: isCurrent ? [
-                      BoxShadow(color: AppTheme.neonBlue.withOpacity(0.3), blurRadius: 8, spreadRadius: 1)
-                    ] : [],
+                    boxShadow: isCurrent
+                        ? [BoxShadow(color: AppTheme.neonBlue.withOpacity(0.3), blurRadius: 8, spreadRadius: 1)]
+                        : [],
                   ),
                   child: ListTile(
                     leading: Container(
@@ -217,6 +277,22 @@ class TimetableWidget extends StatelessWidget {
                             child: Text(item['room']!, style: TextStyle(color: themeProvider.textSecondaryColor, fontSize: 12)),
                           ),
                       ],
+                    ),
+                    trailing: item['attendanceColor'] == Colors.transparent
+                        ? null
+                        : Container(
+                      width: 18, // Increased size
+                      height: 18, // Increased size
+                      decoration: BoxDecoration(
+                        color: item['attendanceColor'],
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: themeProvider.isDarkMode
+                              ? Colors.white.withOpacity(0.2)
+                              : Colors.black.withOpacity(0.1),
+                          width: 0.5,
+                        ),
+                      ),
                     ),
                   ),
                 );
