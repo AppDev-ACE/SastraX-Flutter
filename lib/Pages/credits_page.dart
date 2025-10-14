@@ -1,8 +1,11 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:provider/provider.dart';
 import 'dart:math' as math;
-import '../models/theme_model.dart'; // Using your final theme model
+import '../models/theme_model.dart';
+import '../services/ApiEndpoints.dart'; // Make sure this path is correct
 
 class CreditsScreen extends StatefulWidget {
   final String url;
@@ -15,142 +18,15 @@ class CreditsScreen extends StatefulWidget {
 
 class _CreditsScreenState extends State<CreditsScreen>
     with TickerProviderStateMixin {
-  int _selectedSemester = 0; // 0 means center circle (overall)
+  int _selectedSemester = 0; // 0 for overall
   late AnimationController _rotationController;
   late AnimationController _pulseController;
 
-  // Sample data for 8 semesters
-  final List<Map<String, dynamic>> _semesterData = [
-    {
-      'semester': 1,
-      'totalCredits': 24,
-      'earnedCredits': 22,
-      'gpa': 8.5,
-      'subjects': [
-        {'name': 'Constitutional Law I', 'credits': 4, 'grade': 'A', 'score': 85},
-        {'name': 'Legal Methods', 'credits': 3, 'grade': 'A+', 'score': 92},
-        {'name': 'Political Science', 'credits': 3, 'grade': 'B+', 'score': 78},
-        {'name': 'Economics I', 'credits': 3, 'grade': 'A', 'score': 88},
-        {'name': 'English I', 'credits': 2, 'grade': 'A+', 'score': 94},
-        {'name': 'History I', 'credits': 3, 'grade': 'B+', 'score': 76},
-        {'name': 'Sociology', 'credits': 3, 'grade': 'A', 'score': 82},
-        {'name': 'Environmental Studies', 'credits': 3, 'grade': 'A', 'score': 86},
-      ],
-    },
-    {
-      'semester': 2,
-      'totalCredits': 24,
-      'earnedCredits': 24,
-      'gpa': 8.8,
-      'subjects': [
-        {'name': 'Constitutional Law II', 'credits': 4, 'grade': 'A+', 'score': 91},
-        {'name': 'Contract Law I', 'credits': 4, 'grade': 'A', 'score': 87},
-        {'name': 'Tort Law', 'credits': 3, 'grade': 'A+', 'score': 93},
-        {'name': 'Economics II', 'credits': 3, 'grade': 'A', 'score': 85},
-        {'name': 'English II', 'credits': 2, 'grade': 'A+', 'score': 96},
-        {'name': 'History II', 'credits': 3, 'grade': 'A', 'score': 84},
-        {'name': 'Psychology', 'credits': 3, 'grade': 'A', 'score': 89},
-        {'name': 'Computer Applications', 'credits': 2, 'grade': 'A+', 'score': 95},
-      ],
-    },
-    // ... other semester data
-    {
-      'semester': 3,
-      'totalCredits': 26,
-      'earnedCredits': 25,
-      'gpa': 8.2,
-      'subjects': [
-        {'name': 'Criminal Law I', 'credits': 4, 'grade': 'A', 'score': 88},
-        {'name': 'Contract Law II', 'credits': 4, 'grade': 'B+', 'score': 79},
-        {'name': 'Property Law I', 'credits': 4, 'grade': 'A', 'score': 86},
-        {'name': 'Family Law I', 'credits': 3, 'grade': 'A+', 'score': 92},
-        {'name': 'Jurisprudence', 'credits': 3, 'grade': 'A', 'score': 84},
-        {'name': 'Legal Writing', 'credits': 2, 'grade': 'A+', 'score': 94},
-        {'name': 'Moot Court I', 'credits': 3, 'grade': 'A', 'score': 87},
-        {'name': 'Public Administration', 'credits': 3, 'grade': 'B+', 'score': 77},
-      ],
-    },
-    {
-      'semester': 4,
-      'totalCredits': 26,
-      'earnedCredits': 26,
-      'gpa': 8.6,
-      'subjects': [
-        {'name': 'Criminal Law II', 'credits': 4, 'grade': 'A+', 'score': 90},
-        {'name': 'Property Law II', 'credits': 4, 'grade': 'A', 'score': 85},
-        {'name': 'Family Law II', 'credits': 3, 'grade': 'A', 'score': 88},
-        {'name': 'Administrative Law', 'credits': 4, 'grade': 'A+', 'score': 93},
-        {'name': 'Company Law I', 'credits': 3, 'grade': 'A', 'score': 86},
-        {'name': 'Evidence Law', 'credits': 3, 'grade': 'A', 'score': 89},
-        {'name': 'Moot Court II', 'credits': 3, 'grade': 'A+', 'score': 91},
-        {'name': 'International Relations', 'credits': 2, 'grade': 'A', 'score': 84},
-      ],
-    },
-    {
-      'semester': 5,
-      'totalCredits': 28,
-      'earnedCredits': 27,
-      'gpa': 8.4,
-      'subjects': [
-        {'name': 'Civil Procedure Code', 'credits': 4, 'grade': 'A', 'score': 87},
-        {'name': 'Criminal Procedure Code', 'credits': 4, 'grade': 'A+', 'score': 92},
-        {'name': 'Company Law II', 'credits': 4, 'grade': 'A', 'score': 85},
-        {'name': 'Labour Law I', 'credits': 3, 'grade': 'A', 'score': 88},
-        {'name': 'Intellectual Property Law', 'credits': 3, 'grade': 'A+', 'score': 94},
-        {'name': 'Environmental Law', 'credits': 3, 'grade': 'B+', 'score': 78},
-        {'name': 'Legal Aid & Paralegal Services', 'credits': 3, 'grade': 'A', 'score': 86},
-        {'name': 'Human Rights Law', 'credits': 4, 'grade': 'A', 'score': 89},
-      ],
-    },
-    {
-      'semester': 6,
-      'totalCredits': 28,
-      'earnedCredits': 28,
-      'gpa': 8.7,
-      'subjects': [
-        {'name': 'Labour Law II', 'credits': 4, 'grade': 'A+', 'score': 91},
-        {'name': 'Taxation Law', 'credits': 4, 'grade': 'A', 'score': 87},
-        {'name': 'Banking Law', 'credits': 3, 'grade': 'A', 'score': 85},
-        {'name': 'Insurance Law', 'credits': 3, 'grade': 'A+', 'score': 93},
-        {'name': 'Consumer Protection Law', 'credits': 3, 'grade': 'A', 'score': 88},
-        {'name': 'Cyber Law', 'credits': 3, 'grade': 'A+', 'score': 95},
-        {'name': 'Professional Ethics', 'credits': 2, 'grade': 'A', 'score': 86},
-        {'name': 'Internship I', 'credits': 6, 'grade': 'A', 'score': 89},
-      ],
-    },
-    {
-      'semester': 7,
-      'totalCredits': 30,
-      'earnedCredits': 28,
-      'gpa': 8.3,
-      'subjects': [
-        {'name': 'International Law', 'credits': 4, 'grade': 'A', 'score': 86},
-        {'name': 'Arbitration & Conciliation', 'credits': 3, 'grade': 'A+', 'score': 92},
-        {'name': 'Corporate Governance', 'credits': 3, 'grade': 'A', 'score': 84},
-        {'name': 'Securities Law', 'credits': 3, 'grade': 'B+', 'score': 79},
-        {'name': 'Competition Law', 'credits': 3, 'grade': 'A', 'score': 87},
-        {'name': 'Media Law', 'credits': 3, 'grade': 'A+', 'score': 94},
-        {'name': 'Clinical Legal Education', 'credits': 4, 'grade': 'A', 'score': 88},
-        {'name': 'Dissertation I', 'credits': 7, 'grade': 'A', 'score': 85},
-      ],
-    },
-    {
-      'semester': 8,
-      'totalCredits': 30,
-      'earnedCredits': 30,
-      'gpa': 8.9,
-      'subjects': [
-        {'name': 'Comparative Law', 'credits': 3, 'grade': 'A+', 'score': 93},
-        {'name': 'Legal Research Methodology', 'credits': 3, 'grade': 'A', 'score': 87},
-        {'name': 'Alternative Dispute Resolution', 'credits': 3, 'grade': 'A+', 'score': 91},
-        {'name': 'Space Law', 'credits': 3, 'grade': 'A', 'score': 85},
-        {'name': 'Maritime Law', 'credits': 3, 'grade': 'A', 'score': 88},
-        {'name': 'Sports Law', 'credits': 3, 'grade': 'A+', 'score': 95},
-        {'name': 'Internship II', 'credits': 6, 'grade': 'A+', 'score': 92},
-        {'name': 'Dissertation II', 'credits': 6, 'grade': 'A', 'score': 89},
-      ],
-    },
-  ];
+  // State variables for fetched data
+  bool _isLoading = true;
+  String? _error;
+  List<Map<String, dynamic>> _semesterData = [];
+  int _currentSemester = 0;
 
   @override
   void initState() {
@@ -164,6 +40,121 @@ class _CreditsScreenState extends State<CreditsScreen>
       duration: const Duration(seconds: 2),
       vsync: this,
     )..repeat(reverse: true);
+
+    _fetchAndProcessGrades();
+  }
+
+  // --- DATA FETCHING AND PROCESSING ---
+  Future<void> _fetchAndProcessGrades() async {
+    try {
+      final api = ApiEndpoints(widget.url);
+      final response = await http.post(
+        Uri.parse(api.semGrades), // Make sure api.semGrades is correct
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'token': widget.token, 'refresh': false}),
+      );
+
+      if (!mounted) return;
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final rawGrades = data['semGrades'] ?? data['gradeData'];
+
+        if (rawGrades != null && rawGrades is List && rawGrades.isNotEmpty) {
+          _processBackendData(rawGrades);
+        } else {
+          setState(() => _error = "No grade data found.");
+        }
+      } else {
+        setState(() => _error = "Failed to load grades. Status: ${response.statusCode}");
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _error = "An error occurred: ${e.toString()}");
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  void _processBackendData(List<dynamic> rawGrades) {
+    final Map<int, List<Map<String, dynamic>>> groupedBySem = {};
+    for (var grade in rawGrades) {
+      final int sem = int.tryParse(grade['sem']?.toString() ?? '0') ?? 0;
+      if (sem > 0) {
+        if (!groupedBySem.containsKey(sem)) {
+          groupedBySem[sem] = [];
+        }
+        groupedBySem[sem]!.add({
+          'name': grade['subject'] ?? 'Unknown',
+          'credits': int.tryParse(grade['credit']?.toString() ?? '0') ?? 0,
+          'grade': grade['grade'] ?? 'N/A',
+        });
+      }
+    }
+
+    if (groupedBySem.isEmpty) {
+      setState(() => _error = "Could not parse any semester data.");
+      return;
+    }
+
+    final int maxSemester = groupedBySem.keys.reduce(math.max);
+    final List<Map<String, dynamic>> processedData = [];
+
+    for (var i = 1; i <= maxSemester; i++) {
+      final subjects = groupedBySem[i] ?? [];
+      if (subjects.isEmpty) continue;
+
+      double totalGradePoints = 0;
+      int totalCredits = 0;
+      int earnedCredits = 0;
+
+      for (var subject in subjects) {
+        final int credits = subject['credits'];
+        final String grade = subject['grade'];
+
+        totalCredits += credits;
+        totalGradePoints += (_getGradePoint(grade) * credits);
+
+        if (_isGradePassed(grade)) {
+          earnedCredits += credits;
+        }
+      }
+
+      final double sgpa = totalCredits > 0 ? totalGradePoints / totalCredits : 0.0;
+
+      processedData.add({
+        'semester': i,
+        'totalCredits': totalCredits,
+        'earnedCredits': earnedCredits,
+        'gpa': sgpa,
+        'subjects': subjects,
+      });
+    }
+
+    setState(() {
+      _semesterData = processedData;
+      _currentSemester = maxSemester;
+    });
+  }
+
+  // ✅ CORRECTED GRADE POINT LOGIC
+  double _getGradePoint(String grade) {
+    switch (grade.toUpperCase()) {
+      case 'S': return 10.0;
+      case 'A+': return 9.0;
+      case 'A': return 8.0;
+      case 'B': return 7.0;
+      case 'C': return 6.0;
+      case 'D': return 5.0;
+      case 'F': return 2.0; // F is 2 points for calculation
+      default: return 0.0; // RA, W, U, Absent etc. are 0
+    }
+  }
+
+  bool _isGradePassed(String grade) {
+    // Only F, U, W, RA, Absent are considered fail/incomplete
+    final failedGrades = ['F', 'U', 'RA', 'ABSENT', 'W'];
+    return !failedGrades.contains(grade.toUpperCase());
   }
 
   @override
@@ -174,12 +165,22 @@ class _CreditsScreenState extends State<CreditsScreen>
   }
 
   double get _totalCredits {
+    if (_semesterData.isEmpty) return 0.0;
     return _semesterData.fold(0.0, (sum, sem) => sum + sem['earnedCredits']);
   }
 
   double get _overallGPA {
-    double totalGPA = _semesterData.fold(0.0, (sum, sem) => sum + sem['gpa']);
-    return totalGPA / _semesterData.length;
+    if (_semesterData.isEmpty) return 0.0;
+    double totalGradePoints = 0;
+    int totalCreditsAttempted = 0;
+    for (var sem in _semesterData) {
+      for (var sub in sem['subjects']) {
+        final int credits = sub['credits'];
+        totalCreditsAttempted += credits;
+        totalGradePoints += (_getGradePoint(sub['grade']) * credits);
+      }
+    }
+    return totalCreditsAttempted > 0 ? totalGradePoints / totalCreditsAttempted : 0.0;
   }
 
   @override
@@ -203,16 +204,21 @@ class _CreditsScreenState extends State<CreditsScreen>
         ),
         iconTheme: const IconThemeData(color: Colors.white),
       ),
-      body: Padding(
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : _error != null
+          ? Center(child: Padding(
+        padding: const EdgeInsets.all(20.0),
+        child: Text(_error!, textAlign: TextAlign.center),
+      ))
+          : Padding(
         padding: EdgeInsets.all(16 * scaleFactor),
         child: Column(
           children: [
-            // The circle layout now has a defined height, positioning it at the top.
             SizedBox(
               height: MediaQuery.of(context).size.height * 0.4,
               child: _buildCreditsCircleLayout(),
             ),
-            // The details section fills all the remaining space below the circles.
             Expanded(
               child: _buildDetailsSection(),
             ),
@@ -227,8 +233,8 @@ class _CreditsScreenState extends State<CreditsScreen>
       builder: (context, constraints) {
         final size = math.min(constraints.maxWidth, constraints.maxHeight);
         final centerRadius = size * 0.15;
-        final smallRadius = size * 0.08;
-        final orbitRadius = size * 0.3;
+        final smallRadius = size * 0.1;
+        final orbitRadius = size * 0.38;
 
         return AnimatedBuilder(
           animation: _rotationController,
@@ -255,10 +261,13 @@ class _CreditsScreenState extends State<CreditsScreen>
                         (_rotationController.value * 2 * math.pi * 0.1);
                     final x = orbitRadius * math.cos(angle);
                     final y = orbitRadius * math.sin(angle);
+                    final semesterNumber = index + 1;
 
                     return Transform.translate(
                       offset: Offset(x, y),
-                      child: _buildSemesterCircle(index + 1, smallRadius),
+                      child: semesterNumber > _currentSemester
+                          ? _buildFutureSemesterCircle(semesterNumber, smallRadius)
+                          : _buildSemesterCircle(semesterNumber, smallRadius),
                     );
                   }),
                   _buildCenterCircle(centerRadius),
@@ -273,7 +282,6 @@ class _CreditsScreenState extends State<CreditsScreen>
 
   Widget _buildCenterCircle(double radius) {
     final isSelected = _selectedSemester == 0;
-
     return AnimatedBuilder(
       animation: _pulseController,
       builder: (context, child) {
@@ -308,16 +316,16 @@ class _CreditsScreenState extends State<CreditsScreen>
                   Text(
                     '${_totalCredits.toInt()}',
                     style: TextStyle(
-                      fontSize: radius * 0.3,
+                      fontSize: radius * 0.4,
                       fontWeight: FontWeight.bold,
                       color: Colors.white,
                     ),
                   ),
                   SizedBox(height: radius * 0.05),
                   Text(
-                    'CGPA: ${_overallGPA.toStringAsFixed(1)}',
+                    'CGPA: ${_overallGPA.toStringAsFixed(4)}',
                     style: TextStyle(
-                      fontSize: radius * 0.3,
+                      fontSize: radius * 0.25,
                       color: Colors.white,
                       fontWeight: FontWeight.w500,
                     ),
@@ -332,17 +340,12 @@ class _CreditsScreenState extends State<CreditsScreen>
   }
 
   Widget _buildSemesterCircle(int semester, double radius) {
-    final semesterData = _semesterData[semester - 1];
+    final semesterData = _semesterData.firstWhere((s) => s['semester'] == semester);
     final isSelected = _selectedSemester == semester;
     final colors = [
-      Colors.red,
-      Colors.orange,
-      Colors.yellow.shade700,
-      Colors.green,
-      Colors.blue,
-      Colors.indigo,
-      Colors.purple,
-      Colors.pink,
+      Colors.red, Colors.orange, Colors.yellow.shade700,
+      Colors.green, Colors.blue, Colors.indigo,
+      Colors.purple, Colors.pink,
     ];
     final color = colors[semester - 1];
 
@@ -391,6 +394,32 @@ class _CreditsScreenState extends State<CreditsScreen>
     ).animate().scale(delay: (semester * 100).ms, curve: Curves.elasticOut);
   }
 
+  Widget _buildFutureSemesterCircle(int semester, double radius) {
+    return GestureDetector(
+      onTap: () => setState(() => _selectedSemester = semester),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 300),
+        width: radius * 2,
+        height: radius * 2,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: _selectedSemester == semester ? Colors.grey[700] : Colors.grey[800],
+          border: Border.all(color: Colors.grey[600]!, width: 1),
+        ),
+        child: Center(
+          child: Text(
+            'S$semester',
+            style: TextStyle(
+              fontSize: radius * 0.6,
+              fontWeight: FontWeight.bold,
+              color: Colors.grey[400],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildDetailsSection() {
     return AnimatedSwitcher(
       duration: const Duration(milliseconds: 400),
@@ -408,7 +437,43 @@ class _CreditsScreenState extends State<CreditsScreen>
       },
       child: _selectedSemester == 0
           ? _buildOverallDetails()
+          : _selectedSemester > _currentSemester
+          ? _buildFutureSemesterDetails()
           : _buildSemesterDetails(_selectedSemester),
+    );
+  }
+
+  Widget _buildFutureSemesterDetails() {
+    final themeProvider = Provider.of<ThemeProvider>(context, listen: false);
+    return Container(
+      key: ValueKey('futureDetails$_selectedSemester'),
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: themeProvider.cardBackgroundColor,
+        borderRadius: BorderRadius.circular(20),
+        border: themeProvider.isDarkMode
+            ? Border.all(color: Colors.grey.withOpacity(0.3))
+            : null,
+      ),
+      child: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.hourglass_empty_rounded, size: 40, color: Colors.grey),
+            const SizedBox(height: 16),
+            Text(
+              'Semester $_selectedSemester',
+              style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'Data for this upcoming semester is not yet available.',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 16, color: Colors.grey),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -458,7 +523,7 @@ class _CreditsScreenState extends State<CreditsScreen>
               SizedBox(width: screenWidth * 0.04),
               Expanded(
                 child: _buildStatCard('Overall CGPA',
-                    _overallGPA.toStringAsFixed(2), AppTheme.accentAqua),
+                    _overallGPA.toStringAsFixed(4), AppTheme.accentAqua),
               ),
               SizedBox(width: screenWidth * 0.04),
               Expanded(
@@ -474,7 +539,7 @@ class _CreditsScreenState extends State<CreditsScreen>
 
   Widget _buildSemesterDetails(int semester) {
     final themeProvider = Provider.of<ThemeProvider>(context, listen: false);
-    final semesterData = _semesterData[semester - 1];
+    final semesterData = _semesterData.firstWhere((s) => s['semester'] == semester);
     final subjects = semesterData['subjects'] as List<Map<String, dynamic>>;
     final screenWidth = MediaQuery.of(context).size.width;
 
@@ -535,7 +600,7 @@ class _CreditsScreenState extends State<CreditsScreen>
               const SizedBox(width: 10),
               Expanded(
                 child: _buildStatCard(
-                    'SGPA', '${semesterData['gpa']}', AppTheme.accentAqua),
+                    'SGPA', '${(semesterData['gpa'] as double).toStringAsFixed(4)}', AppTheme.accentAqua),
               ),
               const SizedBox(width: 10),
               Expanded(
@@ -605,15 +670,6 @@ class _CreditsScreenState extends State<CreditsScreen>
                           ),
                         ),
                       ),
-                      const SizedBox(width: 8),
-                      Text(
-                        '${subject['score']}%',
-                        style: TextStyle(
-                          fontSize: screenWidth * 0.03,
-                          fontWeight: FontWeight.bold,
-                          color: _getGradeColor(subject['grade']),
-                        ),
-                      ),
                     ],
                   ),
                 ).animate().slideX(delay: (index * 50).ms, begin: 0.3, end: 0);
@@ -663,15 +719,17 @@ class _CreditsScreenState extends State<CreditsScreen>
   }
 
   Color _getGradeColor(String grade) {
-    switch (grade) {
-      case 'A+':
+    switch (grade.toUpperCase()) {
+      case 'S':
         return AppTheme.successGreen;
+      case 'A+':
       case 'A':
         return AppTheme.primaryBlue;
-      case 'B+':
-        return AppTheme.warningOrange;
       case 'B':
-        return Colors.orange;
+        return AppTheme.accentAqua;
+      case 'C':
+      case 'D':
+        return AppTheme.warningOrange;
       default:
         return AppTheme.errorRed;
     }
