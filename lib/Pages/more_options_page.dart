@@ -126,7 +126,7 @@ class MoreOptionsScreen extends StatelessWidget {
         Navigator.push(
             ctx,
             MaterialPageRoute(
-                builder: (_) => InternalsPage(token: token,)));
+                builder: (_) => InternalsPage(token: token,url: url)));
         break;
       case 'credits':
       // KEY CHANGE 2: Pass the received CGPA along to the CreditsScreen

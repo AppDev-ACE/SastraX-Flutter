@@ -23,6 +23,7 @@ class ApiEndpoints {
   String get facultyList => '$baseUrl/facultyList';
   String get chatbot => '$baseUrl/chatbot';
   String get semGrades => '$baseUrl/semGrades';
+  String get ciaWiseInternalMarks => '$baseUrl/ciaWiseInternalMarks';
 
   // Fees and Status
   String get sastraDue => '$baseUrl/sastraDue';

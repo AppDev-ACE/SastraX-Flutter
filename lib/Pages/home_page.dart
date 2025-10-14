@@ -8,7 +8,7 @@ import '../services/ApiEndpoints.dart';
 import 'FeeDuePage.dart';
 import 'more_options_page.dart';
 import 'subject_wise_attendance.dart';
-import '../Components/timetable_widget.dart';
+import '../components/timetable_widget.dart';
 import '../models/theme_model.dart';
 import '../components/theme_toggle_button.dart';
 import '../components/neon_container.dart';
@@ -20,10 +20,11 @@ import 'community_page.dart';
 import 'mess_menu_page.dart';
 
 class HomePage extends StatefulWidget {
-  final String token; // ✅ changed from regNo
+  final String token;
   final String url;
+  final String regNo;
 
-  const HomePage({super.key, required this.token, required this.url});
+  const HomePage({super.key, required this.token, required this.url, required this.regNo});
 
   @override
   State<HomePage> createState() => _HomePageState();
@@ -39,11 +40,11 @@ class _HomePageState extends State<HomePage> {
     super.initState();
     api = ApiEndpoints(widget.url);
     _pages = [
-      DashboardScreen(token: widget.token, url: widget.url),
-      CalendarPage(token: widget.token), // make sure CalendarPage constructor matches token
+      DashboardScreen(token: widget.token, url: widget.url, regNo: widget.regNo),
+      CalendarPage(token: widget.token),
       const CommunityPage(),
       MessMenuPage(url: widget.url),
-      MoreOptionsScreen(token: widget.token, url: widget.url,),
+      MoreOptionsScreen(token: widget.token, url: widget.url),
     ];
   }
 
@@ -54,8 +55,7 @@ class _HomePageState extends State<HomePage> {
 
     return Consumer<ThemeProvider>(
       builder: (_, theme, __) => Scaffold(
-        backgroundColor:
-        theme.isDarkMode ? AppTheme.darkBackground : Colors.white,
+        backgroundColor: theme.isDarkMode ? AppTheme.darkBackground : Colors.white,
         appBar: AppBar(
           leadingWidth: appBarHeight,
           toolbarHeight: appBarHeight,
@@ -79,8 +79,7 @@ class _HomePageState extends State<HomePage> {
             ),
           ),
           centerTitle: true,
-          backgroundColor:
-          theme.isDarkMode ? AppTheme.darkBackground : AppTheme.primaryBlue,
+          backgroundColor: theme.isDarkMode ? AppTheme.darkBackground : AppTheme.primaryBlue,
           elevation: 0,
           actions: [
             Padding(
@@ -97,19 +96,15 @@ class _HomePageState extends State<HomePage> {
           currentIndex: _currentIndex,
           onTap: (i) => setState(() => _currentIndex = i),
           type: BottomNavigationBarType.fixed,
-          backgroundColor:
-          theme.isDarkMode ? AppTheme.darkSurface : Colors.white,
-          selectedItemColor:
-          theme.isDarkMode ? AppTheme.neonBlue : AppTheme.primaryBlue,
+          backgroundColor: theme.isDarkMode ? AppTheme.darkSurface : Colors.white,
+          selectedItemColor: theme.isDarkMode ? AppTheme.neonBlue : AppTheme.primaryBlue,
           unselectedItemColor: Colors.grey,
           items: const [
             BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
-            BottomNavigationBarItem(
-                icon: Icon(Icons.calendar_today), label: 'Calendar'),
+            BottomNavigationBarItem(icon: Icon(Icons.calendar_today), label: 'Calendar'),
             BottomNavigationBarItem(icon: Icon(Icons.people), label: 'Community'),
             BottomNavigationBarItem(icon: Icon(Icons.restaurant), label: 'Mess'),
-            BottomNavigationBarItem(
-                icon: Icon(Icons.more_horiz_outlined), label: 'More'),
+            BottomNavigationBarItem(icon: Icon(Icons.more_horiz_outlined), label: 'More'),
           ],
         ),
       ),
@@ -121,7 +116,9 @@ class _HomePageState extends State<HomePage> {
 class DashboardScreen extends StatefulWidget {
   final String token;
   final String url;
-  const DashboardScreen({super.key, required this.token, required this.url});
+  final String regNo;
+
+  const DashboardScreen({super.key, required this.token, required this.url, required this.regNo});
 
   @override
   State<DashboardScreen> createState() => _DashboardScreenState();
@@ -160,10 +157,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Future<void> _fetchDashboardDataSequentially() async {
+    if (!mounted) return;
     try {
       await Future.wait([
         _fetchProfile(),
-        _fetchAttendance(),
         _fetchSubjectWiseAttendanceAndSum(),
         _fetchCGPA(),
         _fetchFeeDue(),
@@ -172,12 +169,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
         _checkBirthday(),
       ]);
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error fetching data: $e')),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error fetching initial data: $e')),
+        );
+      }
     }
   }
-
 
   Future<void> _fetchProfile() async {
     try {
@@ -186,7 +184,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({'refresh': false, 'regNo': widget.token}),
       );
-      if (res.statusCode == 200) {
+      if (res.statusCode == 200 && mounted) {
         final data = jsonDecode(res.body);
         if (data['success'] == true) {
           setState(() {
@@ -195,7 +193,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         }
       }
     } catch (_) {
-      setState(() => studentName = null);
+      if (mounted) setState(() => studentName = null);
     }
   }
 
@@ -206,7 +204,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({'refresh': false, 'regNo': widget.token}),
       );
-      if (res.statusCode == 200) {
+      if (res.statusCode == 200 && mounted) {
         final data = jsonDecode(res.body);
         final dob = data['dob']?[0]?['dob'];
         if (dob != null && dob.isNotEmpty) {
@@ -215,58 +213,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
           if (parsed.day == today.day && parsed.month == today.month) {
             setState(() => isBirthday = true);
             WidgetsBinding.instance.addPostFrameCallback((_) {
-              _confettiController.play();
+              if (mounted) _confettiController.play();
             });
           }
         }
-      } else {
-        setState(() => isBirthday = false);
       }
     } catch (_) {
-      setState(() => isBirthday = false);
-    }
-  }
-
-  Future<void> _fetchAttendance() async {
-    try {
-      final res = await http.post(
-        Uri.parse(api.attendance),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'refresh': false, 'token': widget.token}),
-      );
-
-      if (res.statusCode == 200) {
-        final data = jsonDecode(res.body);
-
-        final raw = data['attendance'] ?? data['attendanceHTML'] ?? "0%";
-
-        // 👇 Show the raw data in a snackbar for debugging
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Raw: $raw'),
-            duration: const Duration(seconds: 3),
-          ),
-        );
-
-        final percentMatch = RegExp(r'(\d+(?:\.\d+)?)%').firstMatch(raw);
-        final pairMatch = RegExp(r'(\d+)\s*/\s*(\d+)').firstMatch(raw);
-
-        setState(() {
-          attendancePercent = double.tryParse(percentMatch?[1] ?? '0') ?? 0;
-        });
-      }
-    } catch (_) {
-      setState(() {
-        attendancePercent = 0;
-      });
-
-      // Show error too
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Failed to fetch attendance'),
-          duration: Duration(seconds: 3),
-        ),
-      );
+      if (mounted) setState(() => isBirthday = false);
     }
   }
 
@@ -278,10 +231,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
         body: jsonEncode({'token': widget.token, 'refresh': false}),
       );
 
-      if (res.statusCode == 200) {
+      if (res.statusCode == 200 && mounted) {
         final data = jsonDecode(res.body);
-
-        // Try both possible keys from your backend
         final subjects = data['subjectWiseAttendance'] ?? data['subjectAttendance'];
         if (subjects != null && subjects is List) {
           int totalHrs = 0;
@@ -301,64 +252,41 @@ class _DashboardScreenState extends State<DashboardScreen> {
             attendedClasses = attendedHrs;
             attendancePercent = double.parse(percent.toStringAsFixed(2));
           });
-
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                'Attendance Updated: ${attendancePercent.toStringAsFixed(2)}% ($attendedClasses/$totalClasses)',
-              ),
-              duration: const Duration(seconds: 2),
-            ),
-          );
-        } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('No subject-wise attendance data found')),
-          );
         }
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to fetch subject attendance: ${res.statusCode}')),
-        );
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error fetching subject-wise attendance: $e')),
-      );
+      if (mounted) setState(() => attendancePercent = 0);
     }
   }
 
   Future<void> _fetchCGPA() async {
-    setState(() {
-      isCgpaLoading = true;
-      cgpa = "N/A";
-    });
-
+    if (!mounted) return;
+    setState(() => isCgpaLoading = true);
     try {
       final res = await http.post(
         Uri.parse(api.cgpa),
         headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'refresh': false, 'token': widget.token}), // use 'token' not 'regNo'
+        body: jsonEncode({'refresh': false, 'token': widget.token}),
       );
 
-      if (res.statusCode == 200) {
+      if (res.statusCode == 200 && mounted) {
         final data = jsonDecode(res.body);
-        // Backend returns either 'cgpa' or 'cgpaData'
         final cgpaList = data['cgpa'] ?? data['cgpaData'];
         if (cgpaList != null && cgpaList is List && cgpaList.isNotEmpty) {
           final fetchedCgpa = cgpaList[0]['cgpa'];
           if (fetchedCgpa != null && fetchedCgpa.toString().isNotEmpty) {
-            setState(() {
-              cgpa = fetchedCgpa.toString();
-            });
+            setState(() => cgpa = fetchedCgpa.toString());
+          } else {
+            setState(() => cgpa = "N/A");
           }
+        } else {
+          setState(() => cgpa = "N/A");
         }
       }
     } catch (_) {
-      // Ignore errors, cgpa stays "N/A"
+      if (mounted) setState(() => cgpa = "N/A");
     } finally {
-      setState(() {
-        isCgpaLoading = false;
-      });
+      if (mounted) setState(() => isCgpaLoading = false);
     }
   }
 
@@ -370,65 +298,56 @@ class _DashboardScreenState extends State<DashboardScreen> {
         body: jsonEncode({'refresh': false, 'regNo': widget.token}),
       );
 
-      await Future.delayed(const Duration(milliseconds: 500));
-
       final hostelRes = await http.post(
         Uri.parse(api.hostelDue),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({'refresh': false, 'regNo': widget.token}),
       );
 
-      if (sastraRes.statusCode == 200 && hostelRes.statusCode == 200) {
+      if (sastraRes.statusCode == 200 && hostelRes.statusCode == 200 && mounted) {
         final sastraData = jsonDecode(sastraRes.body);
         final hostelData = jsonDecode(hostelRes.body);
 
         if (sastraData['success'] == true && hostelData['success'] == true) {
-          final sastraDueStr = (sastraData['sastraDue'] ?? sastraData['totalSastraDue'] ?? "0")
-              .toString()
-              .replaceAll(RegExp(r'[^0-9]'), '');
-          final hostelDueStr = (hostelData['hostelDue'] ?? hostelData['totalHostelDue'] ?? "0")
-              .toString()
-              .replaceAll(RegExp(r'[^0-9]'), '');
-
+          final sastraDueStr = (sastraData['sastraDue'] ?? sastraData['totalSastraDue'] ?? "0").toString().replaceAll(RegExp(r'[^0-9]'), '');
+          final hostelDueStr = (hostelData['hostelDue'] ?? hostelData['totalHostelDue'] ?? "0").toString().replaceAll(RegExp(r'[^0-9]'), '');
           final sastraDue = int.tryParse(sastraDueStr) ?? 0;
           final hostelDue = int.tryParse(hostelDueStr) ?? 0;
-
-          setState(() {
-            feeDue = sastraDue + hostelDue;
-          });
+          setState(() => feeDue = sastraDue + hostelDue);
         }
       }
     } catch (_) {
-      setState(() => feeDue = 0);
+      if (mounted) setState(() => feeDue = 0);
     }
   }
 
   Future<void> _fetchBunks() async {
     try {
-      final res = await http.get(Uri.parse(api.bunk));
-      if (res.statusCode == 200) {
-        final data = jsonDecode(res.body);
-        if (data['success'] == true) {
-          final bunkData = data['bunkdata'];
-          final total = (bunkData as Map).values.fold<int>(
-            0,
-                (sum, val) => sum + (val as int),
-          );
-          setState(() {
-            bunks = total;
-          });
+      final response = await http.post(
+        Uri.parse(api.bunk),
+        headers: {
+          'Content-Type': 'application/json; charset=UTF-8',
+          'Authorization': 'Bearer ${widget.token}',
+        },
+        body: jsonEncode({'regNo': widget.regNo}),
+      );
+
+      if (response.statusCode == 200 && mounted) {
+        final data = jsonDecode(response.body);
+        if (data['success'] == true && data['bunkdata'] != null) {
+          final bunkData = data['bunkdata']['perSem20'];
+          final total = (bunkData as Map).values.fold<int>(0, (sum, value) => sum + (value as int));
+          setState(() => bunks = total);
         }
       }
-    } catch (_) {
-      setState(() => bunks = 0);
+    } catch (e) {
+      if (mounted) setState(() => bunks = 0);
     }
   }
 
   Future<void> _fetchTimetable() async {
-    setState(() {
-      isTimetableLoading = true;
-    });
-
+    if (!mounted) return;
+    setState(() => isTimetableLoading = true);
     try {
       final res = await http.post(
         Uri.parse(api.timetable),
@@ -436,63 +355,24 @@ class _DashboardScreenState extends State<DashboardScreen> {
         body: jsonEncode({'refresh': false, 'token': widget.token}),
       );
 
-      if (res.statusCode == 200) {
+      if (res.statusCode == 200 && mounted) {
         final data = jsonDecode(res.body);
-
-        // Handle both 'timetable' and 'timeTable' keys
         final fetchedTimetable = data['timetable'] ?? data['timeTable'];
 
-        if (fetchedTimetable != null && fetchedTimetable is List) {
-          setState(() {
-            timetableData = fetchedTimetable;
-          });
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Timetable Retrieved'),
-            ),
-          );
+        if (fetchedTimetable != null && fetchedTimetable is List && fetchedTimetable.isNotEmpty) {
+          setState(() => timetableData = fetchedTimetable);
         } else {
-          setState(() {
-            timetableData = [];
-          });
+          setState(() => timetableData = []);
         }
-      } else if (res.statusCode == 401) {
-        // Session invalid
-        setState(() {
-          timetableData = [];
-        });
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Session expired. Please log in again.'),
-          ),
-        );
       } else {
-        setState(() {
-          timetableData = [];
-        });
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Failed to fetch the timetable'),
-          ),
-        );
+        if (mounted) setState(() => timetableData = []);
       }
     } catch (e) {
-      setState(() {
-        timetableData = [];
-      });
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Error fetching timetable'),
-        ),
-      );
+      if (mounted) setState(() => timetableData = []);
     } finally {
-      setState(() {
-        isTimetableLoading = false;
-      });
+      if (mounted) setState(() => isTimetableLoading = false);
     }
   }
-
-
 
   @override
   Widget build(BuildContext context) {
@@ -509,25 +389,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 GestureDetector(
                   onTap: () => Navigator.push(
                     context,
-                    MaterialPageRoute(
-                      builder: (_) => ProfilePage(token: widget.token, url: widget.url),
-                    ),
+                    MaterialPageRoute(builder: (_) => ProfilePage(token: widget.token, url: widget.url)),
                   ),
                   child: NeonContainer(
-                    borderColor: theme.isDarkMode
-                        ? AppTheme.neonBlue
-                        : AppTheme.primaryBlue,
+                    borderColor: theme.isDarkMode ? AppTheme.neonBlue : AppTheme.primaryBlue,
                     child: Row(
                       children: [
                         CircleAvatar(
                           radius: 28,
-                          backgroundColor: theme.isDarkMode
-                              ? AppTheme.neonBlue
-                              : AppTheme.primaryBlue,
-                          child: Icon(Icons.person,
-                              color: theme.isDarkMode
-                                  ? Colors.black
-                                  : Colors.white),
+                          backgroundColor: theme.isDarkMode ? AppTheme.neonBlue : AppTheme.primaryBlue,
+                          child: Icon(Icons.person, color: theme.isDarkMode ? Colors.black : Colors.white),
                         ),
                         const SizedBox(width: 16),
                         Expanded(
@@ -539,36 +410,27 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                   fit: BoxFit.scaleDown,
                                   child: Text(
                                     '🎉 Happy Birthday! 🎉',
-                                    style: TextStyle(
-                                      fontSize: 20,
-                                      fontWeight: FontWeight.bold,
-                                      color: Colors.amber,
-                                    ),
+                                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.amber),
                                   ),
                                 )
                               else
                                 FittedBox(
                                   fit: BoxFit.scaleDown,
                                   child: Text(
-                                    studentName != null
-                                        ? 'Welcome, $studentName!'
-                                        : 'Welcome Back!',
+                                    studentName != null ? 'Welcome, $studentName!' : 'Welcome Back!',
                                     style: TextStyle(
                                       fontSize: 20,
                                       fontWeight: FontWeight.bold,
-                                      color: theme.isDarkMode
-                                          ? AppTheme.neonBlue
-                                          : AppTheme.primaryBlue,
+                                      color: theme.isDarkMode ? AppTheme.neonBlue : AppTheme.primaryBlue,
                                     ),
                                   ),
                                 ),
                               FittedBox(
                                 fit: BoxFit.scaleDown,
-                                child: Text('Student Dashboard',
-                                    style: TextStyle(
-                                        color: theme.isDarkMode
-                                            ? Colors.white70
-                                            : Colors.grey[600])),
+                                child: Text(
+                                  'Student Dashboard',
+                                  style: TextStyle(color: theme.isDarkMode ? Colors.white70 : Colors.grey[600]),
+                                ),
                               )
                             ],
                           ),
@@ -584,8 +446,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     : GestureDetector(
                   onTap: () => Navigator.push(
                     context,
-                    MaterialPageRoute(
-                        builder: (_) => SubjectWiseAttendancePage()),
+                    MaterialPageRoute(builder: (_) => SubjectWiseAttendancePage()),
                   ),
                   child: AttendancePieChart(
                     attendancePercentage: attendancePercent,
@@ -605,8 +466,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   ],
                 ),
                 const SizedBox(height: 16),
-                // Timetable
-                TimetableWidget(timetable: timetableData, isLoading: isTimetableLoading),
+                // Timetable with a fixed height
+                SizedBox(
+                  height: 300,
+                  child: TimetableWidget(timetable: timetableData, isLoading: isTimetableLoading),
+                ),
               ],
             ),
           ),

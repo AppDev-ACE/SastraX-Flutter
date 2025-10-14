@@ -15,38 +15,27 @@ class TimetableWidget extends StatelessWidget {
 
   bool _isEmptySchedule(List<dynamic> schedule) {
     if (schedule.isEmpty) return true;
+
     final today = DateTime.now();
+    if (today.weekday > 5) return true;
     final dayIndex = today.weekday - 1;
 
     if (dayIndex >= schedule.length) return true;
 
     final todayData = schedule[dayIndex] as Map<String, dynamic>;
     return todayData.entries.every((entry) {
+      if (entry.key.toLowerCase() == 'day') return true;
       final value = entry.value.toString().trim().toLowerCase();
       return value == 'n/a' || value == 'break' || value.isEmpty;
     });
   }
 
-  int? _getCurrentIndex(List<dynamic> schedule) {
+  int? _getCurrentIndex() {
     final now = DateTime.now();
-    final dayIndex = now.weekday - 1;
-
-    if (dayIndex >= schedule.length) return null;
-
-    final todayData = schedule[dayIndex] as Map<String, dynamic>;
     final timeSlots = [
-      '08:45 - 09:45',
-      '09:45 - 10:45',
-      '10:45 - 11:00',
-      '11:00 - 12:00',
-      '12:00 - 01:00',
-      '01:00 - 02:00',
-      '02:00 - 03:00',
-      '03:00 - 03:15',
-      '03:15 - 04:15',
-      '04:15 - 05:15',
-      '05:30 - 06:30',
-      '06:30 - 07:30',
+      '08:45 - 09:45', '09:45 - 10:45', '10:45 - 11:00', '11:00 - 12:00',
+      '12:00 - 01:00', '01:00 - 02:00', '02:00 - 03:00', '03:00 - 03:15',
+      '03:15 - 04:15', '04:15 - 05:15', '05:30 - 06:30', '06:30 - 07:30',
       '07:30 - 08:30',
     ];
 
@@ -58,7 +47,6 @@ class TimetableWidget extends StatelessWidget {
       try {
         final start = DateFormat('HH:mm').parse(parts[0]);
         final end = DateFormat('HH:mm').parse(parts[1]);
-
         final startTime = DateTime(now.year, now.month, now.day, start.hour, start.minute);
         final endTime = DateTime(now.year, now.month, now.day, end.hour, end.minute);
 
@@ -76,14 +64,9 @@ class TimetableWidget extends StatelessWidget {
 
     if (isLoading) {
       return Container(
-        padding: const EdgeInsets.all(32),
         decoration: BoxDecoration(
           color: themeProvider.cardBackgroundColor,
           borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: AppTheme.neonBlue.withOpacity(0.3)),
-          boxShadow: themeProvider.isDarkMode
-              ? [BoxShadow(color: AppTheme.neonBlue.withOpacity(0.2), blurRadius: 15)]
-              : [BoxShadow(color: Colors.black12, blurRadius: 10, offset: const Offset(0, 5))],
         ),
         child: const Center(child: CircularProgressIndicator()),
       );
@@ -91,40 +74,27 @@ class TimetableWidget extends StatelessWidget {
 
     if (_isEmptySchedule(timetable)) {
       return Container(
-        padding: const EdgeInsets.all(32),
         decoration: BoxDecoration(
           color: themeProvider.cardBackgroundColor,
           borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: AppTheme.neonBlue.withOpacity(0.3)),
-          boxShadow: themeProvider.isDarkMode
-              ? [BoxShadow(color: AppTheme.neonBlue.withOpacity(0.2), blurRadius: 15)]
-              : [BoxShadow(color: Colors.black12, blurRadius: 10, offset: const Offset(0, 5))],
         ),
-        child: const Text(
-          'No timetable available today.',
-          style: TextStyle(fontSize: 16),
+        child: const Center(
+          child: Padding(
+            padding: EdgeInsets.all(20.0),
+            child: Text('No classes scheduled for today! 🎉', style: TextStyle(fontSize: 16)),
+          ),
         ),
       );
     }
 
-    final today = DateTime.now();
-    final dayIndex = today.weekday - 1;
+    final dayIndex = DateTime.now().weekday - 1;
     final todayData = timetable[dayIndex] as Map<String, dynamic>;
 
     final List<Map<String, String>> transformedTimetable = [];
     final timeSlots = [
-      '08:45 - 09:45',
-      '09:45 - 10:45',
-      '10:45 - 11:00',
-      '11:00 - 12:00',
-      '12:00 - 01:00',
-      '01:00 - 02:00',
-      '02:00 - 03:00',
-      '03:00 - 03:15',
-      '03:15 - 04:15',
-      '04:15 - 05:15',
-      '05:30 - 06:30',
-      '06:30 - 07:30',
+      '08:45 - 09:45', '09:45 - 10:45', '10:45 - 11:00', '11:00 - 12:00',
+      '12:00 - 01:00', '01:00 - 02:00', '02:00 - 03:00', '03:00 - 03:15',
+      '03:15 - 04:15', '04:15 - 05:15', '05:30 - 06:30', '06:30 - 07:30',
       '07:30 - 08:30',
     ];
 
@@ -144,14 +114,12 @@ class TimetableWidget extends StatelessWidget {
 
       transformedTimetable.add({
         'time': formattedTime,
-        'start': startTime24.toIso8601String(),
-        'end': endTime24.toIso8601String(),
         'subject': cleanSubject,
         'room': room,
       });
     }
 
-    final currentIndex = _getCurrentIndex(timetable);
+    final currentIndex = _getCurrentIndex();
 
     return Container(
       decoration: BoxDecoration(
@@ -177,10 +145,7 @@ class TimetableWidget extends StatelessWidget {
             ),
             child: Row(
               children: [
-                Icon(
-                  Icons.schedule,
-                  color: themeProvider.isDarkMode ? AppTheme.neonBlue : Colors.white,
-                ),
+                Icon(Icons.schedule, color: themeProvider.isDarkMode ? AppTheme.neonBlue : Colors.white),
                 const SizedBox(width: 12),
                 Expanded(
                   child: FittedBox(
@@ -199,7 +164,6 @@ class TimetableWidget extends StatelessWidget {
               ],
             ),
           ),
-          // Use Expanded instead of Flexible to fix layout warnings
           Expanded(
             child: ListView.builder(
               padding: const EdgeInsets.all(16),
@@ -209,84 +173,50 @@ class TimetableWidget extends StatelessWidget {
                 final isBreak = item['subject']!.toLowerCase() == 'break';
                 final isCurrent = index == currentIndex;
 
+                if (item['subject']!.toLowerCase() == 'n/a' || item['subject']!.isEmpty) {
+                  return const SizedBox.shrink();
+                }
+
                 return Container(
                   margin: const EdgeInsets.only(bottom: 12),
                   decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: themeProvider.isDarkMode
-                          ? (isBreak
-                          ? [const Color(0xFF2A1810), const Color(0xFF3A2418)]
-                          : [const Color(0xFF0A1A2A), const Color(0xFF152A3A)])
-                          : (isBreak
-                          ? [Colors.orange[50]!, Colors.orange[100]!]
-                          : [Colors.blue[50]!, Colors.blue[100]!]),
-                    ),
+                    color: themeProvider.cardBackgroundColor,
                     borderRadius: BorderRadius.circular(15),
                     border: Border.all(
-                      color: isCurrent ? AppTheme.neonBlue : Colors.transparent,
-                      width: isCurrent ? 3 : 1,
+                      color: isCurrent ? AppTheme.neonBlue : Colors.grey.withOpacity(0.2),
+                      width: isCurrent ? 2 : 1,
                     ),
+                    boxShadow: isCurrent ? [
+                      BoxShadow(color: AppTheme.neonBlue.withOpacity(0.3), blurRadius: 8, spreadRadius: 1)
+                    ] : [],
                   ),
                   child: ListTile(
                     leading: Container(
-                      width: 50,
+                      width: 40,
                       height: 40,
                       decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: themeProvider.isDarkMode
-                              ? (isBreak
-                              ? [const Color(0xFFFFD93D), const Color(0xFFFFE55C)]
-                              : [AppTheme.neonBlue, AppTheme.electricBlue])
-                              : (isBreak
-                              ? [Colors.orange[400]!, Colors.orange[600]!]
-                              : [Colors.blue[400]!, Colors.blue[600]!]),
-                        ),
-                        borderRadius: BorderRadius.circular(12),
+                        color: isBreak ? Colors.orange.withOpacity(0.2) : AppTheme.primaryBlue.withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(10),
                       ),
-                      child: Center(
-                        child: Text(
-                          '${index + 1}',
-                          style: TextStyle(
-                            color: themeProvider.isDarkMode ? Colors.black : Colors.white,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 14,
-                          ),
-                        ),
+                      child: Icon(
+                        isBreak ? Icons.free_breakfast_outlined : Icons.menu_book_outlined,
+                        color: isBreak ? Colors.orange : AppTheme.primaryBlue,
                       ),
                     ),
                     title: Text(
                       item['subject']!,
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        color: themeProvider.primaryColor,
-                        fontSize: 15,
-                      ),
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
                     ),
                     subtitle: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          item['time']!,
-                          style: TextStyle(
-                            color: themeProvider.textSecondaryColor,
-                            fontSize: 13,
-                          ),
-                        ),
+                        Text(item['time']!, style: TextStyle(color: themeProvider.textSecondaryColor, fontSize: 13)),
                         if (item['room']!.isNotEmpty)
-                          Text(
-                            item['room']!,
-                            style: TextStyle(
-                              color: themeProvider.textSecondaryColor,
-                              fontSize: 11.5,
-                            ),
+                          Padding(
+                            padding: const EdgeInsets.only(top: 2.0),
+                            child: Text(item['room']!, style: TextStyle(color: themeProvider.textSecondaryColor, fontSize: 12)),
                           ),
                       ],
-                    ),
-                    trailing: Icon(
-                      isBreak ? Icons.free_breakfast : Icons.book,
-                      color: isBreak
-                          ? (themeProvider.isDarkMode ? const Color(0xFFFFD93D) : Colors.orange[600])
-                          : (themeProvider.isDarkMode ? AppTheme.neonBlue : Colors.blue[600]),
                     ),
                   ),
                 );

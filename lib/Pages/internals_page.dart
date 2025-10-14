@@ -2,8 +2,9 @@ import 'package:flutter/material.dart';
 import 'more_options_page.dart'; // Make sure this import is correct
 
 class InternalsPage extends StatelessWidget {
+  final String url;
   final String token ;
-  InternalsPage({super.key , required this.token});
+  InternalsPage({super.key , required this.token , required this.url});
 
   // Hardcoded data for student's internal marks
   final List<Map<String, dynamic>> subjects = [
@@ -36,7 +37,12 @@ class InternalsPage extends StatelessWidget {
     return Scaffold(
       // The AppBar has been updated as you requested
       appBar: AppBar(
-        title: Text('Internal Marks', style: theme.textTheme.titleLarge),
+        title: Text(
+          'Internal Marks',
+          style: theme.textTheme.titleLarge?.copyWith(
+            color: Colors.white,
+          ),
+        ),
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(20),

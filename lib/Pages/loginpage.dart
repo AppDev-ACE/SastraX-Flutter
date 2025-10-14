@@ -136,7 +136,7 @@ class _LoginPageState extends State<LoginPage> {
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(
-            builder: (_) => HomePage(token: token, url: widget.url),
+            builder: (_) => HomePage(token: token, url: widget.url , regNo: regNo,),
           ),
         );
       } else {
