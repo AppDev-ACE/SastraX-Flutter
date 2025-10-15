@@ -109,7 +109,7 @@ class _LoginPageState extends State<LoginPage> {
       final result = jsonDecode(response.body);
 
       if (response.statusCode == 200 && result['success'] == true) {
-        final token = result['token']; // ✅ Extract the actual token
+        final token = result['token'];
 
         if (token == null) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -132,11 +132,10 @@ class _LoginPageState extends State<LoginPage> {
 
         Navigator.pop(context); // Close captcha dialog
 
-        // ✅ Navigate with real token
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(
-            builder: (_) => HomePage(token: token, url: widget.url , regNo: regNo,),
+            builder: (_) => HomePage(token: token, url: widget.url, regNo: regNo),
           ),
         );
       } else {
@@ -284,33 +283,63 @@ class _LoginPageState extends State<LoginPage> {
             ),
             const SizedBox(height: 20),
             Center(
-              child: ElevatedButton(
-                onPressed: () {
-                  if (userController.text.isEmpty || passwordController.text.isEmpty) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Please enter Register Number and Password'),
-                        backgroundColor: Colors.redAccent,
+              child: Column( // Wrapped buttons in a Column
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  ElevatedButton(
+                    onPressed: () {
+                      if (userController.text.isEmpty || passwordController.text.isEmpty) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Please enter Register Number and Password'),
+                            backgroundColor: Colors.redAccent,
+                          ),
+                        );
+                        return;
+                      }
+                      _showCaptchaDialog();
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.blue,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
                       ),
-                    );
-                    return;
-                  }
-                  _showCaptchaDialog();
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.blue,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
+                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                    ),
+                    child: Text(
+                      "LOGIN",
+                      style: GoogleFonts.lato(
+                        fontWeight: FontWeight.w900,
+                        fontSize: 15,
+                        color: Colors.white,
+                      ),
+                    ),
                   ),
-                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                ),
-                child: Text(
-                  "LOGIN",
-                  style: GoogleFonts.lato(
-                    fontWeight: FontWeight.w900,
-                    fontSize: 15,
+                  const SizedBox(height: 10), // Spacing between buttons
+
+                  // --- NEW BUTTON ADDED HERE ---
+                  TextButton(
+                    onPressed: () {
+                      // Navigate directly to HomePage with placeholder data
+                      Navigator.pushReplacement(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => HomePage(
+                            token: "guest_token", // Use a dummy token
+                            url: widget.url,
+                            regNo: "", // No register number for guest
+                          ),
+                        ),
+                      );
+                    },
+                    child: Text(
+                      'Continue without Login',
+                      style: TextStyle(
+                        color: themeProvider.isDarkMode ? Colors.blue.shade300 : Colors.blue.shade700,
+                      ),
+                    ),
                   ),
-                ),
+                ],
               ),
             ),
           ],
