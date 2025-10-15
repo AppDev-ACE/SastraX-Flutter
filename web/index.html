@@ -31,6 +31,26 @@
 
   <title>sastra_x</title>
   <link rel="manifest" href="manifest.json">
+
+  <script type="module">
+    import { initializeApp } from "firebase/app";
+    import { getAnalytics } from "firebase/analytics";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyB1aX2w2BeYkilMITSglK1t0k8RrDZkBuM",
+      authDomain: "sastrax-c59e2.firebaseapp.com",
+      databaseURL: "https://sastrax-c59e2-default-rtdb.firebaseio.com",
+      projectId: "sastrax-c59e2",
+      storageBucket: "sastrax-c59e2.firebasestorage.app",
+      messagingSenderId: "785027783101",
+      appId: "1:785027783101:web:22950a5d4809f32e421ad4",
+      measurementId: "G-YV2GSKVX0B"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const analytics = getAnalytics(app);
+  </script>
+
 </head>
 <body>
   <script src="flutter_bootstrap.js" async></script>
