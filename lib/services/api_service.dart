@@ -56,16 +56,24 @@ class ApiService {
         "Content-Type": "application/json",
       },
       body: jsonEncode({
-        'token': token,    // ✅ send token in body
+        'token': token,
         'refresh': refresh,
       }),
     );
 
     if (response.statusCode == 200) {
       final jsonBody = json.decode(response.body);
-      // backend returns either { profilePic: ... } or { imageUrl: ... }
-      return jsonBody['profilePic'] ?? jsonBody['imageUrl'];
+
+      if (jsonBody['success'] == true) {
+        // Backend returns either { profilePic: ... } or { imageUrl: ... }
+        final url = jsonBody['profilePic'] ?? jsonBody['imageUrl'];
+        return url;
+      } else {
+        // Throw an exception with the message from the backend if success is false
+        throw Exception(jsonBody['message'] ?? 'Failed to retrieve profile picture URL');
+      }
     } else {
+      // Handle server or network errors
       throw Exception(
         'Failed to load profile picture: ${response.statusCode} - ${response.body}',
       );

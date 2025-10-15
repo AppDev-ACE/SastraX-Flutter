@@ -179,7 +179,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
   }
 
-  // All fetch methods...
   Future<void> _fetchProfile() async {
     try {
       final res = await http.post(
@@ -293,7 +292,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
   }
 
-  // THIS FUNCTION CONTAINS THE FIX
   Future<void> _fetchFeeDue() async {
     try {
       final responses = await Future.wait([
@@ -319,12 +317,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
         int sastraDue = 0;
         int hostelDue = 0;
 
-        // Helper function to parse the fee strings safely
         int parseFee(String rawValue) {
-          if (rawValue.toLowerCase().contains('no records found')) {
-            return 0;
-          }
-          // Remove commas, then take the part before the decimal point.
+          if (rawValue.toLowerCase().contains('no records found')) return 0;
           final cleanStr = rawValue.replaceAll(',', '').split('.')[0];
           return int.tryParse(cleanStr) ?? 0;
         }
@@ -350,19 +344,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
     try {
       final response = await http.post(
         Uri.parse(api.bunk),
-        headers: {
-          'Content-Type': 'application/json; charset=UTF-8',
-          'Authorization': 'Bearer ${widget.token}',
-        },
+        headers: {'Content-Type': 'application/json'},
         body: jsonEncode({'regNo': widget.regNo}),
       );
 
       if (response.statusCode == 200 && mounted) {
         final data = jsonDecode(response.body);
-        if (data['success'] == true && data['bunkdata'] != null) {
-          final bunkData = data['bunkdata']['perSem20'];
-          final total = (bunkData as Map).values.fold<int>(0, (sum, value) => sum + (value as int));
-          setState(() => bunks = total);
+        if (data['success'] == true && data['skippableClasses'] != null) {
+          final totalBunks = data['skippableClasses'] as int;
+          setState(() => bunks = totalBunks);
         }
       }
     } catch (e) {
@@ -405,7 +395,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       final res = await http.post(
         Uri.parse('${widget.url}/hourWiseAttendance'),
         headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'refresh': false, 'token': widget.token}),
+        body: jsonEncode({'refresh': true, 'token': widget.token}),
       );
 
       if (res.statusCode == 200 && mounted) {

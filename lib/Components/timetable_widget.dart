@@ -128,6 +128,7 @@ class TimetableWidget extends StatelessWidget {
     try {
       todayAttendance = hourWiseAttendance.firstWhere(
             (att) {
+          if (att == null || att['dateDay'] == null) return false;
           final backendDate = (att['dateDay'] as String).trim();
           return backendDate.toLowerCase().startsWith(todayDateString.toLowerCase());
         },
@@ -278,11 +279,11 @@ class TimetableWidget extends StatelessWidget {
                           ),
                       ],
                     ),
-                    trailing: item['attendanceColor'] == Colors.transparent
+                    trailing: isBreak || item['attendanceColor'] == Colors.transparent
                         ? null
                         : Container(
-                      width: 18, // Increased size
-                      height: 18, // Increased size
+                      width: 18,
+                      height: 18,
                       decoration: BoxDecoration(
                         color: item['attendanceColor'],
                         shape: BoxShape.circle,
