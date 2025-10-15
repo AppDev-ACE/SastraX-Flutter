@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:sastra_x/Pages/home_page.dart'; // Make sure this path is correct
 
-import 'SGPA_calculator.dart';
+// REMOVED: import 'SGPA_calculator.dart';
 import 'about_team_screen.dart';
 import 'club_hub.dart';
 import 'credits_page.dart';
@@ -12,13 +12,13 @@ import 'internals_page.dart';
 class MoreOptionsScreen extends StatelessWidget {
   final String token;
   final String url;
-  final String? cgpa;
+  final String regNo ;
 
   const MoreOptionsScreen({
     super.key,
     required this.token,
     required this.url,
-    this.cgpa, // It's optional as it might be loading initially
+    required this.regNo,
   });
 
   static const List<Map<String, dynamic>> _options = [
@@ -36,13 +36,7 @@ class MoreOptionsScreen extends StatelessWidget {
       'color': Colors.green,
       'route': 'credits',
     },
-    {
-      'title': 'SGPA calculator',
-      'subtitle': 'Calculate your SGPA',
-      'icon': Icons.calculate_sharp,
-      'color': Colors.purple,
-      'route': 'sgpa',
-    },
+    // REMOVED SGPA Calculator from this list
     {
       'title': 'Student Clubs',
       'subtitle': 'Explore clubs & societies',
@@ -127,23 +121,23 @@ class MoreOptionsScreen extends StatelessWidget {
                 builder: (_) => InternalsPage(token: token,url: url)));
         break;
       case 'credits':
-      // KEY CHANGE 2: Pass the received CGPA along to the CreditsScreen
         Navigator.push(ctx,
-            MaterialPageRoute(builder: (_) => CreditsScreen(token: token, url: url)));
+            MaterialPageRoute(builder: (_) => CreditsScreen(token: token, url: url , regNo: regNo)));
         break;
-      case 'sgpa':
-        Navigator.push(
-            ctx, MaterialPageRoute(builder: (_) => const SgpaCalculator()));
-        break;
+    // REMOVED the 'sgpa' case
       case 'about_team':
         Navigator.push(ctx,
             MaterialPageRoute(builder: (_) => AboutTeamScreen()));
         break;
       case 'clubs':
         Navigator.push(ctx,
-            MaterialPageRoute(builder: (_) => ClubHubPage()));
+            MaterialPageRoute(builder: (_) => const ClubHubPage()));
         break;
       default:
+      // You can add a snackbar for unimplemented features
+        ScaffoldMessenger.of(ctx).showSnackBar(
+          const SnackBar(content: Text('This feature is coming soon!')),
+        );
         break;
     }
   }

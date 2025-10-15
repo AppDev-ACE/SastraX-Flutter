@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/theme_model.dart';
 import '../services/ApiEndpoints.dart';
 
@@ -16,7 +17,7 @@ class MessMenuPage extends StatefulWidget {
 class _MessMenuPageState extends State<MessMenuPage> {
   final List<String> weekDays = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
 
-  late final PageController _pageController;
+  late PageController _pageController;
   late final ApiEndpoints api;
   List<dynamic> _fullMenu = [];
   List<dynamic> _filtered = [];
@@ -46,10 +47,22 @@ class _MessMenuPageState extends State<MessMenuPage> {
 
   Future<void> _fetchMenu() async {
     try {
-      final res = await http.get(Uri.parse(api.messMenu));
-      if (res.statusCode != 200) throw Exception('HTTP ${res.statusCode}');
-      _fullMenu = jsonDecode(res.body);
-      _applyWeekFilter();
+      final docSnapshot = await FirebaseFirestore.instance
+          .collection('cache')
+          .doc('messMenu')
+          .get();
+
+      if (docSnapshot.exists && docSnapshot.data() != null) {
+        final data = docSnapshot.data()!;
+        if (data.containsKey('menu') && data['menu'] is List) {
+          _fullMenu = data['menu'] as List<dynamic>;
+          _applyWeekFilter();
+        } else {
+          throw Exception("'menu' field is missing or not a list in the document.");
+        }
+      } else {
+        throw Exception("The 'messMenu' document was not found in the 'cache' collection.");
+      }
     } catch (e) {
       if (mounted) {
         setState(() => isLoading = false);
@@ -101,6 +114,7 @@ class _MessMenuPageState extends State<MessMenuPage> {
               Expanded(
                 child: PageView.builder(
                   controller: _pageController,
+                  // ✅ Your original setting to disable swiping is restored.
                   physics: const NeverScrollableScrollPhysics(),
                   itemCount: _filtered.length,
                   itemBuilder: (_, idx) =>
@@ -119,10 +133,10 @@ class _MessMenuPageState extends State<MessMenuPage> {
     return ListView(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
       children: [
-        _mealCard('Breakfast', day['breakfast'].join(', '), theme),
-        _mealCard('Lunch', day['lunch'].join(', '), theme),
-        _mealCard('Snacks', day['snacks'].join(', '), theme),
-        _mealCard('Dinner', day['dinner'].join(', '), theme),
+        _mealCard('Breakfast', (day['breakfast'] as List<dynamic>).join(', '), theme),
+        _mealCard('Lunch', (day['lunch'] as List<dynamic>).join(', '), theme),
+        _mealCard('Snacks', (day['snacks'] as List<dynamic>).join(', '), theme),
+        _mealCard('Dinner', (day['dinner'] as List<dynamic>).join(', '), theme),
       ],
     );
   }
@@ -136,12 +150,22 @@ class _MessMenuPageState extends State<MessMenuPage> {
           child: GestureDetector(
             onTap: () {
               final newPage = _filtered.indexWhere((d) =>
-              d['day'].toString().substring(0, 3).toUpperCase() == abbr);
+              (d['day'] as String?)?.substring(0, 3).toUpperCase() == abbr);
+
+              // ✅ This logic now correctly handles missing days.
               if (newPage != -1) {
                 setState(() => selectedDayAbbr = abbr);
                 if (_pageController.hasClients) {
                   _pageController.jumpToPage(newPage);
                 }
+              } else {
+                // ✅ If the day isn't found, inform the user.
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Menu for $abbr is not available this week.'),
+                    duration: const Duration(seconds: 1),
+                  ),
+                );
               }
             },
             child: Container(
@@ -253,13 +277,12 @@ class _MessMenuPageState extends State<MessMenuPage> {
               width: 50,
               height: 50,
               decoration: BoxDecoration(
-                // Use the base color with a slightly higher opacity
                 color: mealColors[title]!.withOpacity(0.8),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Icon(
                 palette['icon'] as IconData,
-                color: Colors.white, // A white icon color works well against the solid background
+                color: Colors.white,
                 size: 25,
               ),
             ),

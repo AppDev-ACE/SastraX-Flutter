@@ -1,19 +1,21 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
+import 'package:cloud_firestore/cloud_firestore.dart'; // ✅ Import Firestore
 import '../models/theme_model.dart';
-import '../models/student_profile.dart';
 import '../services/ApiEndpoints.dart';
-import '../services/api_service.dart';
 import 'loginpage.dart';
 
 class ProfilePage extends StatefulWidget {
-  final String token; // ✅ use token
+  final String token; // The token is the user's register number (UID)
   final String url;
-
+  final String regNo ;
   const ProfilePage({
     super.key,
     required this.token,
     required this.url,
+    required this.regNo,
   });
 
   @override
@@ -21,16 +23,48 @@ class ProfilePage extends StatefulWidget {
 }
 
 class _ProfilePageState extends State<ProfilePage> {
-  late Future<StudentProfile> profileFuture;
-  late Future<String?> picUrlFuture;
-  late final ApiService _apiService;
+  // ✅ Use a single Future to get the entire document from Firestore
+  late Future<DocumentSnapshot<Map<String, dynamic>>> _profileFuture;
+  late final ApiEndpoints _apiEndpoints;
 
   @override
   void initState() {
     super.initState();
-    _apiService = ApiService(ApiEndpoints(widget.url));
-    profileFuture = _apiService.fetchStudentProfile(widget.token, refresh: false);
-    picUrlFuture = _apiService.fetchProfilePicUrl(widget.token, refresh: false);
+    _apiEndpoints = ApiEndpoints(widget.url);
+    // Fetch the user's document from Firestore using their token (regNo) as the document ID
+    _profileFuture = FirebaseFirestore.instance
+        .collection('studentDetails')
+        .doc(widget.regNo)
+        .get();
+  }
+
+  /// 🔹 Handles the complete logout process
+  Future<void> _logout() async {
+    // Show a loading dialog for better UX
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) => const Center(child: CircularProgressIndicator()),
+    );
+
+    try {
+      // Call the logout endpoint on your server
+      await http.post(
+        Uri.parse(_apiEndpoints.logout),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'token': widget.token}),
+      );
+    } catch (e) {
+      debugPrint("Error calling logout endpoint: $e");
+    }
+
+    if (!mounted) return;
+
+    // Navigate to the LoginPage and remove all routes behind it
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (context) => LoginPage(url: widget.url)),
+          (Route<dynamic> route) => false,
+    );
   }
 
   @override
@@ -46,16 +80,25 @@ class _ProfilePageState extends State<ProfilePage> {
             title: const Text("Profile"),
           ),
           backgroundColor: themeProvider.backgroundColor,
-          body: FutureBuilder<StudentProfile>(
-            future: profileFuture,
+          body: FutureBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+            future: _profileFuture,
             builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting) {
                 return const Center(child: CircularProgressIndicator());
-              } else if (snapshot.hasError) {
-                return Center(child: Text('Error: ${snapshot.error}'));
+              }
+              if (snapshot.hasError || !snapshot.hasData || !snapshot.data!.exists) {
+                return Center(child: Text('Error: Could not load profile data.\n${snapshot.error ?? "Document does not exist."}'));
               }
 
-              final student = snapshot.data!;
+              // ✅ Extract all data from the single Firestore snapshot
+              final data = snapshot.data!.data()!;
+              final profileData = data['profile'] as Map<String, dynamic>? ?? {};
+              final name = profileData['name'] ?? "Name Not Available";
+              final regNo = profileData['regNo'] ?? "";
+              final department = profileData['department'] ?? "";
+              final semester = profileData['semester'] ?? "";
+              final picUrl = data['profilePic'] as String?;
+
               return SingleChildScrollView(
                 child: Column(
                   children: [
@@ -63,10 +106,8 @@ class _ProfilePageState extends State<ProfilePage> {
                       width: double.infinity,
                       decoration: BoxDecoration(
                         gradient: themeProvider.isDarkMode
-                            ? const LinearGradient(
-                            colors: [Colors.black, Color(0xFF1A1A1A)])
-                            : const LinearGradient(
-                            colors: [Color(0xFF1e3a8a), Color(0xFF3b82f6)]),
+                            ? const LinearGradient(colors: [Colors.black, Color(0xFF1A1A1A)])
+                            : const LinearGradient(colors: [Color(0xFF1e3a8a), Color(0xFF3b82f6)]),
                         borderRadius: const BorderRadius.only(
                           bottomLeft: Radius.circular(30),
                           bottomRight: Radius.circular(30),
@@ -75,56 +116,33 @@ class _ProfilePageState extends State<ProfilePage> {
                       child: Column(
                         children: [
                           const SizedBox(height: 20),
-                          FutureBuilder<String?>(
-                            future: picUrlFuture,
-                            builder: (context, snap) {
-                              if (snap.connectionState == ConnectionState.waiting) {
-                                return const CircularProgressIndicator();
-                              }
-                              if (!snap.hasData || snap.data == null) {
-                                return Icon(
-                                  Icons.person,
-                                  size: 80,
-                                  color: themeProvider.isDarkMode
-                                      ? Colors.white70
-                                      : Colors.white,
-                                );
-                              }
-                              return ClipOval(
-                                child: Image.network(
-                                  snap.data!,
-                                  width: 120,
-                                  height: 120,
-                                  fit: BoxFit.cover,
-                                  errorBuilder: (context, error, stackTrace) =>
-                                      Icon(Icons.person,
-                                          size: 80,
-                                          color: themeProvider.isDarkMode
-                                              ? Colors.white70
-                                              : Colors.white),
-                                ),
-                              );
-                            },
+                          // ✅ Display the profile picture directly
+                          ClipOval(
+                            child: (picUrl != null)
+                                ? Image.network(
+                              picUrl,
+                              width: 120,
+                              height: 120,
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, __, ___) => _buildDefaultAvatar(themeProvider),
+                            )
+                                : _buildDefaultAvatar(themeProvider),
                           ),
                           const SizedBox(height: 15),
                           Text(
-                            student.name ?? "Name Not Available",
+                            name,
                             style: TextStyle(
                               fontSize: 24,
                               fontWeight: FontWeight.bold,
-                              color: themeProvider.isDarkMode
-                                  ? themeProvider.primaryColor
-                                  : Colors.white,
+                              color: themeProvider.isDarkMode ? themeProvider.primaryColor : Colors.white,
                             ),
                           ),
                           const SizedBox(height: 5),
                           Text(
-                            student.regNo ?? "",
+                            regNo,
                             style: TextStyle(
                               fontSize: 16,
-                              color: themeProvider.isDarkMode
-                                  ? themeProvider.textSecondaryColor
-                                  : Colors.white70,
+                              color: themeProvider.isDarkMode ? themeProvider.textSecondaryColor : Colors.white70,
                             ),
                           ),
                           const SizedBox(height: 30),
@@ -136,54 +154,22 @@ class _ProfilePageState extends State<ProfilePage> {
                       padding: const EdgeInsets.symmetric(horizontal: 20),
                       child: Column(
                         children: [
-                          _buildProfileCard(
-                              'Department',
-                              student.department ?? "",
-                              Icons.school,
-                              themeProvider.primaryColor,
-                              themeProvider),
+                          _buildProfileCard('Department', department, Icons.school, themeProvider.primaryColor, themeProvider),
                           const SizedBox(height: 15),
-                          _buildProfileCard(
-                              'Semester',
-                              student.semester ?? "",
-                              Icons.calendar_today,
-                              Colors.green,
-                              themeProvider),
+                          _buildProfileCard('Semester', semester, Icons.calendar_today, Colors.green, themeProvider),
                           const SizedBox(height: 15),
-                          _buildProfileCard(
-                              'Batch',
-                              _getBatch(
-                                  student.regNo ?? "", student.department ?? ""),
-                              Icons.group,
-                              Colors.orange,
-                              themeProvider),
+                          _buildProfileCard('Batch', _getBatch(regNo, department), Icons.group, Colors.orange, themeProvider),
                           const SizedBox(height: 15),
-                          _buildProfileCard(
-                              'Email',
-                              _getEmail(student.regNo ?? ""),
-                              Icons.email,
-                              themeProvider.primaryColor,
-                              themeProvider),
+                          _buildProfileCard('Email', _getEmail(regNo), Icons.email, themeProvider.primaryColor, themeProvider),
                           const SizedBox(height: 30),
                           ElevatedButton.icon(
-                            onPressed: () {
-                              Navigator.pushReplacement(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (context) =>
-                                      LoginPage(url: widget.url),
-                                ),
-                              );
-                            },
+                            onPressed: _logout,
                             icon: const Icon(Icons.logout, color: Colors.white),
-                            label: const Text('Log Out',
-                                style: TextStyle(color: Colors.white)),
+                            label: const Text('Log Out', style: TextStyle(color: Colors.white)),
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: themeProvider.primaryColor,
-                              padding: const EdgeInsets.symmetric(
-                                  vertical: 12, horizontal: 24),
-                              shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(10)),
+                              backgroundColor: Colors.redAccent,
+                              padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 24),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                             ),
                           ),
                           const SizedBox(height: 30),
@@ -200,6 +186,16 @@ class _ProfilePageState extends State<ProfilePage> {
     );
   }
 
+  /// Helper widget for the default avatar
+  Widget _buildDefaultAvatar(ThemeProvider themeProvider) {
+    return Icon(
+      Icons.person,
+      size: 120,
+      color: themeProvider.isDarkMode ? Colors.white70 : Colors.white,
+    );
+  }
+
+  // Helper functions remain unchanged
   String _getEmail(String regNo) {
     if (regNo.length >= 9) {
       return '${regNo.substring(regNo.length - 9)}@sastra.ac.in';
@@ -212,8 +208,7 @@ class _ProfilePageState extends State<ProfilePage> {
       final match = RegExp(r'(\d{2})\d{6}$').firstMatch(regNo);
       if (match != null) {
         final gradYear = 2000 + int.parse(match.group(1)!);
-        final offset =
-        department.toLowerCase().contains("m.tech") ? 5 : 4;
+        final offset = department.toLowerCase().contains("m.tech") ? 2 : 4;
         final startYear = gradYear - offset;
         return "$startYear - $gradYear";
       }
@@ -221,23 +216,16 @@ class _ProfilePageState extends State<ProfilePage> {
     return "Unknown";
   }
 
-  Widget _buildProfileCard(String title, String value, IconData icon, Color color,
-      ThemeProvider themeProvider) {
+  Widget _buildProfileCard(String title, String value, IconData icon, Color color, ThemeProvider themeProvider) {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: themeProvider.cardBackgroundColor,
         borderRadius: BorderRadius.circular(15),
-        border: themeProvider.isDarkMode
-            ? Border.all(color: color.withOpacity(0.3))
-            : null,
+        border: themeProvider.isDarkMode ? Border.all(color: color.withOpacity(0.3)) : null,
         boxShadow: themeProvider.isDarkMode
-            ? [
-          BoxShadow(color: color.withOpacity(0.2), blurRadius: 10)
-        ]
-            : [
-          const BoxShadow(color: Colors.black12, blurRadius: 10)
-        ],
+            ? [BoxShadow(color: color.withOpacity(0.2), blurRadius: 10)]
+            : [const BoxShadow(color: Colors.black12, blurRadius: 10)],
       ),
       child: Row(
         children: [
@@ -247,9 +235,7 @@ class _ProfilePageState extends State<ProfilePage> {
             decoration: BoxDecoration(
               color: color.withOpacity(0.1),
               borderRadius: BorderRadius.circular(12),
-              border: themeProvider.isDarkMode
-                  ? Border.all(color: color.withOpacity(0.3))
-                  : null,
+              border: themeProvider.isDarkMode ? Border.all(color: color.withOpacity(0.3)) : null,
             ),
             child: Icon(icon, color: color, size: 25),
           ),
@@ -258,17 +244,9 @@ class _ProfilePageState extends State<ProfilePage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title,
-                    style: TextStyle(
-                        fontSize: 14,
-                        color: themeProvider.textSecondaryColor,
-                        fontWeight: FontWeight.w500)),
+                Text(title, style: TextStyle(fontSize: 14, color: themeProvider.textSecondaryColor, fontWeight: FontWeight.w500)),
                 const SizedBox(height: 5),
-                Text(value,
-                    style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                        color: themeProvider.textColor)),
+                Text(value, style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: themeProvider.textColor)),
               ],
             ),
           ),
