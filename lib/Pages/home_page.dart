@@ -481,7 +481,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     : GestureDetector(
                   onTap: () => Navigator.push(
                     context,
-                    MaterialPageRoute(builder: (_) => SubjectWiseAttendancePage()),
+                    MaterialPageRoute(builder: (_) => SubjectWiseAttendancePage(regNo: widget.regNo,token: widget.token,url: widget.url)),
                   ),
                   child: AttendancePieChart(
                     attendancePercentage: attendancePercent,

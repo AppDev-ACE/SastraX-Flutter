@@ -5,7 +5,10 @@ import 'dart:math';
 import 'package:intl/intl.dart';
 
 class SubjectWiseAttendancePage extends StatefulWidget {
-  const SubjectWiseAttendancePage({Key? key}) : super(key: key);
+  final String url ;
+  final String token ;
+  final String regNo ;
+  const SubjectWiseAttendancePage({Key? key, required this.url, required this.token, required this.regNo}) : super(key: key);
 
   @override
   State<SubjectWiseAttendancePage> createState() => _SubjectWiseAttendancePageState();
