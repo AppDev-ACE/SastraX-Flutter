@@ -7,6 +7,7 @@ import 'package:sastra_x/Pages/home_page.dart';
 import 'package:sastra_x/UI/LoginUI.dart';
 import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart'; // ✅ Added
 import '../models/theme_model.dart';
 import '../services/ApiEndpoints.dart';
 
@@ -79,6 +80,14 @@ class _LoginPageState extends State<LoginPage> {
     }
   }
 
+  /// 🔹 Store session in SharedPreferences
+  Future<void> _storeSession(String token, String regNo) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('session_token', token);
+    await prefs.setString('regNo', regNo);
+    print("💾 Session stored successfully: token=$token, regNo=$regNo");
+  }
+
   /// 🔹 Login API Call
   Future<void> _login() async {
     final regNo = userController.text.trim();
@@ -122,6 +131,9 @@ class _LoginPageState extends State<LoginPage> {
         }
 
         print("✅ Received token: $token");
+
+        // ✅ Save session locally
+        await _storeSession(token, regNo);
 
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -283,7 +295,7 @@ class _LoginPageState extends State<LoginPage> {
             ),
             const SizedBox(height: 20),
             Center(
-              child: Column( // Wrapped buttons in a Column
+              child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   ElevatedButton(
@@ -315,19 +327,16 @@ class _LoginPageState extends State<LoginPage> {
                       ),
                     ),
                   ),
-                  const SizedBox(height: 10), // Spacing between buttons
-
-                  // --- NEW BUTTON ADDED HERE ---
+                  const SizedBox(height: 10),
                   TextButton(
                     onPressed: () {
-                      // Navigate directly to HomePage with placeholder data
                       Navigator.pushReplacement(
                         context,
                         MaterialPageRoute(
                           builder: (_) => HomePage(
-                            token: "guest_token", // Use a dummy token
+                            token: "guest_token",
                             url: widget.url,
-                            regNo: "", // No register number for guest
+                            regNo: "",
                           ),
                         ),
                       );
@@ -335,7 +344,9 @@ class _LoginPageState extends State<LoginPage> {
                     child: Text(
                       'Continue without Login',
                       style: TextStyle(
-                        color: themeProvider.isDarkMode ? Colors.blue.shade300 : Colors.blue.shade700,
+                        color: themeProvider.isDarkMode
+                            ? Colors.blue.shade300
+                            : Colors.blue.shade700,
                       ),
                     ),
                   ),

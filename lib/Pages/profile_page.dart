@@ -2,15 +2,17 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
-import 'package:cloud_firestore/cloud_firestore.dart'; // ✅ Import Firestore
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../models/theme_model.dart';
 import '../services/ApiEndpoints.dart';
 import 'loginpage.dart';
 
 class ProfilePage extends StatefulWidget {
-  final String token; // The token is the user's register number (UID)
+  final String token;
   final String url;
-  final String regNo ;
+  final String regNo;
+
   const ProfilePage({
     super.key,
     required this.token,
@@ -23,7 +25,6 @@ class ProfilePage extends StatefulWidget {
 }
 
 class _ProfilePageState extends State<ProfilePage> {
-  // ✅ Use a single Future to get the entire document from Firestore
   late Future<DocumentSnapshot<Map<String, dynamic>>> _profileFuture;
   late final ApiEndpoints _apiEndpoints;
 
@@ -31,7 +32,6 @@ class _ProfilePageState extends State<ProfilePage> {
   void initState() {
     super.initState();
     _apiEndpoints = ApiEndpoints(widget.url);
-    // Fetch the user's document from Firestore using their token (regNo) as the document ID
     _profileFuture = FirebaseFirestore.instance
         .collection('studentDetails')
         .doc(widget.regNo)
@@ -48,15 +48,20 @@ class _ProfilePageState extends State<ProfilePage> {
     );
 
     try {
-      // Call the logout endpoint on your server
+      // Call the logout endpoint on your server to invalidate the session there
       await http.post(
         Uri.parse(_apiEndpoints.logout),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({'token': widget.token}),
       );
     } catch (e) {
-      debugPrint("Error calling logout endpoint: $e");
+      debugPrint("Error calling logout endpoint, but logging out locally anyway: $e");
     }
+
+    // ✅ Clear the saved session data from the device's local storage
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('session_token');
+    await prefs.remove('regNo');
 
     if (!mounted) return;
 
@@ -90,7 +95,6 @@ class _ProfilePageState extends State<ProfilePage> {
                 return Center(child: Text('Error: Could not load profile data.\n${snapshot.error ?? "Document does not exist."}'));
               }
 
-              // ✅ Extract all data from the single Firestore snapshot
               final data = snapshot.data!.data()!;
               final profileData = data['profile'] as Map<String, dynamic>? ?? {};
               final name = profileData['name'] ?? "Name Not Available";
@@ -116,7 +120,6 @@ class _ProfilePageState extends State<ProfilePage> {
                       child: Column(
                         children: [
                           const SizedBox(height: 20),
-                          // ✅ Display the profile picture directly
                           ClipOval(
                             child: (picUrl != null)
                                 ? Image.network(
@@ -186,7 +189,6 @@ class _ProfilePageState extends State<ProfilePage> {
     );
   }
 
-  /// Helper widget for the default avatar
   Widget _buildDefaultAvatar(ThemeProvider themeProvider) {
     return Icon(
       Icons.person,
@@ -195,7 +197,6 @@ class _ProfilePageState extends State<ProfilePage> {
     );
   }
 
-  // Helper functions remain unchanged
   String _getEmail(String regNo) {
     if (regNo.length >= 9) {
       return '${regNo.substring(regNo.length - 9)}@sastra.ac.in';
