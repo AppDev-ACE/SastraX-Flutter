@@ -7,12 +7,14 @@ class TimetableWidget extends StatefulWidget {
   final List<dynamic> timetable;
   final bool isLoading;
   final List<dynamic> hourWiseAttendance;
+  final List<dynamic> courseMap;
 
   const TimetableWidget({
     super.key,
     required this.timetable,
     required this.isLoading,
     required this.hourWiseAttendance,
+    required this.courseMap,
   });
 
   @override
@@ -21,7 +23,7 @@ class TimetableWidget extends StatefulWidget {
 
 class _TimetableWidgetState extends State<TimetableWidget> {
   late final ScrollController _scrollController;
-  bool _hasScrolled = false;
+  bool _hasAutoScrolled = false;
 
   static const List<String> _timeSlots = [
     '08:45 - 09:45', '09:45 - 10:45', '10:45 - 11:00', '11:00 - 12:00',
@@ -47,7 +49,7 @@ class _TimetableWidgetState extends State<TimetableWidget> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.isLoading && !widget.isLoading) {
       setState(() {
-        _hasScrolled = false;
+        _hasAutoScrolled = false;
       });
     }
   }
@@ -102,9 +104,9 @@ class _TimetableWidgetState extends State<TimetableWidget> {
     if (todayAttendance == null) return Colors.grey.shade400;
     final hourKey = _slotToHourKeyMap[slot];
     if (hourKey == null) return Colors.transparent;
-    final status = todayAttendance[hourKey]?.toString().trim().toLowerCase() ?? '';
-    if (status == 'p') return Colors.green.shade400;
-    if (status == 'a') return Colors.red.shade400;
+    final statusData = todayAttendance[hourKey]?.toString().trim() ?? '';
+    if (statusData.toUpperCase().startsWith('P')) return Colors.green.shade400;
+    if (statusData.toUpperCase().startsWith('A')) return Colors.red.shade400;
     return Colors.grey.shade400;
   }
 
@@ -119,7 +121,7 @@ class _TimetableWidgetState extends State<TimetableWidget> {
       );
     }
 
-    if (_isEmptySchedule(widget.timetable)) {
+    if (widget.timetable.isEmpty || _isEmptySchedule(widget.timetable)) {
       return Container(
         decoration: BoxDecoration(color: themeProvider.cardBackgroundColor, borderRadius: BorderRadius.circular(20)),
         child: const Center(
@@ -128,7 +130,26 @@ class _TimetableWidgetState extends State<TimetableWidget> {
       );
     }
 
+    final Map<String, String> courseNameMap = {
+      for (var course in widget.courseMap)
+        if (course['courseCode'] != null && course['courseName'] != null)
+          course['courseCode'].toString().trim().toUpperCase(): course['courseName'].toString().trim()
+    };
+
     final today = DateTime.now();
+    final dayIndex = today.weekday - 1;
+
+    if (dayIndex < 0 || dayIndex >= widget.timetable.length) {
+      return Container(
+        decoration: BoxDecoration(color: themeProvider.cardBackgroundColor, borderRadius: BorderRadius.circular(20)),
+        child: const Center(
+          child: Padding(padding: EdgeInsets.all(20.0), child: Text('Enjoy your weekend! 🥳', style: TextStyle(fontSize: 16))),
+        ),
+      );
+    }
+
+    final todayData = widget.timetable[dayIndex] as Map<String, dynamic>;
+    final List<Map<String, dynamic>> transformedTimetable = [];
     final todayDateString = DateFormat('dd-MMM-yyyy').format(today);
     Map<String, dynamic>? todayAttendance;
     try {
@@ -144,34 +165,37 @@ class _TimetableWidgetState extends State<TimetableWidget> {
       todayAttendance = null;
     }
 
-    final dayIndex = today.weekday - 1;
-    if (dayIndex < 0 || dayIndex >= widget.timetable.length) {
-      return Container(
-        decoration: BoxDecoration(color: themeProvider.cardBackgroundColor, borderRadius: BorderRadius.circular(20)),
-        child: const Center(
-          child: Padding(padding: EdgeInsets.all(20.0), child: Text('Enjoy your weekend! 🥳', style: TextStyle(fontSize: 16))),
-        ),
-      );
-    }
-
-    final todayData = widget.timetable[dayIndex] as Map<String, dynamic>;
-    final List<Map<String, dynamic>> transformedTimetable = [];
-
     for (final slot in _timeSlots) {
-      var subject = todayData[slot] ?? 'N/A';
+      String subject = todayData[slot] ?? 'N/A';
+      String finalDisplaySubject;
+      String room = '';
 
       if ((slot == '12:00 - 01:00' || slot == '01:00 - 02:00') &&
-          (subject.toString().trim().isEmpty || subject.toString().toLowerCase() == 'n/a')) {
-        subject = 'Lunch';
+          (subject.trim().isEmpty || subject.toLowerCase() == 'n/a')) {
+        finalDisplaySubject = 'Lunch';
+      } else if (subject.toLowerCase() == 'break' || subject.toLowerCase() == 'n/a' || subject.isEmpty) {
+        finalDisplaySubject = subject;
+      } else {
+        final courseCodes = subject.split(',');
+        List<String> courseNames = [];
+        for (var code in courseCodes) {
+          final roomMatch = RegExp(r'\((.*?)\)').firstMatch(code);
+          if (roomMatch != null) {
+            room = roomMatch.group(1)!;
+          }
+
+          // ✅ FIX: Use a more generic Regex to remove suffixes like '-N', '-S', etc.
+          String cleanCode = code
+              .replaceAll(RegExp(r'\((.*?)\)'), '') // Remove venue
+              .replaceAll(RegExp(r'-[A-Z0-9]+$'), '') // Remove suffix
+              .trim()
+              .toUpperCase();
+
+          courseNames.add(courseNameMap[cleanCode] ?? cleanCode);
+        }
+        finalDisplaySubject = courseNames.join(' / ');
       }
 
-      String room = '';
-      String cleanSubject = subject;
-      final roomMatch = RegExp(r'\((.*?)\)').firstMatch(subject);
-      if (roomMatch != null) {
-        room = roomMatch.group(1)!;
-        cleanSubject = subject.replaceAll(roomMatch.group(0)!, '').trim();
-      }
       final parts = slot.split(' - ');
       final startTime = _parseTime(parts[0], today);
       final endTime = _parseTime(parts[1], today);
@@ -180,26 +204,31 @@ class _TimetableWidgetState extends State<TimetableWidget> {
 
       transformedTimetable.add({
         'time': formattedTime,
-        'subject': cleanSubject,
+        'subject': finalDisplaySubject,
         'room': room,
         'attendanceColor': attendanceColor,
       });
     }
 
     final currentIndex = _getCurrentIndex();
+    final List<GlobalKey> itemKeys = List.generate(transformedTimetable.length, (_) => GlobalKey());
 
-    if (!_hasScrolled && currentIndex != null) {
+    if (!_hasAutoScrolled && currentIndex != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (_scrollController.hasClients) {
-          const double itemHeight = 84.0;
-          final scrollPosition = currentIndex * itemHeight;
-
-          _scrollController.animateTo(
-            scrollPosition > _scrollController.position.maxScrollExtent ? _scrollController.position.maxScrollExtent : scrollPosition,
-            duration: const Duration(milliseconds: 700),
-            curve: Curves.easeInOut,
-          );
-          _hasScrolled = true;
+        if (currentIndex < itemKeys.length) {
+          final key = itemKeys[currentIndex];
+          final context = key.currentContext;
+          if (context != null) {
+            Scrollable.ensureVisible(
+              context,
+              duration: const Duration(milliseconds: 700),
+              curve: Curves.easeInOut,
+              alignment: 0.3,
+            );
+            setState(() {
+              _hasAutoScrolled = true;
+            });
+          }
         }
       });
     }
@@ -253,6 +282,7 @@ class _TimetableWidgetState extends State<TimetableWidget> {
                 }
 
                 return Container(
+                  key: itemKeys[index],
                   margin: const EdgeInsets.only(bottom: 12),
                   decoration: BoxDecoration(
                     color: themeProvider.cardBackgroundColor,
@@ -276,7 +306,10 @@ class _TimetableWidgetState extends State<TimetableWidget> {
                         color: isBreak ? Colors.orange : isLunch ? Colors.teal : AppTheme.primaryBlue,
                       ),
                     ),
-                    title: Text(item['subject']!, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                    title: Text(
+                      item['subject']!,
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                    ),
                     subtitle: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [

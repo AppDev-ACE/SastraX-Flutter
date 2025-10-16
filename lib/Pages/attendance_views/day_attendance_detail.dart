@@ -32,35 +32,56 @@ class _DayAttendanceDetailState extends State<DayAttendanceDetail> {
     });
   }
 
-  Color _getTextColor(BuildContext context) => Provider.of<ThemeProvider>(context).isDarkMode ? Colors.white : Colors.black;
-  Color _getSecondaryTextColor(BuildContext context) => Provider.of<ThemeProvider>(context).isDarkMode ? Colors.white70 : Colors.grey[600]!;
-  Color _getCardColor(BuildContext context) => Provider.of<ThemeProvider>(context).isDarkMode ? const Color(0xFF1E1E1E) : Colors.white;
-  Color _getAppBarColor(BuildContext context) => Provider.of<ThemeProvider>(context).isDarkMode ? Colors.black12 : primaryBlue;
+  Color _getTextColor(BuildContext context) =>
+      Provider.of<ThemeProvider>(context).isDarkMode
+          ? Colors.white
+          : Colors.black;
+  Color _getSecondaryTextColor(BuildContext context) =>
+      Provider.of<ThemeProvider>(context).isDarkMode
+          ? Colors.white70
+          : Colors.grey[600]!;
+  Color _getCardColor(BuildContext context) =>
+      Provider.of<ThemeProvider>(context).isDarkMode
+          ? const Color(0xFF1E1E1E)
+          : Colors.white;
+  Color _getAppBarColor(BuildContext context) =>
+      Provider.of<ThemeProvider>(context).isDarkMode
+          ? Colors.black12
+          : primaryBlue;
 
   Color _getOverallStatusColor() {
-    if (widget.attendanceData.values.any((s) => s == 'absent')) return Colors.red;
-    if (widget.attendanceData.values.any((s) => s == 'OD')) return Colors.orange;
+    if (widget.attendanceData.values.any((s) => s == 'absent'))
+      return Colors.red;
+    if (widget.attendanceData.values.any((s) => s == 'OD'))
+      return Colors.orange;
     return Colors.green;
   }
 
   IconData _getOverallStatusIcon() {
-    if (widget.attendanceData.values.any((s) => s == 'absent')) return Icons.cancel;
-    if (widget.attendanceData.values.any((s) => s == 'OD')) return Icons.access_time;
+    if (widget.attendanceData.values.any((s) => s == 'absent'))
+      return Icons.cancel;
+    if (widget.attendanceData.values.any((s) => s == 'OD'))
+      return Icons.access_time;
     return Icons.check_circle;
   }
 
   String _getOverallStatusText() {
-    if (widget.attendanceData.values.any((s) => s == 'absent')) return 'PARTIAL';
+    if (widget.attendanceData.values.any((s) => s == 'absent'))
+      return 'PARTIAL';
     if (widget.attendanceData.values.any((s) => s == 'OD')) return 'OD';
     return 'PRESENT';
   }
 
   Color _getStatusColor(String status) {
     switch (status) {
-      case 'present': return Colors.green;
-      case 'absent': return Colors.red;
-      case 'OD': return Colors.orange;
-      default: return Colors.grey;
+      case 'present':
+        return Colors.green;
+      case 'absent':
+        return Colors.red;
+      case 'OD':
+        return Colors.orange;
+      default:
+        return Colors.grey;
     }
   }
 
@@ -70,30 +91,45 @@ class _DayAttendanceDetailState extends State<DayAttendanceDetail> {
   }
 
   String _getInsightMessage() {
-    int absentCount = widget.attendanceData.values.where((s) => s == 'absent').length;
+    int absentCount =
+        widget.attendanceData.values.where((s) => s == 'absent').length;
     int odCount = widget.attendanceData.values.where((s) => s == 'OD').length;
-    if (absentCount > 0) return 'You missed $absentCount class(es) today. Make sure to catch up on the material you missed.';
-    if (odCount > 0) return 'You were on OD for $odCount class(es) today. Make sure to complete any pending work.';
+    if (absentCount > 0)
+      return 'You missed $absentCount class(es) today. Make sure to catch up on the material you missed.';
+    if (odCount > 0)
+      return 'You were on OD for $odCount class(es) today. Make sure to complete any pending work.';
     return 'Great job! You attended all your classes today. Keep up the good work!';
   }
 
   String _getSubjectTime(String subject) {
     // This is a placeholder. For real data, you'd need to pass the timetable.
     switch (subject) {
-      case 'Data Structure': return '9:00 AM - 10:00 AM';
-      case 'Computer Networks': return '10:00 AM - 11:00 AM';
-      case 'Operating System': return '11:00 AM - 12:00 PM';
-      case 'Natural Language Processing': return '1:00 PM - 2:00 PM';
-      case 'Soft Skills': return '2:00 PM - 3:00 PM';
-      default: return 'Time not available';
+      case 'Data Structure':
+        return '9:00 AM - 10:00 AM';
+      case 'Computer Networks':
+        return '10:00 AM - 11:00 AM';
+      case 'Operating System':
+        return '11:00 AM - 12:00 PM';
+      case 'Natural Language Processing':
+        return '1:00 PM - 2:00 PM';
+      case 'Soft Skills':
+        return '2:00 PM - 3:00 PM';
+      default:
+        return 'Time not available';
     }
+  }
+
+  bool _isDarkMode(BuildContext context) {
+    return Theme.of(context).brightness == Brightness.dark;
   }
 
   @override
   Widget build(BuildContext context) {
     final themeProvider = Provider.of<ThemeProvider>(context);
     final isDark = themeProvider.isDarkMode;
-    String formattedDate = DateFormat('dd MMMM, yyyy').format(widget.selectedDate);
+    String formattedDate =
+    DateFormat('dd MMMM, yyyy').format(widget.selectedDate);
+    final odreasoncontroller = TextEditingController();
 
     return Scaffold(
       backgroundColor: isDark ? const Color(0xFF121212) : Colors.white,
@@ -105,7 +141,8 @@ class _DayAttendanceDetailState extends State<DayAttendanceDetail> {
         actions: [
           Padding(
             padding: const EdgeInsets.only(right: 16),
-            child: ThemeToggleButton(isDarkMode: isDark, onToggle: themeProvider.toggleTheme),
+            child: ThemeToggleButton(
+                isDarkMode: isDark, onToggle: themeProvider.toggleTheme),
           ),
         ],
       ),
@@ -118,7 +155,10 @@ class _DayAttendanceDetailState extends State<DayAttendanceDetail> {
               alignment: Alignment.centerLeft,
               child: Text(
                 'Subject-wise Attendance',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: _getTextColor(context)),
+                style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: _getTextColor(context)),
               ),
             ),
           ),
@@ -136,26 +176,37 @@ class _DayAttendanceDetailState extends State<DayAttendanceDetail> {
                   margin: const EdgeInsets.only(bottom: 8),
                   elevation: 2,
                   color: _getCardColor(context),
-                  shadowColor: isDark ? Colors.black54 : Colors.grey.withOpacity(0.2),
+                  shadowColor:
+                  isDark ? Colors.black54 : Colors.grey.withOpacity(0.2),
                   child: ListTile(
                     leading: CircleAvatar(
                       backgroundColor: _getSubjectColor(subject),
-                      child: Text(subject.substring(0, 1), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                      child: Text(subject.substring(0, 1),
+                          style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold)),
                     ),
-                    title: Text(subject, style: TextStyle(color: _getTextColor(context))),
-                    subtitle: Text(_getSubjectTime(subject), style: TextStyle(color: _getSecondaryTextColor(context))),
+                    title: Text(subject,
+                        style: TextStyle(color: _getTextColor(context))),
+                    subtitle: Text(_getSubjectTime(subject),
+                        style:
+                        TextStyle(color: _getSecondaryTextColor(context))),
                     trailing: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 4),
                           decoration: BoxDecoration(
                             color: _getStatusColor(status).withOpacity(0.2),
                             borderRadius: BorderRadius.circular(20),
                           ),
                           child: Text(
                             status.toUpperCase(),
-                            style: TextStyle(color: _getStatusColor(status), fontWeight: FontWeight.bold, fontSize: 12),
+                            style: TextStyle(
+                                color: _getStatusColor(status),
+                                fontWeight: FontWeight.bold,
+                                fontSize: 12),
                           ),
                         ),
                         if (status.toLowerCase() == 'absent')
@@ -166,7 +217,8 @@ class _DayAttendanceDetailState extends State<DayAttendanceDetail> {
                                 _checkboxStates[subject] = newValue ?? false;
                               });
                             },
-                            activeColor: primaryBlue,
+                            activeColor:
+                            isDark ? Colors.cyanAccent : primaryBlue,
                           ),
                       ],
                     ),
@@ -175,12 +227,43 @@ class _DayAttendanceDetailState extends State<DayAttendanceDetail> {
               },
             ),
           ),
+          if (_checkboxStates.values.any((value) => value))
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(16),
+              margin: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: _isDarkMode(context)
+                    ? primaryBlue.withOpacity(0.2)
+                    : Colors.blue.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: TextFormField(
+                controller: odreasoncontroller,
+                decoration: InputDecoration(
+                    label: const Text("Reason for OD"),
+                    suffixIcon: IconButton(
+                        onPressed: () {
+                          //integrate with firebase
+                          null;
+                        },
+                        icon: const Icon(Icons.send_rounded))),
+                validator: (value) {
+                  if (value == null || value.isEmpty) {
+                    return "Error";
+                  }
+                  return null;
+                },
+              ),
+            ),
           Container(
             width: double.infinity,
             padding: const EdgeInsets.all(16),
             margin: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: isDark ? primaryBlue.withOpacity(0.2) : Colors.blue.withOpacity(0.1),
+              color: isDark
+                  ? primaryBlue.withOpacity(0.2)
+                  : Colors.blue.withOpacity(0.1),
               borderRadius: BorderRadius.circular(12),
             ),
             child: Column(
@@ -188,10 +271,15 @@ class _DayAttendanceDetailState extends State<DayAttendanceDetail> {
               children: [
                 Text(
                   'Attendance Insights',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: _getTextColor(context)),
+                  style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: _getTextColor(context)),
                 ),
                 const SizedBox(height: 8),
-                Text(_getInsightMessage(), style: TextStyle(fontSize: 14, color: _getTextColor(context))),
+                Text(_getInsightMessage(),
+                    style:
+                    TextStyle(fontSize: 14, color: _getTextColor(context))),
               ],
             ),
           ),
@@ -211,16 +299,22 @@ class _DayAttendanceDetailState extends State<DayAttendanceDetail> {
       ),
       child: Column(
         children: [
-          Text('Overall Status', style: TextStyle(fontSize: 16, color: _getSecondaryTextColor(context))),
+          Text('Overall Status',
+              style: TextStyle(
+                  fontSize: 16, color: _getSecondaryTextColor(context))),
           const SizedBox(height: 8),
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(_getOverallStatusIcon(), color: _getOverallStatusColor(), size: 32),
+              Icon(_getOverallStatusIcon(),
+                  color: _getOverallStatusColor(), size: 32),
               const SizedBox(width: 8),
               Text(
                 _getOverallStatusText(),
-                style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: _getOverallStatusColor()),
+                style: TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                    color: _getOverallStatusColor()),
               ),
             ],
           ),

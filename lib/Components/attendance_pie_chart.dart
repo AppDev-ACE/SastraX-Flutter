@@ -28,21 +28,13 @@ class AttendancePieChart extends StatelessWidget {
           decoration: BoxDecoration(
             color: isDark ? AppTheme.darkSurface : Colors.white,
             borderRadius: BorderRadius.circular(20),
-            boxShadow: isDark
-                ? [
-              BoxShadow(
-                color: AppTheme.neonBlue.withOpacity(0.5),
-                blurRadius: 15,
-                spreadRadius: 2,
-              ),
-            ]
-                : [
-              const BoxShadow(
-                color: Colors.black12,
-                blurRadius: 8,
-                offset: Offset(0, 2),
-              ),
-            ],
+            // ✅ No shadows
+            boxShadow: const [],
+            // ✅ Added border similar to other NeonContainers
+            border: Border.all(
+              color: isDark ? AppTheme.neonBlue : AppTheme.primaryBlue,
+              width: 0.5,
+            ),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.center,
@@ -71,7 +63,6 @@ class AttendancePieChart extends StatelessWidget {
                         centerSpaceRadius: 35,
                         sections: [
                           PieChartSectionData(
-                            // FIX: Logic updated to be red or green, regardless of theme.
                             color: attendancePercentage < 80
                                 ? Colors.red.shade400
                                 : Colors.green.shade400,
@@ -81,12 +72,12 @@ class AttendancePieChart extends StatelessWidget {
                             titleStyle: const TextStyle(
                               fontSize: 12,
                               fontWeight: FontWeight.bold,
-                              // Changed to white for better contrast on red/green.
                               color: Colors.white,
                             ),
                           ),
                           PieChartSectionData(
-                            color: isDark ? Colors.grey[800]! : Colors.grey[300]!,
+                            color:
+                            isDark ? Colors.grey[800]! : Colors.grey[300]!,
                             value: 100 - attendancePercentage,
                             title: '',
                             radius: 45,
@@ -131,6 +122,7 @@ class AttendancePieChart extends StatelessWidget {
       },
     );
   }
+
   Widget _buildStat(String label, String value, Color valueColor, bool dark) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,

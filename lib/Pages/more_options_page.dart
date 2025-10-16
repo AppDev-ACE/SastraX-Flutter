@@ -1,18 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
-import 'package:sastra_x/Pages/home_page.dart'; // Make sure this path is correct
-
-// REMOVED: import 'SGPA_calculator.dart';
+import 'LeaveApplication.dart';
 import 'about_team_screen.dart';
 import 'club_hub.dart';
 import 'credits_page.dart';
 import 'internals_page.dart';
 
-
 class MoreOptionsScreen extends StatelessWidget {
   final String token;
   final String url;
-  final String regNo ;
+  final String regNo;
 
   const MoreOptionsScreen({
     super.key,
@@ -36,7 +33,6 @@ class MoreOptionsScreen extends StatelessWidget {
       'color': Colors.green,
       'route': 'credits',
     },
-    // REMOVED SGPA Calculator from this list
     {
       'title': 'Student Clubs',
       'subtitle': 'Explore clubs & societies',
@@ -45,25 +41,11 @@ class MoreOptionsScreen extends StatelessWidget {
       'route': 'clubs',
     },
     {
-      'title': 'Library',
-      'subtitle': 'Digital library access',
-      'icon': Icons.library_books,
-      'color': Colors.brown,
-      'route': 'library',
-    },
-    {
-      'title': 'Transport',
-      'subtitle': 'Bus routes & timings',
-      'icon': Icons.directions_bus,
-      'color': Colors.orange,
-      'route': 'transport',
-    },
-    {
-      'title': 'College Events',
-      'subtitle': 'Stay updated on events',
-      'icon': Icons.event,
-      'color': Colors.pink,
-      'route': 'events',
+      'title': 'Leave Application',
+      'subtitle': 'Apply for leave',
+      'icon': Icons.outbox,
+      'color': Colors.purple,
+      'route': 'leave_application',
     },
     {
       'title': 'About Team',
@@ -72,20 +54,6 @@ class MoreOptionsScreen extends StatelessWidget {
       'color': Colors.indigo,
       'route': 'about_team',
     },
-    {
-      'title': 'Settings',
-      'subtitle': 'App preferences',
-      'icon': Icons.settings,
-      'color': Colors.grey,
-      'route': 'settings',
-    },
-    {
-      'title': 'Help & Support',
-      'subtitle': 'Get assistance',
-      'icon': Icons.help_outline,
-      'color': Colors.red,
-      'route': 'help',
-    },
   ];
 
   @override
@@ -93,7 +61,7 @@ class MoreOptionsScreen extends StatelessWidget {
     return Scaffold(
       backgroundColor: Theme.of(context).colorScheme.background,
       body: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 20),
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
         child: GridView.builder(
           gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
             maxCrossAxisExtent: 210,
@@ -118,23 +86,30 @@ class MoreOptionsScreen extends StatelessWidget {
         Navigator.push(
             ctx,
             MaterialPageRoute(
-                builder: (_) => InternalsPage(token: token,url: url, regNo: regNo)));
+                builder: (_) =>
+                    InternalsPage(token: token, url: url, regNo: regNo)));
         break;
       case 'credits':
-        Navigator.push(ctx,
-            MaterialPageRoute(builder: (_) => CreditsScreen(token: token, url: url , regNo: regNo)));
+        Navigator.push(
+            ctx,
+            MaterialPageRoute(
+                builder: (_) =>
+                    CreditsScreen(token: token, url: url, regNo: regNo)));
         break;
-    // REMOVED the 'sgpa' case
       case 'about_team':
-        Navigator.push(ctx,
-            MaterialPageRoute(builder: (_) => AboutTeamScreen()));
+        Navigator.push(
+            ctx, MaterialPageRoute(builder: (_) => AboutTeamScreen()));
         break;
       case 'clubs':
-        Navigator.push(ctx,
-            MaterialPageRoute(builder: (_) => const ClubHubPage()));
+        Navigator.push(
+            ctx, MaterialPageRoute(builder: (_) => const ClubHubPage()));
+        break;
+      case 'leave_application':
+      // Corrected navigation to the screen widget
+        Navigator.push(
+            ctx, MaterialPageRoute(builder: (_) => const LeaveApplicationScreen()));
         break;
       default:
-      // You can add a snackbar for unimplemented features
         ScaffoldMessenger.of(ctx).showSnackBar(
           const SnackBar(content: Text('This feature is coming soon!')),
         );
@@ -142,7 +117,6 @@ class MoreOptionsScreen extends StatelessWidget {
     }
   }
 }
-
 
 class _OptionCard extends StatelessWidget {
   const _OptionCard({

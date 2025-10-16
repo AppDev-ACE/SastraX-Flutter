@@ -121,6 +121,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   List hourWiseAttendanceData = [];
   List subjectAttendanceData = [];
   List courseMapData = [];
+  Map<String, dynamic> bunkData = {};
 
   // Controllers
   late final ApiEndpoints api;
@@ -140,48 +141,34 @@ class _DashboardScreenState extends State<DashboardScreen> {
     super.dispose();
   }
 
-  /// Decides whether to fetch from Firestore (fast) or API (slow) on the first load.
   Future<void> _loadInitialData() async {
     if (widget.regNo.isEmpty) {
-      setState(() {
-        _error = "Running in Guest Mode.";
-        isTimetableLoading = false;
-        isCgpaLoading = false;
-        attendancePercent = 0;
-      });
+      setState(() { _error = "Running in Guest Mode."; /* ... */ });
       return;
     }
-
     try {
       final docRef = FirebaseFirestore.instance.collection('studentDetails').doc(widget.regNo);
       final doc = await docRef.get();
       final data = doc.data();
 
-      if (doc.exists && data != null && data.containsKey('profile')) {
-        debugPrint("Found populated document in Firestore. Loading from cache.");
+      if (doc.exists && data != null && data.containsKey('profile') && data.containsKey('bunkdata')) {
         _processFirestoreData(data);
       } else {
-        debugPrint("Document not found or is empty. Triggering initial data fetch from API.");
         await _refreshFromApi();
       }
     } catch (e) {
-      debugPrint("Data loading failed with error: $e");
-      if (mounted) {
-        setState(() => _error = "Error loading data. Please check your connection and try again.");
-      }
+      if (mounted) setState(() => _error = "Error loading data: $e");
     }
   }
 
-  /// Processes the data map from Firestore and populates all state variables.
   void _processFirestoreData(Map<String, dynamic> data) {
     setState(() {
       studentName = data['profile']?['name'] ?? 'Student';
-
-      // Defensively handle lists to prevent type errors
       timetableData = data['timetable'] is List ? data['timetable'] as List : [];
       hourWiseAttendanceData = data['hourWiseAttendance'] is List ? data['hourWiseAttendance'] as List : [];
       subjectAttendanceData = data['subjectAttendance'] is List ? data['subjectAttendance'] as List : [];
       courseMapData = data['courseMap'] is List ? data['courseMap'] as List : [];
+      bunkData = data['bunkdata'] is Map<String, dynamic> ? data['bunkdata'] : {};
 
       final cgpaList = data['cgpa'] is List ? data['cgpa'] as List : [];
       cgpa = cgpaList.isNotEmpty ? (cgpaList[0]['cgpa'] ?? "N/A") : "N/A";
@@ -201,8 +188,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
         totalClasses = totalHrs;
         attendedClasses = attendedHrs;
         attendancePercent = totalClasses > 0 ? (attendedClasses / totalClasses) * 100 : 0;
+
+        int totalAbsences = totalClasses - attendedClasses;
+        int maxAllowedAbsences = 0;
+
+        final perSem20 = bunkData['perSem20'] as Map<String, dynamic>? ?? {};
+        perSem20.forEach((key, value) {
+          maxAllowedAbsences += (value as num).toInt();
+        });
+
+        bunks = maxAllowedAbsences - totalAbsences;
       } else {
         attendancePercent = 0;
+        bunks = 0;
       }
 
       final dobList = data['dob'] is List ? data['dob'] as List : [];
@@ -217,21 +215,21 @@ class _DashboardScreenState extends State<DashboardScreen> {
           }
         } catch (_) {}
       }
-
       isTimetableLoading = false;
       isCgpaLoading = false;
       _error = null;
     });
   }
 
-  /// Forces a refresh by calling all backend endpoints to scrape fresh data.
   Future<void> _refreshFromApi() async {
-    setState(() {
-      isTimetableLoading = true;
-      isCgpaLoading = true;
-    });
-
+    setState(() { isTimetableLoading = true; isCgpaLoading = true; });
     try {
+      final bunkResponse = await http.post(
+        Uri.parse('${widget.url}/bunk'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'token': widget.token}),
+      );
+
       await Future.wait([
         http.post(Uri.parse(api.profile), headers: {'Content-Type': 'application/json'}, body: jsonEncode({'refresh': true, 'token': widget.token})),
         http.post(Uri.parse(api.profilePic), headers: {'Content-Type': 'application/json'}, body: jsonEncode({'refresh': true, 'token': widget.token})),
@@ -246,13 +244,21 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
       if (!mounted) return;
 
+      if (bunkResponse.statusCode == 200) {
+        final bunkJson = jsonDecode(bunkResponse.body);
+        if (bunkJson['success'] == true) {
+          await FirebaseFirestore.instance
+              .collection('studentDetails')
+              .doc(widget.regNo)
+              .set({'bunkdata': bunkJson['bunkdata']}, SetOptions(merge: true));
+        }
+      }
+
       final doc = await FirebaseFirestore.instance.collection('studentDetails').doc(widget.regNo).get();
       if (doc.exists && doc.data() != null) {
         _processFirestoreData(doc.data()!);
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Dashboard refreshed!'), backgroundColor: Colors.green),
-          );
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Dashboard refreshed!'), backgroundColor: Colors.green));
         }
       } else {
         throw Exception("Refreshed data not found in database.");
@@ -269,7 +275,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Provider.of<ThemeProvider>(context);
-
     if (_error != null) {
       return Center(child: Padding(padding: const EdgeInsets.all(20.0), child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [Text(_error!, textAlign: TextAlign.center, style: const TextStyle(color: Colors.red)), const SizedBox(height: 10), ElevatedButton(onPressed: _loadInitialData, child: const Text("Retry"))])));
     }
@@ -318,6 +323,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   const SizedBox(height: 16),
                   attendancePercent < 0
                       ? const Center(child: CircularProgressIndicator())
+                  // ✅ FIX: Removed the NeonContainer wrapper
                       : GestureDetector(
                     onTap: () => Navigator.push(
                       context,
@@ -354,6 +360,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       timetable: timetableData,
                       isLoading: isTimetableLoading,
                       hourWiseAttendance: hourWiseAttendanceData,
+                      courseMap: courseMapData,
                     ),
                   ),
                 ],
