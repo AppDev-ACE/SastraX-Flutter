@@ -6,7 +6,7 @@ import 'package:provider/provider.dart';
 import 'dart:math' as math;
 import 'package:fl_chart/fl_chart.dart';
 import 'package:percent_indicator/circular_percent_indicator.dart';
-import 'package:cloud_firestore/cloud_firestore.dart'; // ✅ Import Firestore
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/theme_model.dart';
 import '../services/ApiEndpoints.dart';
 
@@ -27,6 +27,7 @@ class _CreditsScreenState extends State<CreditsScreen>
   int _selectedSemester = 0;
   late AnimationController _rotationController;
   late AnimationController _pulseController;
+  late final ApiEndpoints _apiEndpoints; // ✅ Added
 
   bool _isLoading = true;
   String? _error;
@@ -46,6 +47,8 @@ class _CreditsScreenState extends State<CreditsScreen>
       vsync: this,
     )..repeat(reverse: true);
 
+    _apiEndpoints = ApiEndpoints(widget.url); // ✅ Initialized
+
     _fetchAndProcessGrades();
   }
 
@@ -56,9 +59,8 @@ class _CreditsScreenState extends State<CreditsScreen>
     super.dispose();
   }
 
-  // ✅ THIS IS THE ONLY METHOD THAT HAS CHANGED
+  // ✅ THIS IS THE CORRECTED METHOD FOR THE OLD BACKEND
   Future<void> _fetchAndProcessGrades() async {
-    // Check if a valid user is logged in
     if (widget.token.isEmpty || widget.token == "guest_token") {
       setState(() {
         _error = "Please log in to view your credits.";
@@ -68,28 +70,44 @@ class _CreditsScreenState extends State<CreditsScreen>
     }
 
     try {
-      // 1. Get the document directly from Firestore using the user's regNo (token)
-      final docSnapshot = await FirebaseFirestore.instance
+      final docRef = FirebaseFirestore.instance
           .collection('studentDetails')
-          .doc(widget.regNo)
-          .get();
+          .doc(widget.regNo);
+      final docSnapshot = await docRef.get();
+      final data = docSnapshot.data();
 
-      if (docSnapshot.exists && docSnapshot.data() != null) {
-        // 2. Extract the 'semGrades' array from the document data
-        final data = docSnapshot.data()!;
-        if (data.containsKey('semGrades') && data['semGrades'] is List) {
-          final rawGrades = data['semGrades'] as List<dynamic>;
-          if (rawGrades.isNotEmpty) {
-            // 3. Call the existing logic to process the grades
-            _processBackendData(rawGrades);
-          } else {
-            setState(() => _error = "No grade data found.");
-          }
+      if (docSnapshot.exists && data != null && data.containsKey('semGrades')) {
+        debugPrint("Grades found in Firestore. Loading from cache.");
+        final rawGrades = data['semGrades'] as List<dynamic>;
+        if (rawGrades.isNotEmpty) {
+          _processBackendData(rawGrades);
         } else {
-          throw Exception("'semGrades' field is missing or not a list in the document.");
+          setState(() => _error = "No grade data found in Firestore.");
         }
       } else {
-        throw Exception("Your student details document was not found in the database.");
+        debugPrint("Grades not in Firestore or field is missing. Fetching from API...");
+        final response = await http.post(
+          Uri.parse(_apiEndpoints.semGrades),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({'token': widget.token}),
+        );
+
+        if (response.statusCode == 200) {
+          final responseData = jsonDecode(response.body);
+
+          // ✅ THE FIX: Check for 'semGrades' OR 'gradeData' and provide an empty list as a fallback.
+          final apiGrades = (responseData['semGrades'] ?? responseData['gradeData'] ?? []) as List<dynamic>;
+
+          if (apiGrades.isNotEmpty) {
+            _processBackendData(apiGrades);
+            debugPrint("Saving/Updating fetched grades to Firestore cache...");
+            await docRef.set({'semGrades': apiGrades}, SetOptions(merge: true));
+          } else {
+            setState(() => _error = "No grade data was returned from the server.");
+          }
+        } else {
+          throw Exception('Failed to fetch grades from API. Status code: ${response.statusCode}');
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -103,7 +121,6 @@ class _CreditsScreenState extends State<CreditsScreen>
   }
 
   void _processBackendData(List<dynamic> rawGrades) {
-    // This function is unchanged
     final Map<int, List<Map<String, dynamic>>> groupedBySem = {};
     for (var grade in rawGrades) {
       final int sem = int.tryParse(grade['sem']?.toString() ?? '0') ?? 0;
@@ -158,7 +175,6 @@ class _CreditsScreenState extends State<CreditsScreen>
   }
 
   double _getGradePoint(String grade) {
-    // This function is unchanged
     switch (grade.toUpperCase()) {
       case 'S': return 10.0;
       case 'A+': return 9.0;
@@ -172,7 +188,6 @@ class _CreditsScreenState extends State<CreditsScreen>
   }
 
   bool _isGradePassed(String grade) {
-    // This function is unchanged
     final failedGrades = ['F', 'U', 'RA', 'ABSENT', 'W'];
     return !failedGrades.contains(grade.toUpperCase());
   }
@@ -198,7 +213,6 @@ class _CreditsScreenState extends State<CreditsScreen>
 
   @override
   Widget build(BuildContext context) {
-    // This build method is unchanged
     final themeProvider = Provider.of<ThemeProvider>(context);
     final screenWidth = MediaQuery.of(context).size.width;
     const double baseWidth = 375.0;
@@ -244,7 +258,6 @@ class _CreditsScreenState extends State<CreditsScreen>
   }
 
   Widget _buildCreditsCircleLayout() {
-    // This method is unchanged
     return LayoutBuilder(
       builder: (context, constraints) {
         final size = math.min(constraints.maxWidth, constraints.maxHeight);
@@ -297,7 +310,6 @@ class _CreditsScreenState extends State<CreditsScreen>
   }
 
   Widget _buildCenterCircle(double radius) {
-    // This method is unchanged
     final isSelected = _selectedSemester == 0;
     return AnimatedBuilder(
       animation: _pulseController,
@@ -363,7 +375,6 @@ class _CreditsScreenState extends State<CreditsScreen>
   }
 
   Widget _buildSemesterCircle(int semester, double radius) {
-    // This method is unchanged
     final semesterData = _semesterData.firstWhere((s) => s['semester'] == semester);
     final isSelected = _selectedSemester == semester;
     final colors = [
@@ -419,7 +430,6 @@ class _CreditsScreenState extends State<CreditsScreen>
   }
 
   Widget _buildFutureSemesterCircle(int semester, double radius) {
-    // This method is unchanged
     return GestureDetector(
       onTap: () => setState(() => _selectedSemester = semester),
       child: AnimatedContainer(
@@ -446,7 +456,6 @@ class _CreditsScreenState extends State<CreditsScreen>
   }
 
   Widget _buildDetailsSection() {
-    // This method is unchanged
     return AnimatedSwitcher(
       duration: const Duration(milliseconds: 400),
       transitionBuilder: (Widget child, Animation<double> animation) {
@@ -470,7 +479,6 @@ class _CreditsScreenState extends State<CreditsScreen>
   }
 
   Widget _buildOverallDetails() {
-    // This method is unchanged
     final themeProvider = Provider.of<ThemeProvider>(context, listen: false);
     final screenWidth = MediaQuery.of(context).size.width;
 
@@ -549,7 +557,6 @@ class _CreditsScreenState extends State<CreditsScreen>
   }
 
   LineChartData _buildGraphData() {
-    // This method is unchanged
     final spots = _semesterData.map((sem) {
       return FlSpot(
         (sem['semester'] as int).toDouble(),
@@ -628,7 +635,6 @@ class _CreditsScreenState extends State<CreditsScreen>
   }
 
   Widget _buildSemesterDetails(int semester) {
-    // This method is unchanged
     final themeProvider = Provider.of<ThemeProvider>(context, listen: false);
     final semesterData = _semesterData.firstWhere((s) => s['semester'] == semester);
     final subjects = semesterData['subjects'] as List<Map<String, dynamic>>;
@@ -773,7 +779,6 @@ class _CreditsScreenState extends State<CreditsScreen>
   }
 
   Widget _buildStatCard(String label, String value, Color color) {
-    // This method is unchanged
     final themeProvider = Provider.of<ThemeProvider>(context, listen: false);
     final screenWidth = MediaQuery.of(context).size.width;
 
@@ -811,7 +816,6 @@ class _CreditsScreenState extends State<CreditsScreen>
   }
 
   Color _getGradeColor(String grade) {
-    // This method is unchanged
     switch (grade.toUpperCase()) {
       case 'S':
         return AppTheme.successGreen;

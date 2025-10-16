@@ -101,23 +101,28 @@ class DashboardScreen extends StatefulWidget {
 }
 
 class _DashboardScreenState extends State<DashboardScreen> {
-  // Your original state variables are preserved
+  // UI State
   bool showAssignments = false;
+  bool isCgpaLoading = true;
+  bool isTimetableLoading = true;
+  String? _error;
+
+  // Data State
   double attendancePercent = -1;
   int attendedClasses = 0;
   int totalClasses = 0;
   String? cgpa;
-  bool isCgpaLoading = true;
   bool isBirthday = false;
   String? studentName;
   int feeDue = 0;
   int bunks = 0;
   List assignments = [];
-  bool isTimetableLoading = true;
   List timetableData = [];
   List hourWiseAttendanceData = [];
-  String? _error;
+  List subjectAttendanceData = [];
+  List courseMapData = [];
 
+  // Controllers
   late final ApiEndpoints api;
   late ConfettiController _confettiController;
 
@@ -150,35 +155,46 @@ class _DashboardScreenState extends State<DashboardScreen> {
     try {
       final docRef = FirebaseFirestore.instance.collection('studentDetails').doc(widget.regNo);
       final doc = await docRef.get();
+      final data = doc.data();
 
-      if (doc.exists && doc.data() != null) {
-        _processFirestoreData(doc.data()!);
+      if (doc.exists && data != null && data.containsKey('profile')) {
+        debugPrint("Found populated document in Firestore. Loading from cache.");
+        _processFirestoreData(data);
       } else {
+        debugPrint("Document not found or is empty. Triggering initial data fetch from API.");
         await _refreshFromApi();
       }
     } catch (e) {
-      if (mounted) setState(() => _error = "Error connecting to database.");
+      debugPrint("Data loading failed with error: $e");
+      if (mounted) {
+        setState(() => _error = "Error loading data. Please check your connection and try again.");
+      }
     }
   }
 
-  /// Processes the data map from Firestore and populates your individual state variables.
+  /// Processes the data map from Firestore and populates all state variables.
   void _processFirestoreData(Map<String, dynamic> data) {
     setState(() {
       studentName = data['profile']?['name'] ?? 'Student';
-      timetableData = data['timetable'] ?? [];
-      hourWiseAttendanceData = data['hourWiseAttendance'] ?? [];
-      cgpa = data['cgpa']?[0]?['cgpa'] ?? "N/A";
+
+      // Defensively handle lists to prevent type errors
+      timetableData = data['timetable'] is List ? data['timetable'] as List : [];
+      hourWiseAttendanceData = data['hourWiseAttendance'] is List ? data['hourWiseAttendance'] as List : [];
+      subjectAttendanceData = data['subjectAttendance'] is List ? data['subjectAttendance'] as List : [];
+      courseMapData = data['courseMap'] is List ? data['courseMap'] as List : [];
+
+      final cgpaList = data['cgpa'] is List ? data['cgpa'] as List : [];
+      cgpa = cgpaList.isNotEmpty ? (cgpaList[0]['cgpa'] ?? "N/A") : "N/A";
 
       final sastraDueRaw = data['sastraDue']?.toString() ?? "0";
       final hostelDueRaw = data['hostelDue']?.toString() ?? "0";
       int parseFee(String raw) => int.tryParse(raw.replaceAll(',', '').split('.')[0]) ?? 0;
       feeDue = parseFee(sastraDueRaw) + parseFee(hostelDueRaw);
 
-      final attendanceData = data['subjectAttendance'] ?? [];
-      if (attendanceData.isNotEmpty) {
+      if (subjectAttendanceData.isNotEmpty) {
         int totalHrs = 0;
         int attendedHrs = 0;
-        for (final subject in attendanceData) {
+        for (final subject in subjectAttendanceData) {
           totalHrs += int.tryParse(subject['totalHrs']?.toString() ?? '0') ?? 0;
           attendedHrs += int.tryParse(subject['presentHrs']?.toString() ?? '0') ?? 0;
         }
@@ -189,7 +205,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
         attendancePercent = 0;
       }
 
-      final dobData = data['dob']?[0]?['dob'];
+      final dobList = data['dob'] is List ? data['dob'] as List : [];
+      final dobData = dobList.isNotEmpty ? dobList[0]['dob'] : null;
       if (dobData != null && dobData.isNotEmpty) {
         try {
           final parsed = DateFormat('dd-MM-yyyy').parse(dobData);
@@ -207,38 +224,36 @@ class _DashboardScreenState extends State<DashboardScreen> {
     });
   }
 
-  /// ✅ FORCES A REFRESH OF ALL DATA BY CALLING ALL API ENDPOINTS
+  /// Forces a refresh by calling all backend endpoints to scrape fresh data.
   Future<void> _refreshFromApi() async {
-    // Show loading indicators
     setState(() {
       isTimetableLoading = true;
       isCgpaLoading = true;
     });
 
     try {
-      // Call all API endpoints in parallel to tell the backend to re-scrape everything.
-      // We don't need to process the responses here, as the final step is to read
-      // the updated document from Firestore.
       await Future.wait([
         http.post(Uri.parse(api.profile), headers: {'Content-Type': 'application/json'}, body: jsonEncode({'refresh': true, 'token': widget.token})),
+        http.post(Uri.parse(api.profilePic), headers: {'Content-Type': 'application/json'}, body: jsonEncode({'refresh': true, 'token': widget.token})),
         http.post(Uri.parse(api.cgpa), headers: {'Content-Type': 'application/json'}, body: jsonEncode({'refresh': true, 'token': widget.token})),
         http.post(Uri.parse('${widget.url}/subjectWiseAttendance'), headers: {'Content-Type': 'application/json'}, body: jsonEncode({'refresh': true, 'token': widget.token})),
         http.post(Uri.parse(api.timetable), headers: {'Content-Type': 'application/json'}, body: jsonEncode({'refresh': true, 'token': widget.token})),
         http.post(Uri.parse('${widget.url}/hourWiseAttendance'), headers: {'Content-Type': 'application/json'}, body: jsonEncode({'refresh': true, 'token': widget.token})),
         http.post(Uri.parse(api.sastraDue), headers: {'Content-Type': 'application/json'}, body: jsonEncode({'refresh': true, 'token': widget.token})),
         http.post(Uri.parse(api.hostelDue), headers: {'Content-Type': 'application/json'}, body: jsonEncode({'refresh': true, 'token': widget.token})),
-        // Add any other endpoints that need refreshing here
+        http.post(Uri.parse('${widget.url}/courseMap'), headers: {'Content-Type': 'application/json'}, body: jsonEncode({'refresh': true, 'token': widget.token})),
       ]);
 
       if (!mounted) return;
 
-      // After all APIs have updated the Firestore document, fetch the fresh document to update the UI.
       final doc = await FirebaseFirestore.instance.collection('studentDetails').doc(widget.regNo).get();
       if (doc.exists && doc.data() != null) {
         _processFirestoreData(doc.data()!);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Dashboard refreshed!'), backgroundColor: Colors.green),
-        );
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Dashboard refreshed!'), backgroundColor: Colors.green),
+          );
+        }
       } else {
         throw Exception("Refreshed data not found in database.");
       }
@@ -253,7 +268,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // Your original UI build method is preserved exactly.
     final theme = Provider.of<ThemeProvider>(context);
 
     if (_error != null) {
@@ -305,7 +319,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   attendancePercent < 0
                       ? const Center(child: CircularProgressIndicator())
                       : GestureDetector(
-                    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => SubjectWiseAttendancePage(regNo: widget.regNo, token: widget.token, url: widget.url))),
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => SubjectWiseAttendancePage(
+                          regNo: widget.regNo,
+                          token: widget.token,
+                          url: widget.url,
+                          initialSubjectAttendance: subjectAttendanceData,
+                          initialHourWiseAttendance: hourWiseAttendanceData,
+                        ),
+                      ),
+                    ),
                     child: AttendancePieChart(
                       attendancePercentage: attendancePercent,
                       attendedClasses: attendedClasses,
@@ -349,7 +374,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final hasDue = feeDue > 0;
     final isDark = theme.isDarkMode;
     return GestureDetector(
-      onTap: () { Navigator.push(context, MaterialPageRoute(builder: (context) => FeeDuePage())); },
+      onTap: () { Navigator.push(context, MaterialPageRoute(builder: (context) => FeeDueStatusPage())); },
       child: SizedBox(
         width: 180,
         height: 150,

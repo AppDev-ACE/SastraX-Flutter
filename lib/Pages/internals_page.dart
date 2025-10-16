@@ -1,20 +1,74 @@
 import 'package:flutter/material.dart';
 import 'more_options_page.dart'; // Make sure this import is correct
+import '../components/theme_toggle_button.dart';
+import '../models/theme_model.dart';
+import 'more_options_page.dart';
+import 'package:provider/provider.dart';
 
 class InternalsPage extends StatelessWidget {
   final String url;
-  final String token ;
-  InternalsPage({super.key , required this.token , required this.url});
+  final String token;
+  final String regNo ;
+  InternalsPage({super.key, required this.token, required this.url , required this.regNo});
 
   // Hardcoded data for student's internal marks
   final List<Map<String, dynamic>> subjects = [
-    {'name': 'CA', 'internal1': 18, 'internal2': 22, 'internal3': 20, 'total': 60, 'maxMarks': 75},
-    {'name': 'CO', 'internal1': 20, 'internal2': 19, 'internal3': 23, 'total': 62, 'maxMarks': 75},
-    {'name': 'CN', 'internal1': 17, 'internal2': 21, 'internal3': 19, 'total': 57, 'maxMarks': 75},
-    {'name': 'Computer Science', 'internal1': 24, 'internal2': 23, 'internal3': 22, 'total': 69, 'maxMarks': 75},
-    {'name': 'DAA', 'internal1': 19, 'internal2': 20, 'internal3': 21, 'total': 60, 'maxMarks': 75},
-    {'name': 'CODING', 'internal1': 16, 'internal2': 18, 'internal3': 20, 'total': 54, 'maxMarks': 75},
-    {'name': 'PYTHON', 'internal1': 22, 'internal2': 20, 'internal3': 18, 'total': 60, 'maxMarks': 75},
+    {
+      'name': 'CA',
+      'internal1': 18,
+      'internal2': 22,
+      'internal3': 20,
+      'total': 60,
+      'maxMarks': 75
+    },
+    {
+      'name': 'CO',
+      'internal1': 20,
+      'internal2': 19,
+      'internal3': 23,
+      'total': 62,
+      'maxMarks': 75
+    },
+    {
+      'name': 'CN',
+      'internal1': 17,
+      'internal2': 21,
+      'internal3': 19,
+      'total': 57,
+      'maxMarks': 75
+    },
+    {
+      'name': 'Computer Science',
+      'internal1': 24,
+      'internal2': 23,
+      'internal3': 22,
+      'total': 69,
+      'maxMarks': 75
+    },
+    {
+      'name': 'DAA',
+      'internal1': 19,
+      'internal2': 20,
+      'internal3': 21,
+      'total': 60,
+      'maxMarks': 75
+    },
+    {
+      'name': 'CODING',
+      'internal1': 16,
+      'internal2': 18,
+      'internal3': 20,
+      'total': 54,
+      'maxMarks': 75
+    },
+    {
+      'name': 'PYTHON',
+      'internal1': 22,
+      'internal2': 20,
+      'internal3': 18,
+      'total': 60,
+      'maxMarks': 75
+    },
   ];
 
   // Helper function to determine the color based on percentage
@@ -25,18 +79,38 @@ class InternalsPage extends StatelessWidget {
     return Colors.red;
   }
 
+  bool _isDarkMode(BuildContext context) {
+    return Theme.of(context).brightness == Brightness.dark;
+  }
+
+  Color _getBackgroundColor(BuildContext context) {
+    return _isDarkMode(context) ? const Color(0xFF121212) : Colors.white;
+  }
+
   @override
   Widget build(BuildContext context) {
+
     final theme = Theme.of(context);
+    final themeProvider = Provider.of<ThemeProvider>(context, listen: false);
 
     // Calculate overall average percentage
-    final double totalMarks = subjects.fold(0, (sum, item) => sum + (item['total'] as int));
-    final double maxTotalMarks = subjects.fold(0, (sum, item) => sum + (item['maxMarks'] as int));
-    final double averagePercentage = (maxTotalMarks > 0) ? (totalMarks / maxTotalMarks) * 100 : 0;
+    final double totalMarks =
+    subjects.fold(0, (sum, item) => sum + (item['total'] as int));
+    final double maxTotalMarks =
+    subjects.fold(0, (sum, item) => sum + (item['maxMarks'] as int));
+    final double averagePercentage =
+    (maxTotalMarks > 0) ? (totalMarks / maxTotalMarks) * 100 : 0;
 
     return Scaffold(
       // The AppBar has been updated as you requested
+      backgroundColor: _getBackgroundColor(context),
       appBar: AppBar(
+        actions: [
+          Padding(
+              padding: const EdgeInsets.only(right: 16),
+              child: ThemeToggleButton(
+                  isDarkMode: _isDarkMode(context), onToggle: themeProvider.toggleTheme)),
+        ],
         title: Text(
           'Internal Marks',
           style: theme.textTheme.titleLarge?.copyWith(
@@ -96,7 +170,8 @@ class InternalsPage extends StatelessWidget {
               Expanded(
                 child: Text(
                   subject['name'],
-                  style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+                  style: theme.textTheme.titleMedium
+                      ?.copyWith(fontWeight: FontWeight.bold),
                   overflow: TextOverflow.ellipsis,
                 ),
               ),

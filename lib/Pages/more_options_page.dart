@@ -118,7 +118,7 @@ class MoreOptionsScreen extends StatelessWidget {
         Navigator.push(
             ctx,
             MaterialPageRoute(
-                builder: (_) => InternalsPage(token: token,url: url)));
+                builder: (_) => InternalsPage(token: token,url: url, regNo: regNo)));
         break;
       case 'credits':
         Navigator.push(ctx,

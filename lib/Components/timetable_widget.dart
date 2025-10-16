@@ -3,7 +3,7 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../models/theme_model.dart';
 
-class TimetableWidget extends StatelessWidget {
+class TimetableWidget extends StatefulWidget {
   final List<dynamic> timetable;
   final bool isLoading;
   final List<dynamic> hourWiseAttendance;
@@ -15,6 +15,14 @@ class TimetableWidget extends StatelessWidget {
     required this.hourWiseAttendance,
   });
 
+  @override
+  State<TimetableWidget> createState() => _TimetableWidgetState();
+}
+
+class _TimetableWidgetState extends State<TimetableWidget> {
+  late final ScrollController _scrollController;
+  bool _hasScrolled = false;
+
   static const List<String> _timeSlots = [
     '08:45 - 09:45', '09:45 - 10:45', '10:45 - 11:00', '11:00 - 12:00',
     '12:00 - 01:00', '01:00 - 02:00', '02:00 - 03:00', '03:00 - 03:15',
@@ -23,16 +31,32 @@ class TimetableWidget extends StatelessWidget {
   ];
 
   static const Map<String, String> _slotToHourKeyMap = {
-    '08:45 - 09:45': 'hour1',
-    '09:45 - 10:45': 'hour2',
-    '11:00 - 12:00': 'hour3',
-    '12:00 - 01:00': 'hour4',
-    '01:00 - 02:00': 'hour5',
-    '02:00 - 03:00': 'hour6',
-    '03:15 - 04:15': 'hour7',
-    '04:15 - 05:15': 'hour8',
-    '05:30 - 06:30': 'hour8',
+    '08:45 - 09:45': 'hour1', '09:45 - 10:45': 'hour2', '11:00 - 12:00': 'hour3',
+    '12:00 - 01:00': 'hour4', '01:00 - 02:00': 'hour5', '02:00 - 03:00': 'hour6',
+    '03:15 - 04:15': 'hour7', '04:15 - 05:15': 'hour8', '05:30 - 06:30': 'hour8',
   };
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollController = ScrollController();
+  }
+
+  @override
+  void didUpdateWidget(covariant TimetableWidget oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.isLoading && !widget.isLoading) {
+      setState(() {
+        _hasScrolled = false;
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
 
   DateTime _parseTime(String timeStr, DateTime now) {
     final parsedTime = DateFormat('HH:mm').parse(timeStr);
@@ -75,49 +99,31 @@ class TimetableWidget extends StatelessWidget {
   }
 
   Color _getAttendanceColor(String slot, Map<String, dynamic>? todayAttendance) {
-    if (todayAttendance == null) {
-      return Colors.grey.shade400;
-    }
+    if (todayAttendance == null) return Colors.grey.shade400;
     final hourKey = _slotToHourKeyMap[slot];
-    if (hourKey == null) {
-      return Colors.transparent;
-    }
+    if (hourKey == null) return Colors.transparent;
     final status = todayAttendance[hourKey]?.toString().trim().toLowerCase() ?? '';
-
-    if (status == 'p') {
-      return Colors.green.shade400;
-    } else if (status == 'a') {
-      return Colors.red.shade400;
-    } else {
-      return Colors.grey.shade400;
-    }
+    if (status == 'p') return Colors.green.shade400;
+    if (status == 'a') return Colors.red.shade400;
+    return Colors.grey.shade400;
   }
 
   @override
   Widget build(BuildContext context) {
     final themeProvider = Provider.of<ThemeProvider>(context);
 
-    if (isLoading) {
+    if (widget.isLoading) {
       return Container(
-        decoration: BoxDecoration(
-          color: themeProvider.cardBackgroundColor,
-          borderRadius: BorderRadius.circular(20),
-        ),
+        decoration: BoxDecoration(color: themeProvider.cardBackgroundColor, borderRadius: BorderRadius.circular(20)),
         child: const Center(child: CircularProgressIndicator()),
       );
     }
 
-    if (_isEmptySchedule(timetable)) {
+    if (_isEmptySchedule(widget.timetable)) {
       return Container(
-        decoration: BoxDecoration(
-          color: themeProvider.cardBackgroundColor,
-          borderRadius: BorderRadius.circular(20),
-        ),
+        decoration: BoxDecoration(color: themeProvider.cardBackgroundColor, borderRadius: BorderRadius.circular(20)),
         child: const Center(
-          child: Padding(
-            padding: EdgeInsets.all(20.0),
-            child: Text('No classes scheduled for today! 🎉', style: TextStyle(fontSize: 16)),
-          ),
+          child: Padding(padding: EdgeInsets.all(20.0), child: Text('No classes scheduled for today! 🎉', style: TextStyle(fontSize: 16))),
         ),
       );
     }
@@ -126,7 +132,7 @@ class TimetableWidget extends StatelessWidget {
     final todayDateString = DateFormat('dd-MMM-yyyy').format(today);
     Map<String, dynamic>? todayAttendance;
     try {
-      todayAttendance = hourWiseAttendance.firstWhere(
+      todayAttendance = widget.hourWiseAttendance.firstWhere(
             (att) {
           if (att == null || att['dateDay'] == null) return false;
           final backendDate = (att['dateDay'] as String).trim();
@@ -139,26 +145,26 @@ class TimetableWidget extends StatelessWidget {
     }
 
     final dayIndex = today.weekday - 1;
-    if (dayIndex < 0 || dayIndex >= timetable.length) {
+    if (dayIndex < 0 || dayIndex >= widget.timetable.length) {
       return Container(
-        decoration: BoxDecoration(
-          color: themeProvider.cardBackgroundColor,
-          borderRadius: BorderRadius.circular(20),
-        ),
+        decoration: BoxDecoration(color: themeProvider.cardBackgroundColor, borderRadius: BorderRadius.circular(20)),
         child: const Center(
-          child: Padding(
-            padding: EdgeInsets.all(20.0),
-            child: Text('Enjoy your weekend! 🥳', style: TextStyle(fontSize: 16)),
-          ),
+          child: Padding(padding: EdgeInsets.all(20.0), child: Text('Enjoy your weekend! 🥳', style: TextStyle(fontSize: 16))),
         ),
       );
     }
 
-    final todayData = timetable[dayIndex] as Map<String, dynamic>;
+    final todayData = widget.timetable[dayIndex] as Map<String, dynamic>;
     final List<Map<String, dynamic>> transformedTimetable = [];
 
     for (final slot in _timeSlots) {
-      final subject = todayData[slot] ?? 'N/A';
+      var subject = todayData[slot] ?? 'N/A';
+
+      if ((slot == '12:00 - 01:00' || slot == '01:00 - 02:00') &&
+          (subject.toString().trim().isEmpty || subject.toString().toLowerCase() == 'n/a')) {
+        subject = 'Lunch';
+      }
+
       String room = '';
       String cleanSubject = subject;
       final roomMatch = RegExp(r'\((.*?)\)').firstMatch(subject);
@@ -182,6 +188,22 @@ class TimetableWidget extends StatelessWidget {
 
     final currentIndex = _getCurrentIndex();
 
+    if (!_hasScrolled && currentIndex != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (_scrollController.hasClients) {
+          const double itemHeight = 84.0;
+          final scrollPosition = currentIndex * itemHeight;
+
+          _scrollController.animateTo(
+            scrollPosition > _scrollController.position.maxScrollExtent ? _scrollController.position.maxScrollExtent : scrollPosition,
+            duration: const Duration(milliseconds: 700),
+            curve: Curves.easeInOut,
+          );
+          _hasScrolled = true;
+        }
+      });
+    }
+
     return Container(
       decoration: BoxDecoration(
         color: themeProvider.cardBackgroundColor,
@@ -199,10 +221,7 @@ class TimetableWidget extends StatelessWidget {
               gradient: themeProvider.isDarkMode
                   ? const LinearGradient(colors: [Colors.black, Color(0xFF1A1A1A)])
                   : const LinearGradient(colors: [AppTheme.navyBlue, Color(0xFF3b82f6)]),
-              borderRadius: const BorderRadius.only(
-                topLeft: Radius.circular(20),
-                topRight: Radius.circular(20),
-              ),
+              borderRadius: const BorderRadius.only(topLeft: Radius.circular(20), topRight: Radius.circular(20)),
             ),
             child: Row(
               children: [
@@ -212,14 +231,7 @@ class TimetableWidget extends StatelessWidget {
                   child: FittedBox(
                     fit: BoxFit.scaleDown,
                     alignment: Alignment.centerLeft,
-                    child: Text(
-                      'Today\'s Timetable',
-                      style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                        color: themeProvider.isDarkMode ? AppTheme.neonBlue : Colors.white,
-                      ),
-                    ),
+                    child: Text('Today\'s Timetable', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: themeProvider.isDarkMode ? AppTheme.neonBlue : Colors.white)),
                   ),
                 ),
               ],
@@ -227,11 +239,13 @@ class TimetableWidget extends StatelessWidget {
           ),
           Expanded(
             child: ListView.builder(
+              controller: _scrollController,
               padding: const EdgeInsets.all(16),
               itemCount: transformedTimetable.length,
               itemBuilder: (context, index) {
                 final item = transformedTimetable[index];
                 final isBreak = item['subject']!.toLowerCase() == 'break';
+                final isLunch = item['subject']!.toLowerCase() == 'lunch';
                 final isCurrent = index == currentIndex;
 
                 if (item['subject']!.toLowerCase() == 'n/a' || item['subject']!.isEmpty) {
@@ -247,27 +261,22 @@ class TimetableWidget extends StatelessWidget {
                       color: isCurrent ? AppTheme.neonBlue : Colors.grey.withOpacity(0.2),
                       width: isCurrent ? 2 : 1,
                     ),
-                    boxShadow: isCurrent
-                        ? [BoxShadow(color: AppTheme.neonBlue.withOpacity(0.3), blurRadius: 8, spreadRadius: 1)]
-                        : [],
+                    boxShadow: isCurrent ? [BoxShadow(color: AppTheme.neonBlue.withOpacity(0.3), blurRadius: 8, spreadRadius: 1)] : [],
                   ),
                   child: ListTile(
                     leading: Container(
                       width: 40,
                       height: 40,
                       decoration: BoxDecoration(
-                        color: isBreak ? Colors.orange.withOpacity(0.2) : AppTheme.primaryBlue.withOpacity(0.2),
+                        color: (isBreak ? Colors.orange : isLunch ? Colors.teal : AppTheme.primaryBlue).withOpacity(0.2),
                         borderRadius: BorderRadius.circular(10),
                       ),
                       child: Icon(
-                        isBreak ? Icons.free_breakfast_outlined : Icons.menu_book_outlined,
-                        color: isBreak ? Colors.orange : AppTheme.primaryBlue,
+                        isBreak ? Icons.free_breakfast_outlined : isLunch ? Icons.lunch_dining_outlined : Icons.menu_book_outlined,
+                        color: isBreak ? Colors.orange : isLunch ? Colors.teal : AppTheme.primaryBlue,
                       ),
                     ),
-                    title: Text(
-                      item['subject']!,
-                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
-                    ),
+                    title: Text(item['subject']!, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
                     subtitle: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -279,7 +288,7 @@ class TimetableWidget extends StatelessWidget {
                           ),
                       ],
                     ),
-                    trailing: isBreak || item['attendanceColor'] == Colors.transparent
+                    trailing: isBreak || isLunch || item['attendanceColor'] == Colors.transparent
                         ? null
                         : Container(
                       width: 18,
@@ -288,9 +297,7 @@ class TimetableWidget extends StatelessWidget {
                         color: item['attendanceColor'],
                         shape: BoxShape.circle,
                         border: Border.all(
-                          color: themeProvider.isDarkMode
-                              ? Colors.white.withOpacity(0.2)
-                              : Colors.black.withOpacity(0.1),
+                          color: themeProvider.isDarkMode ? Colors.white.withOpacity(0.2) : Colors.black.withOpacity(0.1),
                           width: 0.5,
                         ),
                       ),

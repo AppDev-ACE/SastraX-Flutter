@@ -25,6 +25,7 @@ class ProfilePage extends StatefulWidget {
 }
 
 class _ProfilePageState extends State<ProfilePage> {
+  // ✅ Changed to allow re-assignment
   late Future<DocumentSnapshot<Map<String, dynamic>>> _profileFuture;
   late final ApiEndpoints _apiEndpoints;
 
@@ -32,11 +33,38 @@ class _ProfilePageState extends State<ProfilePage> {
   void initState() {
     super.initState();
     _apiEndpoints = ApiEndpoints(widget.url);
-    _profileFuture = FirebaseFirestore.instance
-        .collection('studentDetails')
-        .doc(widget.regNo)
-        .get();
+    // ✅ Call the new method that contains the refresh logic
+    _profileFuture = _fetchAndRefreshProfile();
   }
+
+  // ✅ NEW METHOD to handle fetching and refreshing if the pic is missing
+  Future<DocumentSnapshot<Map<String, dynamic>>> _fetchAndRefreshProfile() async {
+    final docRef = FirebaseFirestore.instance.collection('studentDetails').doc(widget.regNo);
+    final doc = await docRef.get();
+
+    // If the doc exists but the profilePic field is missing or empty, trigger a refresh.
+    if (doc.exists && (doc.data()?['profilePic'] == null || doc.data()!['profilePic'].isEmpty)) {
+      debugPrint("Profile picture missing in Firestore. Fetching from API...");
+      try {
+        // Trigger the backend scrape for the profile picture
+        await http.post(
+          Uri.parse(_apiEndpoints.profilePic),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({'token': widget.token, 'refresh': true}),
+        );
+        // After triggering, refetch the document to get the updated data.
+        return await docRef.get();
+      } catch (e) {
+        debugPrint("Failed to trigger profile pic refresh: $e");
+        // Return the original (incomplete) document on failure to avoid a crash
+        return doc;
+      }
+    }
+
+    // If the picture exists or the document doesn't exist, return the initial result.
+    return doc;
+  }
+
 
   /// 🔹 Handles the complete logout process
   Future<void> _logout() async {
@@ -58,7 +86,7 @@ class _ProfilePageState extends State<ProfilePage> {
       debugPrint("Error calling logout endpoint, but logging out locally anyway: $e");
     }
 
-    // ✅ Clear the saved session data from the device's local storage
+    // Clear the saved session data from the device's local storage
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('session_token');
     await prefs.remove('regNo');
@@ -121,7 +149,7 @@ class _ProfilePageState extends State<ProfilePage> {
                         children: [
                           const SizedBox(height: 20),
                           ClipOval(
-                            child: (picUrl != null)
+                            child: (picUrl != null && picUrl.isNotEmpty) // ✅ Added isNotEmpty check
                                 ? Image.network(
                               picUrl,
                               width: 120,
