@@ -8,11 +8,17 @@ import 'day_attendance_detail.dart';
 class MonthlyView extends StatefulWidget {
   final Map<DateTime, Map<String, String>> attendanceData;
   final int currentStreak;
+  // ✅ 1. Accept the timetable and courseMap data
+  final List<dynamic> timetable;
+  final List<dynamic> courseMap;
 
   const MonthlyView({
     Key? key,
     required this.attendanceData,
     required this.currentStreak,
+    // ✅ 2. Add them to the constructor
+    required this.timetable,
+    required this.courseMap,
   }) : super(key: key);
 
   @override
@@ -163,6 +169,9 @@ class _MonthlyViewState extends State<MonthlyView> {
                           builder: (context) => DayAttendanceDetail(
                             selectedDate: selectedDay,
                             attendanceData: widget.attendanceData[dayKey] ?? {},
+                            // ✅ 3. Pass the data on to the next screen
+                            timetable: widget.timetable,
+                            courseMap: widget.courseMap,
                           ),
                         ),
                       );

@@ -15,7 +15,7 @@ import '../services/ApiEndpoints.dart';
 class CreditsScreen extends StatefulWidget {
   final String url;
   final String regNo;
-  final String token; // This token is the user's Register Number (UID)
+  final String token;
   const CreditsScreen({super.key, required this.url, required this.token , required this.regNo});
 
   @override
@@ -27,12 +27,13 @@ class _CreditsScreenState extends State<CreditsScreen>
   int _selectedSemester = 0;
   late AnimationController _rotationController;
   late AnimationController _pulseController;
-  late final ApiEndpoints _apiEndpoints; // ✅ Added
+  late final ApiEndpoints _apiEndpoints;
 
   bool _isLoading = true;
   String? _error;
   List<Map<String, dynamic>> _semesterData = [];
   int _currentSemester = 0;
+  String? _fetchedCgpa;
 
   @override
   void initState() {
@@ -47,9 +48,9 @@ class _CreditsScreenState extends State<CreditsScreen>
       vsync: this,
     )..repeat(reverse: true);
 
-    _apiEndpoints = ApiEndpoints(widget.url); // ✅ Initialized
+    _apiEndpoints = ApiEndpoints(widget.url);
 
-    _fetchAndProcessGrades();
+    _loadInitialData();
   }
 
   @override
@@ -59,8 +60,7 @@ class _CreditsScreenState extends State<CreditsScreen>
     super.dispose();
   }
 
-  // ✅ THIS IS THE CORRECTED METHOD FOR THE OLD BACKEND
-  Future<void> _fetchAndProcessGrades() async {
+  Future<void> _loadInitialData() async {
     if (widget.token.isEmpty || widget.token == "guest_token") {
       setState(() {
         _error = "Please log in to view your credits.";
@@ -70,57 +70,80 @@ class _CreditsScreenState extends State<CreditsScreen>
     }
 
     try {
-      final docRef = FirebaseFirestore.instance
-          .collection('studentDetails')
-          .doc(widget.regNo);
+      final docRef = FirebaseFirestore.instance.collection('studentDetails').doc(widget.regNo);
       final docSnapshot = await docRef.get();
       final data = docSnapshot.data();
 
-      if (docSnapshot.exists && data != null && data.containsKey('semGrades')) {
-        debugPrint("Grades found in Firestore. Loading from cache.");
-        final rawGrades = data['semGrades'] as List<dynamic>;
-        if (rawGrades.isNotEmpty) {
-          _processBackendData(rawGrades);
-        } else {
-          setState(() => _error = "No grade data found in Firestore.");
-        }
+      if (docSnapshot.exists && data != null && data.containsKey('semGrades') && data.containsKey('cgpa')) {
+        debugPrint("CreditsScreen: Data found in Firestore. Processing...");
+        _processFirestoreData(data);
       } else {
-        debugPrint("Grades not in Firestore or field is missing. Fetching from API...");
-        final response = await http.post(
-          Uri.parse(_apiEndpoints.semGrades),
-          headers: {'Content-Type': 'application/json'},
-          body: jsonEncode({'token': widget.token}),
-        );
-
-        if (response.statusCode == 200) {
-          final responseData = jsonDecode(response.body);
-
-          // ✅ THE FIX: Check for 'semGrades' OR 'gradeData' and provide an empty list as a fallback.
-          final apiGrades = (responseData['semGrades'] ?? responseData['gradeData'] ?? []) as List<dynamic>;
-
-          if (apiGrades.isNotEmpty) {
-            _processBackendData(apiGrades);
-            debugPrint("Saving/Updating fetched grades to Firestore cache...");
-            await docRef.set({'semGrades': apiGrades}, SetOptions(merge: true));
-          } else {
-            setState(() => _error = "No grade data was returned from the server.");
-          }
-        } else {
-          throw Exception('Failed to fetch grades from API. Status code: ${response.statusCode}');
-        }
+        debugPrint("CreditsScreen: Data missing in Firestore. Refreshing from API...");
+        await _refreshFromApi();
       }
     } catch (e) {
-      if (mounted) {
-        setState(() => _error = "An error occurred: ${e.toString()}");
-      }
+      if (mounted) setState(() => _error = "Error loading initial data: $e");
     } finally {
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
-  void _processBackendData(List<dynamic> rawGrades) {
+  Future<void> _refreshFromApi() async {
+    setState(() => _isLoading = true);
+    try {
+      // Trigger API refresh calls for both CGPA and Semester Grades
+      await Future.wait([
+        http.post(
+          Uri.parse(_apiEndpoints.cgpa),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({'refresh': true, 'token': widget.token}),
+        ),
+        http.post(
+          Uri.parse(_apiEndpoints.semGrades),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({'refresh': true, 'token': widget.token}),
+        ),
+      ]);
+
+      if (!mounted) return;
+
+      // After API calls complete, fetch the single, updated document from Firestore
+      final doc = await FirebaseFirestore.instance.collection('studentDetails').doc(widget.regNo).get();
+      if (doc.exists && doc.data() != null) {
+        _processFirestoreData(doc.data()!);
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Credits data refreshed!'), backgroundColor: Colors.green));
+      } else {
+        throw Exception("Refreshed data not found in database.");
+      }
+    } catch (e) {
+      if (mounted) setState(() => _error = "Failed to refresh data: $e");
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  void _processFirestoreData(Map<String, dynamic> data) {
+    // Process Semester Grades for SGPA and semester-specific details
+    final rawGrades = data['semGrades'] as List<dynamic>? ?? [];
+    if (rawGrades.isNotEmpty) {
+      _processSemesterData(rawGrades);
+    } else {
+      if (mounted) setState(() => _error = "No semester grade data found.");
+    }
+
+    // Fetch the pre-calculated CGPA directly from its own field
+    final cgpaList = data['cgpa'] as List<dynamic>? ?? [];
+    final String fetchedCgpaValue = cgpaList.isNotEmpty ? (cgpaList[0]['cgpa']?.toString() ?? 'N/A') : 'N/A';
+
+    if (mounted) {
+      setState(() {
+        _fetchedCgpa = fetchedCgpaValue;
+        _error = null; // Clear previous errors on successful data processing
+      });
+    }
+  }
+
+  void _processSemesterData(List<dynamic> rawGrades) {
     final Map<int, List<Map<String, dynamic>>> groupedBySem = {};
     for (var grade in rawGrades) {
       final int sem = int.tryParse(grade['sem']?.toString() ?? '0') ?? 0;
@@ -134,7 +157,7 @@ class _CreditsScreenState extends State<CreditsScreen>
     }
 
     if (groupedBySem.isEmpty) {
-      setState(() => _error = "Could not parse any semester data.");
+      if (mounted) setState(() => _error = "Could not parse any semester data.");
       return;
     }
 
@@ -146,32 +169,33 @@ class _CreditsScreenState extends State<CreditsScreen>
       if (subjects.isEmpty) continue;
 
       double totalGradePoints = 0;
-      int totalCredits = 0;
+      int totalCreditsAttempted = 0; // For SGPA, we use attempted credits
       int earnedCredits = 0;
 
       for (var subject in subjects) {
         final int credits = subject['credits'];
         final String grade = subject['grade'];
-        totalCredits += credits;
+        totalCreditsAttempted += credits;
         totalGradePoints += (_getGradePoint(grade) * credits);
         if (_isGradePassed(grade)) {
           earnedCredits += credits;
         }
       }
-      final double sgpa = totalCredits > 0 ? totalGradePoints / totalCredits : 0.0;
+      final double sgpa = totalCreditsAttempted > 0 ? totalGradePoints / totalCreditsAttempted : 0.0;
       processedData.add({
         'semester': i,
-        'totalCredits': totalCredits,
+        'totalCredits': totalCreditsAttempted,
         'earnedCredits': earnedCredits,
         'gpa': sgpa,
         'subjects': subjects,
       });
     }
-
-    setState(() {
-      _semesterData = processedData;
-      _currentSemester = maxSemester;
-    });
+    if(mounted) {
+      setState(() {
+        _semesterData = processedData;
+        _currentSemester = maxSemester;
+      });
+    }
   }
 
   double _getGradePoint(String grade) {
@@ -182,7 +206,7 @@ class _CreditsScreenState extends State<CreditsScreen>
       case 'B': return 7.0;
       case 'C': return 6.0;
       case 'D': return 5.0;
-      case 'F': return 2.0;
+      case 'F': return 0.0;
       default: return 0.0;
     }
   }
@@ -195,20 +219,6 @@ class _CreditsScreenState extends State<CreditsScreen>
   double get _totalCredits {
     if (_semesterData.isEmpty) return 0.0;
     return _semesterData.fold(0.0, (sum, sem) => sum + (sem['earnedCredits'] as int));
-  }
-
-  double get _overallGPA {
-    if (_semesterData.isEmpty) return 0.0;
-    double totalGradePoints = 0;
-    int totalCreditsAttempted = 0;
-    for (var sem in _semesterData) {
-      for (var sub in sem['subjects']) {
-        final int credits = sub['credits'];
-        totalCreditsAttempted += credits;
-        totalGradePoints += (_getGradePoint(sub['grade']) * credits);
-      }
-    }
-    return totalCreditsAttempted > 0 ? totalGradePoints / totalCreditsAttempted : 0.0;
   }
 
   @override
@@ -235,23 +245,35 @@ class _CreditsScreenState extends State<CreditsScreen>
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : _error != null
-          ? Center(child: Padding(
-        padding: const EdgeInsets.all(20.0),
-        child: Text(_error!, textAlign: TextAlign.center),
-      ))
-          : Padding(
-        padding: EdgeInsets.all(16 * scaleFactor),
-        child: Column(
-          children: [
-            SizedBox(
-              height: MediaQuery.of(context).size.height * 0.35,
-              child: _buildCreditsCircleLayout(),
-            ),
-            const SizedBox(height: 16),
-            Expanded(
-              child: _buildDetailsSection(),
-            ),
-          ],
+          ? Center(
+        child: Padding(
+          padding: const EdgeInsets.all(20.0),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(_error!, textAlign: TextAlign.center, style: const TextStyle(color: Colors.red)),
+              const SizedBox(height: 10),
+              ElevatedButton(onPressed: _loadInitialData, child: const Text("Retry"))
+            ],
+          ),
+        ),
+      )
+          : RefreshIndicator(
+        onRefresh: _refreshFromApi,
+        child: Padding(
+          padding: EdgeInsets.all(16 * scaleFactor),
+          child: Column(
+            children: [
+              SizedBox(
+                height: MediaQuery.of(context).size.height * 0.35,
+                child: _buildCreditsCircleLayout(),
+              ),
+              const SizedBox(height: 16),
+              Expanded(
+                child: _buildDetailsSection(),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -356,7 +378,7 @@ class _CreditsScreenState extends State<CreditsScreen>
                     child: Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 4.0),
                       child: Text(
-                        'CGPA: ${_overallGPA.toStringAsFixed(4)}',
+                        'CGPA: ${_fetchedCgpa ?? "..."}',
                         style: TextStyle(
                           fontSize: radius * 0.25,
                           color: Colors.white,
@@ -375,7 +397,9 @@ class _CreditsScreenState extends State<CreditsScreen>
   }
 
   Widget _buildSemesterCircle(int semester, double radius) {
-    final semesterData = _semesterData.firstWhere((s) => s['semester'] == semester);
+    final semesterData = _semesterData.firstWhere((s) => s['semester'] == semester, orElse: () => {});
+    if (semesterData.isEmpty) return const SizedBox.shrink();
+
     final isSelected = _selectedSemester == semester;
     final colors = [
       Colors.red, Colors.orange, Colors.yellow.shade700,
@@ -523,8 +547,8 @@ class _CreditsScreenState extends State<CreditsScreen>
               ),
               SizedBox(width: screenWidth * 0.04),
               Expanded(
-                child: _buildStatCard('Overall CGPA',
-                    _overallGPA.toStringAsFixed(4), AppTheme.accentAqua),
+                child: _buildStatCard(
+                    'Overall CGPA', _fetchedCgpa ?? 'N/A', AppTheme.accentAqua),
               ),
               SizedBox(width: screenWidth * 0.04),
               Expanded(
@@ -832,10 +856,6 @@ class _CreditsScreenState extends State<CreditsScreen>
     }
   }
 }
-
-// =======================================================================
-// SGPA CALCULATOR WIDGET (UNCHANGED)
-// =======================================================================
 
 class SgpaCalculatorWidget extends StatefulWidget {
   const SgpaCalculatorWidget({super.key});

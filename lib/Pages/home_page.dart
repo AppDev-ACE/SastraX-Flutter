@@ -143,7 +143,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   Future<void> _loadInitialData() async {
     if (widget.regNo.isEmpty) {
-      setState(() { _error = "Running in Guest Mode."; /* ... */ });
+      setState(() { _error = "Running in Guest Mode."; });
       return;
     }
     try {
@@ -323,7 +323,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   const SizedBox(height: 16),
                   attendancePercent < 0
                       ? const Center(child: CircularProgressIndicator())
-                  // ✅ FIX: Removed the NeonContainer wrapper
                       : GestureDetector(
                     onTap: () => Navigator.push(
                       context,
@@ -334,6 +333,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           url: widget.url,
                           initialSubjectAttendance: subjectAttendanceData,
                           initialHourWiseAttendance: hourWiseAttendanceData,
+                          // ✅ PASS THE DATA HERE
+                          timetable: timetableData,
+                          courseMap: courseMapData,
                         ),
                       ),
                     ),

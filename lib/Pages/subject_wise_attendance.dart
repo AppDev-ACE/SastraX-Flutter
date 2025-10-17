@@ -18,6 +18,9 @@ class SubjectWiseAttendancePage extends StatefulWidget {
   final String url;
   final List<dynamic> initialSubjectAttendance;
   final List<dynamic> initialHourWiseAttendance;
+  // ✅ ACCEPT THE NEW DATA
+  final List<dynamic> timetable;
+  final List<dynamic> courseMap;
 
   const SubjectWiseAttendancePage({
     Key? key,
@@ -26,6 +29,9 @@ class SubjectWiseAttendancePage extends StatefulWidget {
     required this.url,
     required this.initialSubjectAttendance,
     required this.initialHourWiseAttendance,
+    // ✅ ADD TO CONSTRUCTOR
+    required this.timetable,
+    required this.courseMap,
   }) : super(key: key);
 
   @override
@@ -98,7 +104,6 @@ class _SubjectWiseAttendancePageState extends State<SubjectWiseAttendancePage> w
     }
   }
 
-  /// ✅ THIS METHOD IS UPDATED TO CORRECTLY PARSE THE DATE
   void _processData({required List<dynamic> subjectData, required List<dynamic> hourData}) {
     final newSubjectAttendance = <String, Map<String, dynamic>>{};
     final codeToNameMap = <String, String>{};
@@ -126,10 +131,7 @@ class _SubjectWiseAttendancePageState extends State<SubjectWiseAttendancePage> w
         final dateStringWithDay = dayData['dateDay'] as String?;
         if (dateStringWithDay == null) continue;
 
-        // FIX: Split the string to isolate the date part before parsing.
-        // "15-Oct-2025 Wednesday" becomes "15-Oct-2025"
         final dateString = dateStringWithDay.split(' ')[0];
-
         final date = DateFormat('dd-MMM-yyyy').parse(dateString);
         final dayKey = DateTime(date.year, date.month, date.day);
 
@@ -219,6 +221,10 @@ class _SubjectWiseAttendancePageState extends State<SubjectWiseAttendancePage> w
   Widget build(BuildContext context) {
     final themeProvider = Provider.of<ThemeProvider>(context);
     final isDark = themeProvider.isDarkMode;
+    final screenWidth = MediaQuery.of(context).size.width;
+    final double scaleFactor = screenWidth / 390.0;
+    final double selectedFontSize = (15 * scaleFactor).clamp(12.0, 16.0);
+    final double unselectedFontSize = (13 * scaleFactor).clamp(11.0, 14.0);
 
     return Scaffold(
       backgroundColor: isDark ? const Color(0xFF121212) : Colors.white,
@@ -235,26 +241,21 @@ class _SubjectWiseAttendancePageState extends State<SubjectWiseAttendancePage> w
         ],
         bottom: TabBar(
           controller: _tabController,
+          isScrollable: true,
+          tabAlignment: TabAlignment.start,
           indicatorColor: Colors.white,
           labelColor: Colors.white,
           unselectedLabelColor: Colors.white70,
+          labelPadding: const EdgeInsets.symmetric(horizontal: 20.0),
           tabs: ['Monthly View', 'Subject View', 'Analytics']
               .asMap()
               .entries
               .map((entry) => Tab(
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              decoration: BoxDecoration(
-                color: _tabController.index == entry.key ? Colors.white.withOpacity(0.2) : Colors.transparent,
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: Text(
-                entry.value,
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: _tabController.index == entry.key ? 16 : 14,
-                  fontWeight: _tabController.index == entry.key ? FontWeight.bold : FontWeight.normal,
-                ),
+            child: Text(
+              entry.value,
+              style: TextStyle(
+                fontSize: _tabController.index == entry.key ? selectedFontSize : unselectedFontSize,
+                fontWeight: _tabController.index == entry.key ? FontWeight.bold : FontWeight.normal,
               ),
             ),
           ))
@@ -273,6 +274,9 @@ class _SubjectWiseAttendancePageState extends State<SubjectWiseAttendancePage> w
             child: MonthlyView(
               attendanceData: _attendanceData,
               currentStreak: _currentStreak,
+              // ✅ PASS THE DATA DOWN TO THE MONTHLY VIEW
+              timetable: widget.timetable,
+              courseMap: widget.courseMap,
             ),
           ),
           RefreshIndicator(

@@ -7,11 +7,17 @@ import '../../components/theme_toggle_button.dart';
 class DayAttendanceDetail extends StatefulWidget {
   final DateTime selectedDate;
   final Map<String, String> attendanceData;
+  // ✅ Accepts the real timetable and course map data
+  final List<dynamic> timetable;
+  final List<dynamic> courseMap;
 
   const DayAttendanceDetail({
     Key? key,
     required this.selectedDate,
     required this.attendanceData,
+    // ✅ Added to the constructor
+    required this.timetable,
+    required this.courseMap,
   }) : super(key: key);
 
   @override
@@ -101,22 +107,54 @@ class _DayAttendanceDetailState extends State<DayAttendanceDetail> {
     return 'Great job! You attended all your classes today. Keep up the good work!';
   }
 
-  String _getSubjectTime(String subject) {
-    // This is a placeholder. For real data, you'd need to pass the timetable.
-    switch (subject) {
-      case 'Data Structure':
-        return '9:00 AM - 10:00 AM';
-      case 'Computer Networks':
-        return '10:00 AM - 11:00 AM';
-      case 'Operating System':
-        return '11:00 AM - 12:00 PM';
-      case 'Natural Language Processing':
-        return '1:00 PM - 2:00 PM';
-      case 'Soft Skills':
-        return '2:00 PM - 3:00 PM';
-      default:
-        return 'Time not available';
+  // ✅ NEW: Helper to convert hour period to a time string
+  String _getHourMapping(String hourPeriod) {
+    switch (hourPeriod) {
+      case 'hour1': return '09:00 AM - 09:50 AM';
+      case 'hour2': return '09:50 AM - 10:40 AM';
+      case 'hour3': return '10:55 AM - 11:45 AM';
+      case 'hour4': return '11:45 AM - 12:35 PM';
+      case 'hour5': return '01:30 PM - 02:20 PM';
+      case 'hour6': return '02:20 PM - 03:10 PM';
+      case 'hour7': return '03:25 PM - 04:15 PM';
+      case 'hour8': return '04:15 PM - 05:05 PM';
+      default: return 'Time not available';
     }
+  }
+
+  // ✅ REWRITTEN: This method now performs a real lookup instead of using placeholders
+  String _getSubjectTime(String subjectName) {
+    // 1. Find the course code from the subject name using the courseMap
+    String courseCode = '';
+    for (var course in widget.courseMap) {
+      if (course['name'] == subjectName) {
+        courseCode = course['code'];
+        break;
+      }
+    }
+    // If the subject name from attendance doesn't have a matching code, we can't find its time
+    if (courseCode.isEmpty) return 'Time not available';
+
+    // 2. Find the day of the week for the selected date (e.g., "Monday")
+    final dayOfWeek = DateFormat('EEEE').format(widget.selectedDate);
+
+    // 3. Find the timetable entry for that specific day
+    final dayTimetable = widget.timetable.firstWhere(
+            (day) => (day['day'] as String).toLowerCase() == dayOfWeek.toLowerCase(),
+        orElse: () => null);
+
+    if (dayTimetable == null) return 'No classes on this day';
+
+    // 4. Loop through the hours of that day to find a match with the course code
+    for (var i = 1; i <= 8; i++) {
+      final hourKey = 'hour$i';
+      if (dayTimetable[hourKey] == courseCode) {
+        // 5. If a match is found, convert the hour key to a readable time string
+        return _getHourMapping(hourKey);
+      }
+    }
+
+    return 'Time not available';
   }
 
   bool _isDarkMode(BuildContext context) {
