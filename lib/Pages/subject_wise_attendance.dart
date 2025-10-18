@@ -274,10 +274,16 @@ class _SubjectWiseAttendancePageState
             courseMap: widget.courseMap,
             regNo: widget.regNo,
           ),
+          // ============= THIS IS THE FIX =============
           SubjectView(
-            // Pass the updated map which includes 'od'
             subjectAttendance: _subjectAttendance,
+            // Pass the NORMALIZED timetable
+            timetable: _normalizedTimetable,
+            initialSubjectAttendance: widget.initialSubjectAttendance,
+            courseMap: widget.courseMap,
+            initialHourWiseAttendance: widget.initialHourWiseAttendance,
           ),
+          // ===========================================
           AnalyticsView(
             // Pass the updated map which includes 'od'
             subjectAttendance: _subjectAttendance,

@@ -10,6 +10,7 @@ class ApiEndpoints {
   String get profilePic => '$baseUrl/profilePic';
   String get dob => '$baseUrl/dob';
   String get logout => '$baseUrl/logout';
+  String get relogin => '$baseUrl/relogin';
 
   // Attendance and Grades
   String get attendance => '$baseUrl/attendance';

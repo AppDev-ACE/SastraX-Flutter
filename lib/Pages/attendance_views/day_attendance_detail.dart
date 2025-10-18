@@ -152,19 +152,22 @@ class _DayAttendanceDetailState extends State<DayAttendanceDetail> {
   }
 
   String _getInsightMessage() {
+    // Format the date first
+    final dateString = DateFormat('MMM dd').format(widget.selectedDate);
+
     if (!mounted || _scheduledClasses.isEmpty) {
-      return 'No classes scheduled for today!';
+      return 'No classes scheduled for $dateString!';
     }
 
     int absentCount = _scheduledClasses.where((c) => c['status'] == 'absent').length;
     int odCount = _scheduledClasses.where((c) => c['status'] == 'od').length;
     bool pending = _scheduledClasses.any((c) => c['status'] == 'not updated');
 
-    if (absentCount > 0) return 'You missed $absentCount class(es) today.';
-    if (odCount > 0) return 'You were on OD for $odCount class(es) today.';
-    if (pending) return 'Some classes are still pending update.';
+    if (absentCount > 0) return 'You missed $absentCount class(es) on $dateString.';
+    if (odCount > 0) return 'You were on OD for $odCount class(es) on $dateString.';
+    if (pending) return 'Some classes are still pending update.'; // This one is fine as is.
 
-    return 'You attended all your classes today!';
+    return 'You attended all your classes on $dateString!';
   }
 
   bool _isDarkMode(BuildContext context) =>
@@ -180,8 +183,12 @@ class _DayAttendanceDetailState extends State<DayAttendanceDetail> {
       appBar: AppBar(
         title: Text(
           DateFormat('dd MMMM, yyyy').format(widget.selectedDate),
-          style: const TextStyle(color: Colors.white),
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 20 * scale, // Responsive font size
+          ),
         ),
+        centerTitle: true, // Centers the title
         backgroundColor: isDark ? Colors.black12 : primaryBlue,
         iconTheme: const IconThemeData(color: Colors.white),
         actions: [
@@ -216,6 +223,7 @@ class _DayAttendanceDetailState extends State<DayAttendanceDetail> {
                   elevation: 2,
                   color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
                   child: ListTile(
+                    isThreeLine: true, // Keep this to allow vertical space
                     leading: CircleAvatar(
                       backgroundColor: _getSubjectColor(subject),
                       child: Text(
@@ -232,14 +240,20 @@ class _DayAttendanceDetailState extends State<DayAttendanceDetail> {
                       style: TextStyle(
                         color: isDark ? Colors.white : Colors.black,
                         fontWeight: FontWeight.w600,
+                        fontSize: 16 * scale, // Responsive font size
                       ),
                     ),
                     subtitle: Text(
                         time, // Only show the time
                         style: TextStyle(
-                            color: isDark ? Colors.white70 : Colors.grey[600])),
-                    trailing: Row(
-                      mainAxisSize: MainAxisSize.min,
+                          color: isDark ? Colors.white70 : Colors.grey[600],
+                          fontSize: 14 * scale, // Responsive font size
+                        )),
+                    // ============== MODIFIED TRAILING WIDGET ==============
+                    trailing: Column(
+                      mainAxisAlignment: MainAxisAlignment.center, // Center vertically
+                      crossAxisAlignment: CrossAxisAlignment.center, // Center horizontally
+                      mainAxisSize: MainAxisSize.min, // Take minimal space
                       children: [
                         Container(
                           padding: const EdgeInsets.symmetric(
@@ -257,19 +271,32 @@ class _DayAttendanceDetailState extends State<DayAttendanceDetail> {
                             ),
                           ),
                         ),
-                        if (status == 'absent')
-                          Checkbox(
-                            value: isChecked,
-                            onChanged: (bool? newValue) {
-                              setState(() {
-                                _checkboxStates[checkboxKey] = newValue ?? false;
-                              });
-                            },
-                            activeColor:
-                            isDark ? Colors.cyanAccent : primaryBlue,
+                        // Only show Checkbox if status is 'absent'
+                        if (status == 'absent') ...[
+                          const SizedBox(height: 4.0), // <-- Added vertical space
+                          SizedBox(
+                            height: 24, // Sized for the checkbox
+                            width: 24, // Sized for the checkbox
+                            child: Checkbox(
+                              value: isChecked,
+                              onChanged: (bool? newValue) {
+                                setState(() {
+                                  _checkboxStates[checkboxKey] = newValue ?? false;
+                                });
+                              },
+                              activeColor:
+                              isDark ? Colors.cyanAccent : primaryBlue,
+                            ),
                           ),
+                        ]
+                        // If not absent, show an empty box to keep alignment
+                        else if (_scheduledClasses.any((c) => c['status'] == 'absent')) ...[
+                          const SizedBox(height: 4.0), // <-- Added matching space
+                          const SizedBox(height: 24, width: 24), // Placeholder
+                        ]
                       ],
                     ),
+                    // ===============================================
                   ),
                 );
               },

@@ -1,211 +1,348 @@
+// subject_attendance_detail.dart
 import 'package:flutter/material.dart';
+import 'package:flutter/widgets.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:provider/provider.dart';
-import '../../models/theme_model.dart'; // Ensure this path is correct
+import 'package:intl/intl.dart';
+// Adjust path if needed based on your project structure
+import '../../models/theme_model.dart';
 import 'dart:math';
 
-class SubjectAttendanceDetail extends StatelessWidget {
+class SubjectAttendanceDetail extends StatefulWidget {
   final String subjectName;
   final double attendancePercentage;
+  final List<dynamic> initialSubjectAttendance; // Kept but not directly used in record fetching
+  final List<dynamic> initialHourWiseAttendance;
+  // *** This MUST be the NORMALIZED timetable passed from the parent ***
+  final List<dynamic> timetable;
+  final List<dynamic> courseMap;
+  // Raw timetable is no longer needed with this logic
 
   const SubjectAttendanceDetail({
     Key? key,
     required this.subjectName,
     required this.attendancePercentage,
+    required this.initialHourWiseAttendance,
+    required this.courseMap,
+    required this.initialSubjectAttendance,
+    required this.timetable, // Normalized
   }) : super(key: key);
 
   static const Color primaryBlue = Color(0xFF1e3a8a);
+  static const Color lightBlue = Color(0xFF4A90E2);
 
-  // --- Helper methods now take BuildContext ---
+  @override
+  State<SubjectAttendanceDetail> createState() => _SubjectAttendanceDetailState();
+}
 
-  bool _isDarkMode(BuildContext context) =>
-      Provider.of<ThemeProvider>(context, listen: false).isDarkMode;
+class _SubjectAttendanceDetailState extends State<SubjectAttendanceDetail> {
 
-  Color _getBackgroundColor(BuildContext context) =>
-      _isDarkMode(context) ? const Color(0xFF121212) : Colors.white;
+  List<Map<String, String>> _recentSubjectRecords = [];
+  String _targetCode = ''; // Store the code from courseMap
+  bool _isLoading = true;
+  String _errorMessage = '';
 
-  Color _getCardColor(BuildContext context) =>
-      _isDarkMode(context) ? const Color(0xFF1E1E1E) : Colors.white;
+  // Map hour keys (used in normalized timetable and attendance)
+  static const List<String> _hourKeys = [
+    "hour1", "hour2", "hour3", "hour4",
+    "hour5", "hour6", "hour7", "hour8",
+  ];
 
-  Color _getTextColor(BuildContext context) =>
-      _isDarkMode(context) ? Colors.white : Colors.black;
-
-  Color _getSecondaryTextColor(BuildContext context) =>
-      _isDarkMode(context) ? Colors.white70 : Colors.grey[600]!;
-
-  Color _getAppBarColor(BuildContext context) =>
-      _isDarkMode(context) ? Colors.black12 : primaryBlue;
-
-  Color _getGridColor(BuildContext context) =>
-      _isDarkMode(context) ? const Color(0xFF2C2C2C) : Colors.grey.withOpacity(0.3);
-
-  // --- Other helper methods (don't need context) ---
-
-  Color _getAttendanceColor(double percentage) {
-    if (percentage >= 80) return Colors.green;
-    if (percentage >= 75) return Colors.orange;
-    return Colors.red;
-  }
-
-  Color _getSubjectColor(String subject) {
-    final hash = subject.hashCode;
-    return Color((hash & 0xFFFFFF) | 0xFF000000).withOpacity(1.0);
-  }
-
-  Color _getStatusColor(String status) {
-    switch (status.toLowerCase()) {
-      case 'present': return Colors.green;
-      case 'absent': return Colors.red;
-      case 'od': return Colors.orange;
-      default: return Colors.grey;
-    }
-  }
-
-  String _getDayName(int weekday) {
-    // ... (no changes needed)
-    switch (weekday) {
-      case 1: return 'Monday';
-      case 2: return 'Tuesday';
-      case 3: return 'Wednesday';
-      case 4: return 'Thursday';
-      case 5: return 'Friday';
-      case 6: return 'Saturday';
-      case 7: return 'Sunday';
-      default: return '';
-    }
-  }
-
-  String _generateRandomStatus() {
-    // ... (no changes needed)
-    final random = Random();
-    final statuses = ['present', 'present', 'present', 'od', 'absent'];
-    return statuses[random.nextInt(statuses.length)];
-  }
-
-  // --- Chart Title Helpers (now take context) ---
-
-  Widget monthTitles(double value, TitleMeta meta, BuildContext context) {
-    final style = TextStyle(
-        color: _getTextColor(context), fontWeight: FontWeight.bold, fontSize: 10);
-    String text;
-    final months = ['Jun', 'Jul', 'Aug', 'Sep', 'Oct']; // Example months
-    if (value.toInt() >= 0 && value.toInt() < months.length) {
-      text = months[value.toInt()];
-    } else {
-      text = '';
-    }
-    return SideTitleWidget(
-        axisSide: meta.axisSide, space: 8, child: Text(text, style: style));
-  }
-
-  Widget leftTitles(double value, TitleMeta meta, BuildContext context) {
-    final style = TextStyle(
-        color: _getTextColor(context), fontWeight: FontWeight.bold, fontSize: 10);
-    String text;
-    switch (value.toInt()) {
-      case 0: text = '0%'; break;
-      case 20: text = '20%'; break;
-      case 40: text = '40%'; break;
-      case 60: text = '60%'; break;
-      case 80: text = '80%'; break;
-      case 100: text = '100%'; break;
-      default: return Container();
-    }
-    return SideTitleWidget(
-        axisSide: meta.axisSide, space: 8, child: Text(text, style: style));
-  }
-
-  // --- Recommendation Helper (now takes context) ---
-
-  Widget _buildRecommendationItem(BuildContext context, String title, String value, IconData icon, Color color) {
-    return Row(
-      children: [
-        Icon(icon, color: color, size: 20),
-        const SizedBox(width: 8),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(title, style: const TextStyle(fontSize: 12, color: Colors.grey)),
-              Text(
-                value?.toString() ?? '', // Safety check
-                style: TextStyle(fontWeight: FontWeight.bold, color: _getTextColor(context)),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
+  // Helper to safely call setState only if mounted, after the current frame
+  void safeSetState(VoidCallback fn) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        setState(fn);
+      }
+    });
   }
 
   @override
-  Widget build(BuildContext context) { // context is available here
-    // Example monthly data (replace with actual data)
-    final List<Map<String, dynamic>> monthlyData = [
-      {'month': 'Jun', 'percentage': 75},
-      {'month': 'Jul', 'percentage': 78},
-      {'month': 'Aug', 'percentage': 82},
-      {'month': 'Sep', 'percentage': 79},
-      {'month': 'Oct', 'percentage': attendancePercentage.toInt()},
-    ];
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _initializeData();
+    });
+  }
+
+  // --- Orchestration Logic ---
+  void _initializeData() {
+    // No need for setState here initially
+    _isLoading = true;
+    _errorMessage = '';
+
+    // Step 1: Find the code from courseMap
+    _targetCode = _findCodeInCourseMap();
+
+    if (_targetCode.isNotEmpty) {
+      // Step 2 & 3: Find last 10 scheduled occurrences and get their status
+      _recentSubjectRecords = _getLast10Records(_targetCode);
+    } else {
+      _recentSubjectRecords = [];
+      _errorMessage = "Could not find code for '${widget.subjectName}' in course map.";
+      print("[Initializer] $_errorMessage");
+    }
+
+    // Update the UI after processing is complete
+    if (mounted) { // Check mount status before final setState
+      setState(() => _isLoading = false);
+    }
+  }
+
+  // --- Step 1: Find the code expected based on courseMap ---
+  String _findCodeInCourseMap() {
+    final String targetSubjectNameLower = widget.subjectName.trim().toLowerCase();
+    for (var course in widget.courseMap) {
+      if (course is Map) {
+        final courseName = course['courseName']?.toString().trim().toLowerCase();
+        if (courseName == targetSubjectNameLower) {
+          final code = course['courseCode']?.toString().trim().toUpperCase() ?? '';
+          print("[Code Finder] Found code '$code' for subject '${widget.subjectName}' in courseMap.");
+          return code;
+        }
+      }
+    }
+    print("[Code Finder] ERROR: Could not find subject '${widget.subjectName}' in courseMap.");
+    return ''; // Return empty if not found
+  }
+
+
+  // --- Step 2 & 3 Combined: Find Last 10 Occurrences and Get Status ---
+  List<Map<String, String>> _getLast10Records(String targetCode) {
+    print("[Record Fetcher] Finding last 10 scheduled occurrences for code: '$targetCode'");
+    final List<Map<String, String>> records = [];
+    // Stores {'date': DateTime, 'hourKey': String, 'dayName': String}
+    final List<Map<String, dynamic>> foundOccurrences = [];
+
+    // Create a lookup map for faster attendance checking
+    final Map<DateTime, Map<String, dynamic>> attendanceLookup = {};
+    for (var dayData in widget.initialHourWiseAttendance) {
+      if (dayData is! Map || dayData['dateDay'] == null) continue;
+      try {
+        final dateString = (dayData['dateDay'] as String).split(' ')[0];
+        final date = DateFormat('dd-MMM-yyyy').parse(dateString);
+        final dayKey = DateTime(date.year, date.month, date.day); // Use date only as key
+        attendanceLookup[dayKey] = Map<String, dynamic>.from(dayData); // Explicit cast
+      } catch(e) {
+        print("[Record Fetcher] Error parsing date for attendance lookup: ${dayData['dateDay']} - $e");
+      }
+    }
+    print("[Record Fetcher] Created attendance lookup map with ${attendanceLookup.length} entries.");
+
+
+    // Iterate backwards from today to find scheduled classes
+    DateTime checkDate = DateTime.now();
+    int daysChecked = 0;
+    const int maxDaysToCheck = 90; // Limit search depth
+
+    while (foundOccurrences.length < 10 && daysChecked < maxDaysToCheck) {
+      final dayNameLower = DateFormat('EEEE').format(checkDate).toLowerCase(); // e.g., "monday"
+      final dateOnly = DateTime(checkDate.year, checkDate.month, checkDate.day);
+
+      // Find the timetable entry for this day of the week in the NORMALIZED timetable
+      dynamic dayTimetableEntry = null;
+      try {
+        dayTimetableEntry = widget.timetable.firstWhere(
+              (d) => d is Map && d['day']?.toString().toLowerCase() == dayNameLower,
+        );
+      } catch (e) { /* Day not found in timetable (expected for weekends/holidays) */ }
+
+      if (dayTimetableEntry != null) {
+        final dayTimetable = dayTimetableEntry as Map<String, dynamic>;
+        // Check hours in NORMAL order for this day to get chronological occurrences
+        for (final hourKey in _hourKeys) {
+          final scheduledCodes = dayTimetable[hourKey]?.toString() ?? '';
+          if (scheduledCodes.isNotEmpty) {
+            final codesInSlot = scheduledCodes.split(',').map((c) => c.trim()).toList();
+            if (codesInSlot.contains(targetCode)) {
+              // Found a scheduled occurrence for the target code
+              foundOccurrences.add({
+                'date': dateOnly,
+                'hourKey': hourKey,
+                'dayName': DateFormat('EEEE').format(checkDate), // Full day name
+              });
+            }
+          }
+        }
+      }
+
+      // Move to the previous day
+      checkDate = checkDate.subtract(const Duration(days: 1));
+      daysChecked++;
+    }
+
+    // Sort occurrences newest first
+    foundOccurrences.sort((a,b) {
+      int dateComp = (b['date'] as DateTime).compareTo(a['date'] as DateTime);
+      if (dateComp != 0) return dateComp;
+      return _hourKeys.indexOf(b['hourKey']).compareTo(_hourKeys.indexOf(a['hourKey']));
+    });
+
+    print("[Record Fetcher] Found ${foundOccurrences.length} scheduled occurrences within the last $daysChecked days.");
+
+    // Now, get the status for the latest 10 found occurrences
+    int recordsAdded = 0;
+    for (var occurrence in foundOccurrences) {
+      if (recordsAdded >= 10) break; // Ensure we only take the top 10
+
+      final DateTime occDate = occurrence['date'];
+      final String occHourKey = occurrence['hourKey'];
+      final String occDayName = occurrence['dayName'];
+
+      // Look up the attendance record for this specific day
+      final attendanceRecord = attendanceLookup[occDate];
+      String finalStatus = 'not updated'; // Default
+
+      if (attendanceRecord != null) {
+        final status = attendanceRecord[occHourKey]?.toString().toUpperCase() ?? '';
+        switch (status) {
+          case 'P': finalStatus = 'present'; break;
+          case 'A': finalStatus = 'absent'; break;
+          case 'OD': finalStatus = 'OD'; break;
+        }
+      }
+
+      records.add({
+        'date': DateFormat('dd/MM').format(occDate),
+        'dayName': occDayName,
+        'status': finalStatus,
+      });
+      recordsAdded++;
+    }
+
+    if (records.isEmpty && _targetCode.isNotEmpty) {
+      if (foundOccurrences.isEmpty) {
+        _errorMessage = "Subject '$targetCode' was not found scheduled in the timetable within the last $maxDaysToCheck days.";
+        print("[Record Fetcher] $_errorMessage");
+      } else {
+        _errorMessage = "Found scheduled classes, but couldn't retrieve attendance status for any recent ones.";
+        print("[Record Fetcher] $_errorMessage");
+      }
+    } else {
+      print("[Record Fetcher] Successfully compiled ${records.length} final records.");
+    }
+
+    return records;
+  }
+
+
+  // --- Helper methods ---
+  bool _isDarkMode(BuildContext context) => Provider.of<ThemeProvider>(context, listen: false).isDarkMode;
+  Color _getBackgroundColor(BuildContext context) => _isDarkMode(context) ? const Color(0xFF121212) : Colors.white;
+  Color _getCardColor(BuildContext context) => _isDarkMode(context) ? const Color(0xFF1E1E1E) : Colors.white;
+  Color _getTextColor(BuildContext context) => _isDarkMode(context) ? Colors.white : Colors.black;
+  Color _getSecondaryTextColor(BuildContext context) => _isDarkMode(context) ? Colors.white70 : Colors.grey[600]!;
+  Color _getAppBarColor(BuildContext context) => _isDarkMode(context) ? Colors.black12 : SubjectAttendanceDetail.primaryBlue;
+  Color _getGridColor(BuildContext context) => _isDarkMode(context) ? const Color(0xFF2C2C2C) : Colors.grey.withOpacity(0.3);
+  Color _getAttendanceColor(double percentage) { if (percentage >= 80) return Colors.green; if (percentage >= 75) return Colors.orange; return Colors.red; }
+  Color _getSubjectColor(String subject) { final hash = subject.hashCode; return Color((hash & 0xFFFFFF) | 0xFF000000).withOpacity(1.0); }
+  Color _getStatusColor(String status) { switch (status.toLowerCase()) { case 'present': return Colors.green; case 'absent': return Colors.red; case 'od': return Colors.orange; default: return Colors.grey; } }
+
+  // --- Chart Title Helpers ---
+  Widget monthTitles(double value, TitleMeta meta, BuildContext context, double scale) {
+    final style = TextStyle( color: _getTextColor(context), fontWeight: FontWeight.bold, fontSize: 10 * scale);
+    String text;
+    final now = DateTime.now();
+    final monthsToShow = List.generate(5, (index) => DateTime(now.year, now.month - index)).reversed.map((date) => DateFormat('MMM').format(date)).toList();
+    if (value.toInt() >= 0 && value.toInt() < monthsToShow.length) { text = monthsToShow[value.toInt()]; } else { text = ''; }
+    return SideTitleWidget( axisSide: meta.axisSide, space: 8 * scale, child: Text(text, style: style));
+  }
+  Widget leftTitles(double value, TitleMeta meta, BuildContext context, double scale) { final style = TextStyle( color: _getTextColor(context), fontWeight: FontWeight.bold, fontSize: 10 * scale); String text; switch (value.toInt()) { case 0: text = '0%'; break; case 20: text = '20%'; break; case 40: text = '40%'; break; case 60: text = '60%'; break; case 80: text = '80%'; break; case 100: text = '100%'; break; default: return Container(); } return SideTitleWidget( axisSide: meta.axisSide, space: 8 * scale, child: Text(text, style: style)); }
+
+  // --- Recommendation Helper ---
+  Widget _buildRecommendationItem(BuildContext context, String title, String value, IconData icon, Color color, double scale) { return Row( children: [ Icon(icon, color: color, size: 20 * scale), SizedBox(width: 8 * scale), Expanded( child: Column( crossAxisAlignment: CrossAxisAlignment.start, children: [ Text( title, style: TextStyle( fontSize: 12 * scale, color: _getSecondaryTextColor(context) ) ), Text( value?.toString() ?? '', style: TextStyle( fontWeight: FontWeight.bold, color: _getTextColor(context), fontSize: 14 * scale ), ), ], ), ), ], ); }
+
+
+  // ============= BUILD METHOD WITH APPBAR FIX APPLIED =============
+  @override
+  Widget build(BuildContext context) {
+    final scale = MediaQuery.of(context).textScaler.scale(1.0);
+    final screenWidth = MediaQuery.of(context).size.width;
+    final double rPadding = screenWidth * 0.04;
+    final bool isDark = _isDarkMode(context);
+    final Color goalIconColor = isDark ? SubjectAttendanceDetail.lightBlue : SubjectAttendanceDetail.primaryBlue;
+
+    // Example monthly data (replace with actual processed data if needed)
+    final List<Map<String, dynamic>> monthlyData = [ {'month': 'Jun', 'percentage': 75}, {'month': 'Jul', 'percentage': 78}, {'month': 'Aug', 'percentage': 82}, {'month': 'Sep', 'percentage': 79}, {'month': 'Oct', 'percentage': widget.attendancePercentage.toInt()}, ];
 
     return Scaffold(
-      backgroundColor: _getBackgroundColor(context), // Pass context
+      backgroundColor: _getBackgroundColor(context),
       appBar: AppBar(
-        title: Text(subjectName, style: const TextStyle(color: Colors.white)),
-        backgroundColor: _getAppBarColor(context), // Pass context
+        // Use a Column in the title slot for wrapping
+        title: Column(
+          mainAxisAlignment: MainAxisAlignment.center, // Center vertically
+          crossAxisAlignment: CrossAxisAlignment.start, // Align text start
+          children: [
+            Text(
+              widget.subjectName,
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 18 * scale, // Slightly smaller base size
+              ),
+              textAlign: TextAlign.start, // Align text start
+              softWrap: true, // Allow wrapping
+              // Text will wrap automatically within the Column
+            ),
+          ],
+        ),
+        backgroundColor: _getAppBarColor(context),
         elevation: 0,
         iconTheme: const IconThemeData(color: Colors.white),
+        centerTitle: false, // Set to false to allow Column alignment to work
+        // Optional: Increase height slightly if titles frequently wrap
+        // toolbarHeight: kToolbarHeight + (widget.subjectName.length > 25 ? (20 * scale) : 0),
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
+      body: _isLoading
+          ? Center(child: CircularProgressIndicator(color: isDark ? SubjectAttendanceDetail.lightBlue : SubjectAttendanceDetail.primaryBlue))
+          : SingleChildScrollView(
+        padding: EdgeInsets.all(rPadding),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // Current Attendance Card
             Container(
               width: double.infinity,
-              padding: const EdgeInsets.all(16),
+              padding: EdgeInsets.all(rPadding),
               decoration: BoxDecoration(
-                color: _getAttendanceColor(attendancePercentage).withOpacity(0.2),
+                color: _getAttendanceColor(widget.attendancePercentage).withOpacity(0.2),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Column(
                 children: [
                   Text('Current Attendance',
                       style: TextStyle(
-                          fontSize: 16,
-                          color: _getSecondaryTextColor(context))), // Pass context
-                  const SizedBox(height: 8),
+                          fontSize: 16 * scale,
+                          color: _getSecondaryTextColor(context))),
+                  SizedBox(height: 8 * scale),
                   Text(
-                    '${attendancePercentage.toInt()}%',
+                    '${widget.attendancePercentage.toInt()}%',
                     style: TextStyle(
-                        fontSize: 36,
+                        fontSize: 36 * scale,
                         fontWeight: FontWeight.bold,
-                        color: _getAttendanceColor(attendancePercentage)),
+                        color: _getAttendanceColor(widget.attendancePercentage)),
                   ),
-                  const SizedBox(height: 8),
+                  SizedBox(height: 8 * scale),
                   LinearProgressIndicator(
-                    value: attendancePercentage / 100,
-                    backgroundColor: _getGridColor(context), // Pass context
+                    value: widget.attendancePercentage / 100,
+                    backgroundColor: _getGridColor(context),
                     valueColor: AlwaysStoppedAnimation<Color>(
-                        _getAttendanceColor(attendancePercentage)),
+                        _getAttendanceColor(widget.attendancePercentage)),
                     borderRadius: BorderRadius.circular(5),
                   ),
                 ],
               ),
             ),
-            const SizedBox(height: 20),
+            SizedBox(height: 20 * scale),
 
             // Monthly Trend Chart
             Text('Monthly Trend',
                 style: TextStyle(
-                    fontSize: 18,
+                    fontSize: 18 * scale,
                     fontWeight: FontWeight.bold,
-                    color: _getTextColor(context))), // Pass context
-            const SizedBox(height: 16),
+                    color: _getTextColor(context))),
+            SizedBox(height: 16 * scale),
             SizedBox(
-              height: 200,
+              height: 200 * scale,
               child: LineChart(
                 LineChartData(
                   gridData: FlGridData(
@@ -213,26 +350,24 @@ class SubjectAttendanceDetail extends StatelessWidget {
                       drawVerticalLine: false,
                       horizontalInterval: 20,
                       getDrawingHorizontalLine: (v) => FlLine(
-                          color: _getGridColor(context), // Pass context
+                          color: _getGridColor(context),
                           strokeWidth: 1)),
                   titlesData: FlTitlesData(
                     show: true,
                     bottomTitles: AxisTitles(
                         sideTitles: SideTitles(
                             showTitles: true,
-                            reservedSize: 30,
+                            reservedSize: 30 * scale,
                             interval: 1,
-                            // Pass context to titles helper
                             getTitlesWidget: (v, m) =>
-                                monthTitles(v, m, context))),
+                                monthTitles(v, m, context, scale))),
                     leftTitles: AxisTitles(
                         sideTitles: SideTitles(
                             showTitles: true,
-                            reservedSize: 42,
+                            reservedSize: 42 * scale,
                             interval: 20,
-                            // Pass context to titles helper
                             getTitlesWidget: (v, m) =>
-                                leftTitles(v, m, context))),
+                                leftTitles(v, m, context, scale))),
                     topTitles: const AxisTitles(
                         sideTitles: SideTitles(showTitles: false)),
                     rightTitles: const AxisTitles(
@@ -240,39 +375,43 @@ class SubjectAttendanceDetail extends StatelessWidget {
                   ),
                   borderData: FlBorderData(
                       show: true,
-                      border: Border.all(color: _getGridColor(context))), // Pass context
+                      border: Border.all(color: _getGridColor(context))),
                   minX: 0,
-                  maxX: monthlyData.length - 1.0,
+                  maxX: (monthlyData.length - 1.0).clamp(0.0, double.infinity),
                   minY: 0,
                   maxY: 100,
                   lineBarsData: [
                     LineChartBarData(
                       spots: monthlyData.asMap().entries.map((entry) {
                         final percentage =
-                        (entry.value['percentage'] as num).toDouble();
-                        return FlSpot(entry.key.toDouble(), percentage);
+                            (entry.value['percentage'] as num?)?.toDouble() ?? 0.0;
+                        return FlSpot(entry.key.toDouble(), percentage.clamp(0.0,100.0));
                       }).toList(),
                       isCurved: true,
-                      color: _getSubjectColor(subjectName),
-                      barWidth: 3,
+                      color: _getSubjectColor(widget.subjectName),
+                      barWidth: 3 * scale,
                       isStrokeCapRound: true,
                       dotData: const FlDotData(show: true),
                       belowBarData: BarAreaData(
                           show: true,
-                          color: _getSubjectColor(subjectName).withOpacity(0.2)),
+                          color: _getSubjectColor(widget.subjectName).withOpacity(0.2)),
                     ),
                   ],
                   lineTouchData: LineTouchData(
                     touchTooltipData: LineTouchTooltipData(
-                      tooltipBgColor: _getCardColor(context).withOpacity(0.8), // Pass context
+                      tooltipBgColor: _getCardColor(context).withOpacity(0.8),
                       getTooltipItems: (List<LineBarSpot> touchedBarSpots) {
                         return touchedBarSpots.map((barSpot) {
                           final flSpot = barSpot;
+                          final index = flSpot.x.toInt();
+                          if (index < 0 || index >= monthlyData.length) return null;
+                          final month = monthlyData[index]['month'] as String? ?? '??';
                           return LineTooltipItem(
-                            '${monthlyData[flSpot.x.toInt()]['month']}\n',
+                            '$month\n',
                             TextStyle(
-                              color: _getTextColor(context), // Pass context
+                              color: _getTextColor(context),
                               fontWeight: FontWeight.bold,
+                              fontSize: 12 * scale,
                             ),
                             children: <TextSpan>[
                               TextSpan(
@@ -280,103 +419,98 @@ class SubjectAttendanceDetail extends StatelessWidget {
                                 style: TextStyle(
                                   color: _getAttendanceColor(flSpot.y),
                                   fontWeight: FontWeight.w900,
+                                  fontSize: 14 * scale,
                                 ),
                               ),
                             ],
                           );
-                        }).toList();
+                        }).whereType<LineTooltipItem>().toList();
                       },
                     ),
                   ),
                 ),
               ),
             ),
-            const SizedBox(height: 20),
+            SizedBox(height: 20 * scale),
 
-            // Recent Attendance Records List
+            // RECENT ATTENDANCE LIST (Using user's provided structure)
             Text('Recent Attendance Records',
                 style: TextStyle(
-                    fontSize: 18,
+                    fontSize: 18 * scale,
                     fontWeight: FontWeight.bold,
-                    color: _getTextColor(context))), // Pass context
-            const SizedBox(height: 16),
-            ListView.builder(
+                    color: _getTextColor(context))),
+            SizedBox(height: 16 * scale),
+            ListView.builder( // Directly use ListView.builder
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
-              itemCount: 10,
-              itemBuilder: (context, index) { // context is fine here
-                final date = DateTime.now().subtract(Duration(days: index));
-                final status = _generateRandomStatus(); // Replace with actual status
+              // Show 1 item for message, or actual record count
+              itemCount: (_errorMessage.isNotEmpty || _recentSubjectRecords.isEmpty) ? 1 : _recentSubjectRecords.length,
+              itemBuilder: (context, index) {
+                // Handle Error Message
+                if (_errorMessage.isNotEmpty) {
+                  return Container(
+                    width: double.infinity, padding: EdgeInsets.all(rPadding),
+                    margin: EdgeInsets.only(bottom: 8 * scale), // Add margin like Card
+                    decoration: BoxDecoration( color: _getCardColor(context), borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.redAccent.withOpacity(0.7)) ),
+                    child: Center( child: Text( _errorMessage, style: TextStyle(color: _isDarkMode(context) ? Colors.redAccent[100] : Colors.red[700], fontSize: 14 * scale), textAlign: TextAlign.center, ), ),
+                  );
+                }
+                // Handle No Records Found
+                else if (_recentSubjectRecords.isEmpty) {
+                  return Container(
+                    width: double.infinity, padding: EdgeInsets.all(rPadding),
+                    margin: EdgeInsets.only(bottom: 8 * scale), // Add margin like Card
+                    decoration: BoxDecoration( color: _getCardColor(context), borderRadius: BorderRadius.circular(12), border: Border.all(color: _getGridColor(context)) ),
+                    child: Center( child: Text( 'No recent attendance records found.', style: TextStyle(color: _getSecondaryTextColor(context), fontSize: 14 * scale), textAlign: TextAlign.center, ), ),
+                  );
+                }
+                // Build Actual Record Item
+                else {
+                  // Ensure index is within bounds (should be, due to itemCount logic)
+                  if (index >= _recentSubjectRecords.length) return const SizedBox.shrink(); // Safety net
 
-                return Card(
-                  margin: const EdgeInsets.only(bottom: 8),
-                  color: _getCardColor(context), // Pass context
-                  shadowColor: _isDarkMode(context) // Pass context
-                      ? Colors.black54
-                      : Colors.grey.withOpacity(0.2),
-                  child: ListTile(
-                    leading: Text('${date.day}/${date.month}',
-                        style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            color: _getTextColor(context))), // Pass context
-                    title: Text(_getDayName(date.weekday),
-                        style: TextStyle(color: _getTextColor(context))), // Pass context
-                    trailing: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: _getStatusColor(status).withOpacity(0.2),
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Text(
-                        status.toUpperCase(),
-                        style: TextStyle(
-                            color: _getStatusColor(status),
-                            fontWeight: FontWeight.bold,
-                            fontSize: 12),
+                  final record = _recentSubjectRecords[index];
+                  final dateStr = record['date']!;
+                  final dayName = record['dayName']!;
+                  final status = record['status']!;
+                  return Card(
+                    margin: EdgeInsets.only(bottom: 8 * scale),
+                    color: _getCardColor(context),
+                    shadowColor: _isDarkMode(context)
+                        ? Colors.black54
+                        : Colors.grey.withOpacity(0.2),
+                    child: ListTile(
+                      leading: Text(dateStr, style: TextStyle( fontWeight: FontWeight.bold, fontSize: 14 * scale, color: _getTextColor(context))),
+                      title: Text(dayName, style: TextStyle( color: _getTextColor(context), fontSize: 16 * scale)),
+                      trailing: Container(
+                        padding: EdgeInsets.symmetric( horizontal: 8 * scale, vertical: 4 * scale),
+                        decoration: BoxDecoration( color: _getStatusColor(status).withOpacity(0.2), borderRadius: BorderRadius.circular(20), ),
+                        child: Text( status.toUpperCase(), style: TextStyle( color: _getStatusColor(status), fontWeight: FontWeight.bold, fontSize: 12 * scale), ),
                       ),
                     ),
-                  ),
-                );
+                  );
+                }
               },
             ),
-            const SizedBox(height: 20),
+            SizedBox(height: 20 * scale),
 
             // Recommendations Card
             Text('Recommendations',
                 style: TextStyle(
-                    fontSize: 18,
+                    fontSize: 18 * scale,
                     fontWeight: FontWeight.bold,
-                    color: _getTextColor(context))), // Pass context
-            const SizedBox(height: 16),
+                    color: _getTextColor(context))),
+            SizedBox(height: 16 * scale),
             Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: _isDarkMode(context) // Pass context
-                    ? primaryBlue.withOpacity(0.2)
-                    : Colors.blue.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Column(
-                children: [
-                  _buildRecommendationItem(context, 'Attendance Goal', // Pass context
-                      'Try to maintain at least 85% attendance', Icons.flag, primaryBlue),
-                  const SizedBox(height: 12),
-                  _buildRecommendationItem(context, 'Study Time', // Pass context
-                      'Allocate extra time for ${subjectName.toLowerCase()}', Icons.schedule, Colors.green),
-                  const SizedBox(height: 12),
-                  _buildRecommendationItem(
-                    context, // Pass context
-                    'Performance',
-                    attendancePercentage < 75
-                        ? 'Your attendance is below average. Focus on improving.'
-                        : 'Good attendance! Keep it up.',
-                    attendancePercentage < 75 ? Icons.warning : Icons.thumb_up,
-                    attendancePercentage < 75 ? Colors.orange : Colors.green,
-                  ),
-                ],
-              ),
+              width: double.infinity, padding: EdgeInsets.all(rPadding),
+              decoration: BoxDecoration( color: _isDarkMode(context) ? SubjectAttendanceDetail.primaryBlue.withOpacity(0.2) : Colors.blue.withOpacity(0.1), borderRadius: BorderRadius.circular(12), ),
+              child: Column( children: [
+                _buildRecommendationItem(context, 'Attendance Goal', 'Try to maintain at least 85% attendance', Icons.flag, goalIconColor, scale),
+                SizedBox(height: 12 * scale),
+                _buildRecommendationItem(context, 'Study Time', 'Allocate extra time for ${widget.subjectName.toLowerCase()}', Icons.schedule, Colors.green, scale),
+                SizedBox(height: 12 * scale),
+                _buildRecommendationItem( context, 'Performance', widget.attendancePercentage < 75 ? 'Your attendance is below average. Focus on improving.' : 'Good attendance! Keep it up.', widget.attendancePercentage < 75 ? Icons.warning : Icons.thumb_up, widget.attendancePercentage < 75 ? Colors.orange : Colors.green, scale ),
+              ], ),
             ),
           ],
         ),
