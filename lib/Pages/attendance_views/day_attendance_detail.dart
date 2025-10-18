@@ -1,3 +1,4 @@
+// day_attendance_detail.dart
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
@@ -6,18 +7,19 @@ import '../../components/theme_toggle_button.dart';
 
 class DayAttendanceDetail extends StatefulWidget {
   final DateTime selectedDate;
+  // This data is now {'hour1': 'present', 'hour2': 'absent', ...}
   final Map<String, String> attendanceData;
-  // ✅ Accepts the real timetable and course map data
-  final List<dynamic> timetable;
+  final List<dynamic> timetable; // Normalized timetable
   final List<dynamic> courseMap;
+  final String regNo;
 
   const DayAttendanceDetail({
     Key? key,
     required this.selectedDate,
     required this.attendanceData,
-    // ✅ Added to the constructor
     required this.timetable,
     required this.courseMap,
+    required this.regNo,
   }) : super(key: key);
 
   @override
@@ -28,66 +30,119 @@ class _DayAttendanceDetailState extends State<DayAttendanceDetail> {
   final Map<String, bool> _checkboxStates = {};
   static const Color primaryBlue = Color(0xFF1e3a8a);
 
+  // ✅ **THIS MAP IS NOW CORRECT**
+  // Maps hour keys to display times, matching the parent.
+  static const Map<String, String> _hourKeyToTime = {
+    'hour1': '08:45 AM - 09:45 AM',
+    'hour2': '09:45 AM - 10:45 AM',
+    'hour3': '11:00 AM - 12:00 PM',
+    'hour4': '12:00 PM - 01:00 PM',
+    'hour5': '01:00 PM - 02:00 PM', // Matches the parent's assumption
+    'hour6': '02:00 PM - 03:00 PM', // Matches the parent's assumption
+    'hour7': '03:15 PM - 04:15 PM', // Matches the parent's assumption
+    'hour8': '04:15 PM - 05:15 PM', // Matches the parent's assumption
+    // Adjust if necessary based on real data
+  };
+
+  late final List<Map<String, String>> _scheduledClasses;
+  late final Map<String, String> _codeToNameMap;
+
   @override
   void initState() {
     super.initState();
-    widget.attendanceData.forEach((subject, status) {
-      if (status.toLowerCase() == 'absent') {
-        _checkboxStates[subject] = false;
+
+    try {
+      // Build course code → name map
+      _codeToNameMap = {
+        for (var course in widget.courseMap)
+          if (course is Map && course['courseCode'] != null && course['courseName'] != null)
+            course['courseCode'].toString().trim().toUpperCase():
+            course['courseName'].toString().trim(),
+      };
+
+      _scheduledClasses = _getScheduledClassesForDay();
+
+      // Pre-fill checkbox states
+      for (var classData in _scheduledClasses) {
+        if (classData['status'] == 'absent') {
+          // Use a unique key for the checkbox map (subject + time)
+          _checkboxStates[classData['subject']! + classData['time']!] = false;
+        }
+      }
+
+    } catch (e) {
+      print("Error in DayAttendanceDetail initState: $e");
+      _scheduledClasses = [];
+      _codeToNameMap = {};
+    }
+  }
+
+  // ✅ This logic now loops over the corrected map keys
+  List<Map<String, String>> _getScheduledClassesForDay() {
+    final List<Map<String, String>> classes = [];
+    final dayOfWeek = DateFormat('EEEE').format(widget.selectedDate).toLowerCase();
+
+    // Find the timetable entry for this day
+    final dayTimetable = widget.timetable.firstWhere(
+          (d) => d is Map && d['day']?.toString().toLowerCase() == dayOfWeek,
+      orElse: () => <String, dynamic>{},
+    );
+
+    if (dayTimetable.isEmpty) return [];
+
+    // Loop over the _hourKeyToTime map's keys
+    for (final hourKey in _hourKeyToTime.keys) {
+
+      // Get the scheduled course codes for this hour (e.g., "ICT302")
+      final rawSlotData = dayTimetable[hourKey]?.toString().trim();
+
+      // Get the attendance status for this hour (e.g., "A")
+      final status = widget.attendanceData[hourKey] ?? 'not updated';
+
+      // Only show if there's a scheduled class
+      if (rawSlotData != null && rawSlotData.isNotEmpty) {
+
+        final timeString = _hourKeyToTime[hourKey] ?? 'All Day';
+
+        final individualRawCodes = rawSlotData.split(',');
+        for (final rawCode in individualRawCodes) {
+
+          final cleanedCode = rawCode.trim().toUpperCase();
+          if (cleanedCode.isEmpty) continue;
+
+          final subjectName = _codeToNameMap[cleanedCode] ?? cleanedCode;
+
+          classes.add({
+            'code': cleanedCode,
+            'subject': subjectName,
+            'time': timeString,
+            'status': status,
+          });
+        }
+      }
+    }
+
+    // Sort the classes by their time
+    classes.sort((a, b) {
+      try {
+        final timeA = DateFormat('h:mm a').parse(a['time']!.split(' - ')[0]);
+        final timeB = DateFormat('h:mm a').parse(b['time']!.split(' - ')[0]);
+        return timeA.compareTo(timeB);
+      } catch (e) {
+        return 0; // Should not happen with consistent time formats
       }
     });
+
+    return classes;
   }
 
-  Color _getTextColor(BuildContext context) =>
-      Provider.of<ThemeProvider>(context).isDarkMode
-          ? Colors.white
-          : Colors.black;
-  Color _getSecondaryTextColor(BuildContext context) =>
-      Provider.of<ThemeProvider>(context).isDarkMode
-          ? Colors.white70
-          : Colors.grey[600]!;
-  Color _getCardColor(BuildContext context) =>
-      Provider.of<ThemeProvider>(context).isDarkMode
-          ? const Color(0xFF1E1E1E)
-          : Colors.white;
-  Color _getAppBarColor(BuildContext context) =>
-      Provider.of<ThemeProvider>(context).isDarkMode
-          ? Colors.black12
-          : primaryBlue;
-
-  Color _getOverallStatusColor() {
-    if (widget.attendanceData.values.any((s) => s == 'absent'))
-      return Colors.red;
-    if (widget.attendanceData.values.any((s) => s == 'OD'))
-      return Colors.orange;
-    return Colors.green;
-  }
-
-  IconData _getOverallStatusIcon() {
-    if (widget.attendanceData.values.any((s) => s == 'absent'))
-      return Icons.cancel;
-    if (widget.attendanceData.values.any((s) => s == 'OD'))
-      return Icons.access_time;
-    return Icons.check_circle;
-  }
-
-  String _getOverallStatusText() {
-    if (widget.attendanceData.values.any((s) => s == 'absent'))
-      return 'PARTIAL';
-    if (widget.attendanceData.values.any((s) => s == 'OD')) return 'OD';
-    return 'PRESENT';
-  }
 
   Color _getStatusColor(String status) {
-    switch (status) {
-      case 'present':
-        return Colors.green;
-      case 'absent':
-        return Colors.red;
-      case 'OD':
-        return Colors.orange;
-      default:
-        return Colors.grey;
+    switch (status.toLowerCase()) {
+      case 'present': return Colors.green;
+      case 'absent': return Colors.red;
+      case 'od': return Colors.orange;
+      default: return Colors.grey;
     }
   }
 
@@ -97,138 +152,92 @@ class _DayAttendanceDetailState extends State<DayAttendanceDetail> {
   }
 
   String _getInsightMessage() {
-    int absentCount =
-        widget.attendanceData.values.where((s) => s == 'absent').length;
-    int odCount = widget.attendanceData.values.where((s) => s == 'OD').length;
-    if (absentCount > 0)
-      return 'You missed $absentCount class(es) today. Make sure to catch up on the material you missed.';
-    if (odCount > 0)
-      return 'You were on OD for $odCount class(es) today. Make sure to complete any pending work.';
-    return 'Great job! You attended all your classes today. Keep up the good work!';
-  }
-
-  // ✅ NEW: Helper to convert hour period to a time string
-  String _getHourMapping(String hourPeriod) {
-    switch (hourPeriod) {
-      case 'hour1': return '09:00 AM - 09:50 AM';
-      case 'hour2': return '09:50 AM - 10:40 AM';
-      case 'hour3': return '10:55 AM - 11:45 AM';
-      case 'hour4': return '11:45 AM - 12:35 PM';
-      case 'hour5': return '01:30 PM - 02:20 PM';
-      case 'hour6': return '02:20 PM - 03:10 PM';
-      case 'hour7': return '03:25 PM - 04:15 PM';
-      case 'hour8': return '04:15 PM - 05:05 PM';
-      default: return 'Time not available';
-    }
-  }
-
-  // ✅ REWRITTEN: This method now performs a real lookup instead of using placeholders
-  String _getSubjectTime(String subjectName) {
-    // 1. Find the course code from the subject name using the courseMap
-    String courseCode = '';
-    for (var course in widget.courseMap) {
-      if (course['name'] == subjectName) {
-        courseCode = course['code'];
-        break;
-      }
-    }
-    // If the subject name from attendance doesn't have a matching code, we can't find its time
-    if (courseCode.isEmpty) return 'Time not available';
-
-    // 2. Find the day of the week for the selected date (e.g., "Monday")
-    final dayOfWeek = DateFormat('EEEE').format(widget.selectedDate);
-
-    // 3. Find the timetable entry for that specific day
-    final dayTimetable = widget.timetable.firstWhere(
-            (day) => (day['day'] as String).toLowerCase() == dayOfWeek.toLowerCase(),
-        orElse: () => null);
-
-    if (dayTimetable == null) return 'No classes on this day';
-
-    // 4. Loop through the hours of that day to find a match with the course code
-    for (var i = 1; i <= 8; i++) {
-      final hourKey = 'hour$i';
-      if (dayTimetable[hourKey] == courseCode) {
-        // 5. If a match is found, convert the hour key to a readable time string
-        return _getHourMapping(hourKey);
-      }
+    if (!mounted || _scheduledClasses.isEmpty) {
+      return 'No classes scheduled for today!';
     }
 
-    return 'Time not available';
+    int absentCount = _scheduledClasses.where((c) => c['status'] == 'absent').length;
+    int odCount = _scheduledClasses.where((c) => c['status'] == 'od').length;
+    bool pending = _scheduledClasses.any((c) => c['status'] == 'not updated');
+
+    if (absentCount > 0) return 'You missed $absentCount class(es) today.';
+    if (odCount > 0) return 'You were on OD for $odCount class(es) today.';
+    if (pending) return 'Some classes are still pending update.';
+
+    return 'You attended all your classes today!';
   }
 
-  bool _isDarkMode(BuildContext context) {
-    return Theme.of(context).brightness == Brightness.dark;
-  }
+  bool _isDarkMode(BuildContext context) =>
+      Provider.of<ThemeProvider>(context).isDarkMode;
 
   @override
   Widget build(BuildContext context) {
-    final themeProvider = Provider.of<ThemeProvider>(context);
-    final isDark = themeProvider.isDarkMode;
-    String formattedDate =
-    DateFormat('dd MMMM, yyyy').format(widget.selectedDate);
-    final odreasoncontroller = TextEditingController();
+    final isDark = _isDarkMode(context);
+    final scale = MediaQuery.of(context).textScaler.scale(1.0);
 
     return Scaffold(
       backgroundColor: isDark ? const Color(0xFF121212) : Colors.white,
       appBar: AppBar(
-        title: Text(formattedDate, style: const TextStyle(color: Colors.white)),
-        backgroundColor: _getAppBarColor(context),
-        elevation: 0,
+        title: Text(
+          DateFormat('dd MMMM, yyyy').format(widget.selectedDate),
+          style: const TextStyle(color: Colors.white),
+        ),
+        backgroundColor: isDark ? Colors.black12 : primaryBlue,
         iconTheme: const IconThemeData(color: Colors.white),
         actions: [
           Padding(
             padding: const EdgeInsets.only(right: 16),
             child: ThemeToggleButton(
-                isDarkMode: isDark, onToggle: themeProvider.toggleTheme),
+              isDarkMode: isDark,
+              onToggle: Provider.of<ThemeProvider>(context, listen: false).toggleTheme,
+            ),
           ),
         ],
       ),
       body: Column(
         children: [
-          _buildOverallStatusCard(context),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Align(
-              alignment: Alignment.centerLeft,
-              child: Text(
-                'Subject-wise Attendance',
-                style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: _getTextColor(context)),
-              ),
-            ),
-          ),
           const SizedBox(height: 8),
           Expanded(
             child: ListView.builder(
               padding: const EdgeInsets.symmetric(horizontal: 16),
-              itemCount: widget.attendanceData.length,
+              itemCount: _scheduledClasses.length,
               itemBuilder: (context, index) {
-                final subject = widget.attendanceData.keys.elementAt(index);
-                final status = widget.attendanceData[subject]!;
-                final isChecked = _checkboxStates[subject] ?? false;
+                final classData = _scheduledClasses[index];
+                final subject = classData['subject']!;
+                final status = classData['status']!;
+                final time = classData['time']!;
+                // final code = classData['code']!; // We have this if needed
+
+                final checkboxKey = subject + time;
+                final isChecked = _checkboxStates[checkboxKey] ?? false;
 
                 return Card(
                   margin: const EdgeInsets.only(bottom: 8),
                   elevation: 2,
-                  color: _getCardColor(context),
-                  shadowColor:
-                  isDark ? Colors.black54 : Colors.grey.withOpacity(0.2),
+                  color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
                   child: ListTile(
                     leading: CircleAvatar(
                       backgroundColor: _getSubjectColor(subject),
-                      child: Text(subject.substring(0, 1),
-                          style: const TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.bold)),
+                      child: Text(
+                        subject.substring(0, 1),
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16 * scale,
+                        ),
+                      ),
                     ),
-                    title: Text(subject,
-                        style: TextStyle(color: _getTextColor(context))),
-                    subtitle: Text(_getSubjectTime(subject),
-                        style:
-                        TextStyle(color: _getSecondaryTextColor(context))),
+                    title: Text(
+                      subject,
+                      style: TextStyle(
+                        color: isDark ? Colors.white : Colors.black,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    subtitle: Text(
+                        time, // Only show the time
+                        style: TextStyle(
+                            color: isDark ? Colors.white70 : Colors.grey[600])),
                     trailing: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
@@ -242,17 +251,18 @@ class _DayAttendanceDetailState extends State<DayAttendanceDetail> {
                           child: Text(
                             status.toUpperCase(),
                             style: TextStyle(
-                                color: _getStatusColor(status),
-                                fontWeight: FontWeight.bold,
-                                fontSize: 12),
+                              color: _getStatusColor(status),
+                              fontWeight: FontWeight.bold,
+                              fontSize: 12 * scale,
+                            ),
                           ),
                         ),
-                        if (status.toLowerCase() == 'absent')
+                        if (status == 'absent')
                           Checkbox(
                             value: isChecked,
                             onChanged: (bool? newValue) {
                               setState(() {
-                                _checkboxStates[subject] = newValue ?? false;
+                                _checkboxStates[checkboxKey] = newValue ?? false;
                               });
                             },
                             activeColor:
@@ -265,35 +275,6 @@ class _DayAttendanceDetailState extends State<DayAttendanceDetail> {
               },
             ),
           ),
-          if (_checkboxStates.values.any((value) => value))
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(16),
-              margin: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: _isDarkMode(context)
-                    ? primaryBlue.withOpacity(0.2)
-                    : Colors.blue.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: TextFormField(
-                controller: odreasoncontroller,
-                decoration: InputDecoration(
-                    label: const Text("Reason for OD"),
-                    suffixIcon: IconButton(
-                        onPressed: () {
-                          //integrate with firebase
-                          null;
-                        },
-                        icon: const Icon(Icons.send_rounded))),
-                validator: (value) {
-                  if (value == null || value.isEmpty) {
-                    return "Error";
-                  }
-                  return null;
-                },
-              ),
-            ),
           Container(
             width: double.infinity,
             padding: const EdgeInsets.all(16),
@@ -304,57 +285,13 @@ class _DayAttendanceDetailState extends State<DayAttendanceDetail> {
                   : Colors.blue.withOpacity(0.1),
               borderRadius: BorderRadius.circular(12),
             ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Attendance Insights',
-                  style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: _getTextColor(context)),
-                ),
-                const SizedBox(height: 8),
-                Text(_getInsightMessage(),
-                    style:
-                    TextStyle(fontSize: 14, color: _getTextColor(context))),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildOverallStatusCard(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(16),
-      margin: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: _getOverallStatusColor().withOpacity(0.2),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Column(
-        children: [
-          Text('Overall Status',
+            child: Text(
+              _getInsightMessage(),
               style: TextStyle(
-                  fontSize: 16, color: _getSecondaryTextColor(context))),
-          const SizedBox(height: 8),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(_getOverallStatusIcon(),
-                  color: _getOverallStatusColor(), size: 32),
-              const SizedBox(width: 8),
-              Text(
-                _getOverallStatusText(),
-                style: TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
-                    color: _getOverallStatusColor()),
+                fontSize: 14 * scale,
+                color: isDark ? Colors.white : Colors.black,
               ),
-            ],
+            ),
           ),
         ],
       ),

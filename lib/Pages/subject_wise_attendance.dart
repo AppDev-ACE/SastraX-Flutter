@@ -1,11 +1,9 @@
-import 'dart:convert';
+// subject_wise_attendance_page.dart
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
 
-import '../services/ApiEndpoints.dart';
+// Import your models/components
 import '../models/theme_model.dart';
 import '../components/theme_toggle_button.dart';
 import 'attendance_views/monthly_view.dart';
@@ -18,7 +16,6 @@ class SubjectWiseAttendancePage extends StatefulWidget {
   final String url;
   final List<dynamic> initialSubjectAttendance;
   final List<dynamic> initialHourWiseAttendance;
-  // ✅ ACCEPT THE NEW DATA
   final List<dynamic> timetable;
   final List<dynamic> courseMap;
 
@@ -29,24 +26,22 @@ class SubjectWiseAttendancePage extends StatefulWidget {
     required this.url,
     required this.initialSubjectAttendance,
     required this.initialHourWiseAttendance,
-    // ✅ ADD TO CONSTRUCTOR
     required this.timetable,
     required this.courseMap,
   }) : super(key: key);
 
   @override
-  State<SubjectWiseAttendancePage> createState() => _SubjectWiseAttendancePageState();
+  State<SubjectWiseAttendancePage> createState() =>
+      _SubjectWiseAttendancePageState();
 }
 
-class _SubjectWiseAttendancePageState extends State<SubjectWiseAttendancePage> with TickerProviderStateMixin {
+class _SubjectWiseAttendancePageState
+    extends State<SubjectWiseAttendancePage> with TickerProviderStateMixin {
   late TabController _tabController;
-  late final ApiEndpoints _api;
-
-  bool _isLoading = false;
-  String? _error;
 
   Map<DateTime, Map<String, String>> _attendanceData = {};
   Map<String, Map<String, dynamic>> _subjectAttendance = {};
+  List<Map<String, dynamic>> _normalizedTimetable = [];
   int _currentStreak = 0;
 
   static const Color primaryBlue = Color(0xFF1e3a8a);
@@ -54,7 +49,6 @@ class _SubjectWiseAttendancePageState extends State<SubjectWiseAttendancePage> w
   @override
   void initState() {
     super.initState();
-    _api = ApiEndpoints(widget.url);
     _tabController = TabController(length: 3, vsync: this);
     _tabController.addListener(() => setState(() {}));
 
@@ -70,102 +64,116 @@ class _SubjectWiseAttendancePageState extends State<SubjectWiseAttendancePage> w
     super.dispose();
   }
 
-  Future<void> _fetchFromApi() async {
-    if (!mounted) return;
-    setState(() { _isLoading = true; _error = null; });
-    try {
-      await Future.wait([
-        http.post(
-          Uri.parse('${widget.url}/subjectWiseAttendance'),
-          headers: {'Content-Type': 'application/json'},
-          body: jsonEncode({'token': widget.token, 'refresh': true}),
-        ),
-        http.post(
-          Uri.parse('${widget.url}/hourWiseAttendance'),
-          headers: {'Content-Type': 'application/json'},
-          body: jsonEncode({'token': widget.token, 'refresh': true}),
-        ),
-      ]);
-      final docRef = FirebaseFirestore.instance.collection('studentDetails').doc(widget.regNo);
-      final freshDoc = await docRef.get();
-      if (freshDoc.exists && freshDoc.data() != null) {
-        final data = freshDoc.data()!;
-        _processData(
-          subjectData: data['subjectWiseAttendance'] ?? [],
-          hourData: data['hourWiseAttendance'] ?? [],
-        );
-      } else {
-        throw Exception("Failed to find refreshed data.");
-      }
-    } catch (e) {
-      if (mounted) setState(() => _error = "Failed to refresh: $e");
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
-    }
-  }
-
+  /// ✅ **FINAL, CORRECT DATA PROCESSING LOGIC**
   void _processData({required List<dynamic> subjectData, required List<dynamic> hourData}) {
-    final newSubjectAttendance = <String, Map<String, dynamic>>{};
-    final codeToNameMap = <String, String>{};
+    // Step 1: Normalize the timetable
+    final List<Map<String, dynamic>> normalized = [];
+    final Map<String, String> dayAbbreviationMap = {
+      "Mon": "Monday", "Tue": "Tuesday", "Wed": "Wednesday",
+      "Thu": "Thursday", "Fri": "Friday", "Sat": "Saturday",
+    };
 
-    for (var item in subjectData) {
-      final subjectName = item['subject'] as String? ?? 'Unknown';
-      final courseCode = item['code'] as String? ?? '';
-      if (subjectName != 'Unknown' && courseCode.isNotEmpty) {
-        codeToNameMap[courseCode] = subjectName;
+    // Correct Mapping
+    final Map<String, String> slotToHourKeyMap = {
+      "08:45 - 09:45": "hour1",
+      "09:45 - 10:45": "hour2",
+      "11:00 - 12:00": "hour3",
+      "12:00 - 01:00": "hour4",
+      "01:00 - 02:00": "hour5", // Assuming 1-2 PM maps to hour5
+      "02:00 - 03:00": "hour6", // Assuming 2-3 PM maps to hour6
+      "03:15 - 04:15": "hour7", // Assuming 3:15-4:15 PM maps to hour7
+      "04:15 - 05:15": "hour8", // Assuming 4:15-5:15 PM maps to hour8
+      // Adjust if necessary
+    };
+
+    for (var dayEntry in widget.timetable) {
+      if (dayEntry is! Map) continue;
+      final String dayAbbr = dayEntry['day']?.toString() ?? '';
+      final Map<String, dynamic> newDay = {'day': dayAbbreviationMap[dayAbbr] ?? dayAbbr};
+
+      for (final entry in slotToHourKeyMap.entries) {
+        final timeSlotKey = entry.key;
+        final hourKey = entry.value;
+        final rawSlotData = dayEntry[timeSlotKey]?.toString();
+
+        if (rawSlotData != null &&
+            rawSlotData.isNotEmpty &&
+            rawSlotData.trim() != 'N/A' &&
+            rawSlotData.trim().toLowerCase() != 'break') {
+          final individualRawCodes = rawSlotData.split(',');
+          List<String> cleanedCodes = [];
+          for (final rawCode in individualRawCodes) {
+            final cleanedCode = rawCode
+                .trim()
+                .replaceAll(RegExp(r'\((.*?)\)'), '')
+                .replaceAll(RegExp(r'-[A-Z0-9]+$'), '')
+                .trim()
+                .toUpperCase();
+            if (cleanedCode.isNotEmpty) {
+              cleanedCodes.add(cleanedCode);
+            }
+          }
+          newDay[hourKey] = cleanedCodes.join(',');
+        }
       }
-      newSubjectAttendance[subjectName] = {
-        'percentage': double.tryParse(item['percentage']?.toString() ?? '0.0') ?? 0.0,
-        'totalClasses': int.tryParse(item['totalHrs']?.toString() ?? '0') ?? 0,
-        'present': int.tryParse(item['presentHrs']?.toString() ?? '0') ?? 0,
-        'absent': int.tryParse(item['absentHrs']?.toString() ?? '0') ?? 0,
-        'od': 0,
-      };
+      normalized.add(newDay);
     }
+    setState(() => _normalizedTimetable = normalized);
 
+    // Step 2: Process hour-wise data
     final newAttendanceData = <DateTime, Map<String, String>>{};
-    final hourKeys = ['hour1', 'hour2', 'hour3', 'hour4', 'hour5', 'hour6', 'hour7', 'hour8'];
-
     for (var dayData in hourData) {
+      if (dayData is! Map || dayData['dateDay'] == null) continue;
       try {
-        final dateStringWithDay = dayData['dateDay'] as String?;
-        if (dateStringWithDay == null) continue;
-
-        final dateString = dateStringWithDay.split(' ')[0];
+        final dateString = (dayData['dateDay'] as String).split(' ')[0];
         final date = DateFormat('dd-MMM-yyyy').parse(dateString);
         final dayKey = DateTime(date.year, date.month, date.day);
-
-        final dailyAttendance = <String, String>{};
-        for (var hourKey in hourKeys) {
-          final statusData = dayData[hourKey] as String? ?? '';
-          if (statusData.isEmpty) continue;
-
-          final match = RegExp(r'([PA])\((.*?)\)').firstMatch(statusData);
-          if (match != null) {
-            final status = match.group(1) == 'P' ? 'present' : 'absent';
-            final courseCode = match.group(2) ?? '';
-            final subjectName = codeToNameMap[courseCode] ?? courseCode;
-            dailyAttendance[subjectName] = status;
-          }
-          else if (statusData.toUpperCase() == 'P') {
-            dailyAttendance['Class ${hourKey.substring(4)}'] = 'present';
-          } else if (statusData.toUpperCase() == 'A') {
-            dailyAttendance['Class ${hourKey.substring(4)}'] = 'absent';
-          } else if (statusData.toUpperCase() == 'OD') {
-            dailyAttendance['On-Duty'] = 'OD';
+        final Map<String, String> hourMap = {};
+        for (final hourKey in slotToHourKeyMap.values) {
+          final status = dayData[hourKey]?.toString() ?? '';
+          if (status.isNotEmpty) {
+            switch (status.toUpperCase()) {
+              case 'P': hourMap[hourKey] = 'present'; break;
+              case 'A': hourMap[hourKey] = 'absent'; break;
+              case 'OD': hourMap[hourKey] = 'OD'; break;
+            }
           }
         }
-        if(dailyAttendance.isNotEmpty) newAttendanceData[dayKey] = dailyAttendance;
+        if (hourMap.isNotEmpty) {
+          newAttendanceData[dayKey] = hourMap;
+        }
       } catch (e) {
-        debugPrint("Error parsing data for entry: ${dayData['dateDay']} - $e");
+        debugPrint("Error parsing hour data for ${dayData['dateDay']}: $e");
       }
     }
+    setState(() => _attendanceData = newAttendanceData);
 
-    setState(() {
-      _subjectAttendance = newSubjectAttendance;
-      _attendanceData = newAttendanceData;
-      _calculateCurrentStreak();
-    });
+    // Step 3: Process subject summary (✅ OD count is now included)
+    final newSubjectAttendance = <String, Map<String, dynamic>>{};
+    for (var item in subjectData) {
+      if (item is! Map) continue;
+      final subjectName = item['subject'] as String? ?? 'Unknown';
+
+      // Safely parse counts, defaulting to 0
+      final totalClasses = int.tryParse(item['totalHrs']?.toString() ?? '0') ?? 0;
+      final present = int.tryParse(item['presentHrs']?.toString() ?? '0') ?? 0;
+      final absent = int.tryParse(item['absentHrs']?.toString() ?? '0') ?? 0;
+
+      // Calculate OD count
+      final odCount = (totalClasses - present - absent).clamp(0, totalClasses);
+
+      newSubjectAttendance[subjectName] = {
+        'percentage': double.tryParse(item['percentage']?.toString() ?? '0.0') ?? 0.0,
+        'totalClasses': totalClasses,
+        'present': present,
+        'absent': absent,
+        'od': odCount, // Add the calculated OD count here
+      };
+    }
+    setState(() => _subjectAttendance = newSubjectAttendance);
+
+    // Step 4: Calculate streak
+    _calculateCurrentStreak();
   }
 
   bool _isDayPresentOrOd(DateTime day) {
@@ -177,19 +185,7 @@ class _SubjectWiseAttendancePageState extends State<SubjectWiseAttendancePage> w
   void _calculateCurrentStreak() {
     final sortedDates = _attendanceData.keys.toList()..sort((a, b) => b.compareTo(a));
     if (sortedDates.isEmpty) {
-      setState(() => _currentStreak = 0);
-      return;
-    }
-    final today = DateTime.now();
-    final mostRecentAttendanceDay = sortedDates.first;
-    int daysDifference = today.difference(mostRecentAttendanceDay).inDays;
-
-    if (today.weekday == DateTime.monday && mostRecentAttendanceDay.weekday == DateTime.friday) {
-      daysDifference = 1;
-    }
-
-    if (daysDifference > 1 && !_isDayPresentOrOd(mostRecentAttendanceDay)) {
-      setState(() => _currentStreak = 0);
+      setState(() => _currentStreak = 0); // Use setState here
       return;
     }
 
@@ -201,9 +197,9 @@ class _SubjectWiseAttendancePageState extends State<SubjectWiseAttendancePage> w
           streak = 1;
         } else {
           final difference = previousDate.difference(date).inDays;
-          if (difference == 1) {
-            streak++;
-          } else if (previousDate.weekday == DateTime.monday && date.weekday == DateTime.friday && difference <= 3) {
+          if (difference == 1 ||
+              (previousDate.weekday == DateTime.monday &&
+                  date.weekday == DateTime.friday && difference <= 3)) {
             streak++;
           } else {
             break;
@@ -211,11 +207,12 @@ class _SubjectWiseAttendancePageState extends State<SubjectWiseAttendancePage> w
         }
         previousDate = date;
       } else {
-        break;
+        break; // Stop streak if a day is absent or missing
       }
     }
     setState(() => _currentStreak = streak);
   }
+
 
   @override
   Widget build(BuildContext context) {
@@ -223,6 +220,7 @@ class _SubjectWiseAttendancePageState extends State<SubjectWiseAttendancePage> w
     final isDark = themeProvider.isDarkMode;
     final screenWidth = MediaQuery.of(context).size.width;
     final double scaleFactor = screenWidth / 390.0;
+
     final double selectedFontSize = (15 * scaleFactor).clamp(12.0, 16.0);
     final double unselectedFontSize = (13 * scaleFactor).clamp(11.0, 14.0);
 
@@ -241,55 +239,48 @@ class _SubjectWiseAttendancePageState extends State<SubjectWiseAttendancePage> w
         ],
         bottom: TabBar(
           controller: _tabController,
-          isScrollable: true,
-          tabAlignment: TabAlignment.start,
+          isScrollable: false, // Make tabs fill width
+          tabAlignment: TabAlignment.fill, // Ensure they fill equally
           indicatorColor: Colors.white,
           labelColor: Colors.white,
           unselectedLabelColor: Colors.white70,
-          labelPadding: const EdgeInsets.symmetric(horizontal: 20.0),
           tabs: ['Monthly View', 'Subject View', 'Analytics']
               .asMap()
               .entries
               .map((entry) => Tab(
             child: Text(
               entry.value,
+              textAlign: TextAlign.center, // Center text within the tab
               style: TextStyle(
-                fontSize: _tabController.index == entry.key ? selectedFontSize : unselectedFontSize,
-                fontWeight: _tabController.index == entry.key ? FontWeight.bold : FontWeight.normal,
+                fontSize: _tabController.index == entry.key
+                    ? selectedFontSize
+                    : unselectedFontSize,
+                fontWeight: _tabController.index == entry.key
+                    ? FontWeight.bold
+                    : FontWeight.normal,
               ),
             ),
           ))
               .toList(),
         ),
       ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : _error != null
-          ? Center(child: Padding(padding: const EdgeInsets.all(16.0), child: Text(_error!)))
-          : TabBarView(
+      body: TabBarView(
         controller: _tabController,
         children: [
-          RefreshIndicator(
-            onRefresh: _fetchFromApi,
-            child: MonthlyView(
-              attendanceData: _attendanceData,
-              currentStreak: _currentStreak,
-              // ✅ PASS THE DATA DOWN TO THE MONTHLY VIEW
-              timetable: widget.timetable,
-              courseMap: widget.courseMap,
-            ),
+          MonthlyView(
+            attendanceData: _attendanceData,
+            currentStreak: _currentStreak,
+            timetable: _normalizedTimetable,
+            courseMap: widget.courseMap,
+            regNo: widget.regNo,
           ),
-          RefreshIndicator(
-            onRefresh: _fetchFromApi,
-            child: SubjectView(
-              subjectAttendance: _subjectAttendance,
-            ),
+          SubjectView(
+            // Pass the updated map which includes 'od'
+            subjectAttendance: _subjectAttendance,
           ),
-          RefreshIndicator(
-            onRefresh: _fetchFromApi,
-            child: AnalyticsView(
-              subjectAttendance: _subjectAttendance,
-            ),
+          AnalyticsView(
+            // Pass the updated map which includes 'od'
+            subjectAttendance: _subjectAttendance,
           ),
         ],
       ),

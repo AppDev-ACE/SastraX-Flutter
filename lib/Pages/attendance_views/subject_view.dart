@@ -33,7 +33,7 @@ class SubjectView extends StatelessWidget {
   }
 
   Color _getAttendanceColor(double percentage) {
-    if (percentage >= 85) return Colors.green;
+    if (percentage >= 80) return Colors.green;
     if (percentage >= 75) return Colors.orange;
     return Colors.red;
   }
