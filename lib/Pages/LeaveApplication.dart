@@ -290,12 +290,6 @@ class _LeaveApplicationScreenState extends State<LeaveApplicationScreen> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.end,
                       children: [
-                        TextButton.icon(
-                          onPressed: _refreshScreen,
-                          icon: const Icon(Icons.refresh, size: 20),
-                          label: const Text('REFRESH'),
-                          style: TextButton.styleFrom(foregroundColor: appColor),
-                        ),
                         const SizedBox(width: 16),
                         ElevatedButton.icon(
                           onPressed: _submitApplication,

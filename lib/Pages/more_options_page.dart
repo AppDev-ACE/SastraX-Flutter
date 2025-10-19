@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+// --- ADD THIS IMPORT ---
+import 'home_page.dart'; // Or the correct path to your HomePage file
+// -----------------------
 import 'LeaveApplication.dart';
 import 'about_team_screen.dart';
 import 'club_hub.dart';
@@ -11,12 +14,15 @@ class MoreOptionsScreen extends StatelessWidget {
   final String url;
   final String regNo;
 
+  // --- REMOVED initialSemGrades and initialCgpa from constructor ---
   const MoreOptionsScreen({
     super.key,
     required this.token,
     required this.url,
     required this.regNo,
   });
+  // -----------------------------------------------------------------
+
 
   static const List<Map<String, dynamic>> _options = [
     {
@@ -89,13 +95,43 @@ class MoreOptionsScreen extends StatelessWidget {
                 builder: (_) =>
                     InternalsPage(token: token, url: url, regNo: regNo)));
         break;
+
+    // --- MODIFIED CREDITS CASE ---
       case 'credits':
-        Navigator.push(
+      // 1. Access the static cache directly from DashboardScreen
+        final cache = DashboardScreen.dashboardCache;
+
+        // 2. Extract the data, providing empty lists as a safe fallback
+        final List<dynamic> semGrades = cache?['semGrades'] as List<dynamic>? ?? [];
+        final List<dynamic> cgpa = cache?['cgpa'] as List<dynamic>? ?? [];
+
+        // 3. Check if the necessary data is available in the cache
+        if (cache == null || semGrades.isEmpty || cgpa.isEmpty) {
+          // If data isn't loaded yet, inform the user.
+          ScaffoldMessenger.of(ctx).showSnackBar(
+            const SnackBar(
+              content: Text('Data not loaded yet. Please visit the Home screen first.'),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        } else {
+          // If data exists, navigate and pass it to CreditsScreen
+          Navigator.push(
             ctx,
             MaterialPageRoute(
-                builder: (_) =>
-                    CreditsScreen(token: token, url: url, regNo: regNo)));
+              builder: (_) => CreditsScreen(
+                token: token,
+                url: url,
+                regNo: regNo,
+                initialSemGrades: semGrades, // Pass the data from the cache
+                initialCgpa: cgpa,         // Pass the data from the cache
+              ),
+            ),
+          );
+        }
         break;
+    // --- END OF MODIFICATION ---
+
       case 'about_team':
         Navigator.push(
             ctx, MaterialPageRoute(builder: (_) => AboutTeamScreen()));

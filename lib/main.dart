@@ -57,7 +57,9 @@ class _AuthHandlerState extends State<AuthHandler> {
   Future<void> _restoreSession() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final token = prefs.getString('session_token');
+      // --- THIS IS THE FIX ---
+      final token = prefs.getString('authToken'); // Use 'authToken' key
+      // -----------------------
       final regNo = prefs.getString('regNo');
 
       // Debug logs
@@ -98,6 +100,8 @@ class _AuthHandlerState extends State<AuthHandler> {
       debugPrint("⚠️ Session check failed: $e");
       _goToLogin();
     } finally {
+      // In a real app, you might not need to set isLoading to false here
+      // since you're navigating away. But it's fine for now.
       if (mounted) setState(() => _isLoading = false);
     }
   }
@@ -112,11 +116,10 @@ class _AuthHandlerState extends State<AuthHandler> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    // This loading screen is only shown for a moment while checking the session.
+    return const Scaffold(
       body: Center(
-        child: _isLoading
-            ? const CircularProgressIndicator()
-            : const Text("Redirecting..."),
+        child: CircularProgressIndicator(),
       ),
     );
   }

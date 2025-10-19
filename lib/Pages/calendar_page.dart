@@ -15,40 +15,9 @@ class CalendarPage extends StatefulWidget {
   /// Static cache for Firebase events to prevent re-fetching.
   static Map<String, List<String>>? firebaseEventsCache;
 
-  @override
-  _CalendarPageState createState() => _CalendarPageState();
-}
-
-class _CalendarPageState extends State<CalendarPage> {
-  DateTime _selectedDay = DateTime.now();
-  DateTime _focusedDay = DateTime.now();
-  late SharedPreferences _prefs;
-  late String _storageKey;
-
-  // Local user notes, loaded from SharedPreferences
-  Map<String, List<String>> localEvents = {};
-
-  // Firebase events, initialized from static cache
-  Map<String, List<String>> _firebaseEvents = CalendarPage.firebaseEventsCache ?? {};
-  // Loading state based on cache status
-  bool _isFirebaseLoading = CalendarPage.firebaseEventsCache == null;
-
-  final TextEditingController _noteController = TextEditingController();
-  final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
-  FlutterLocalNotificationsPlugin();
-
-  // Color scheme
-  final Color _primaryBlue = const Color(0xFF1976D2);
-  final Color _lightBlue = const Color(0xFF42A5F5);
-  final Color _accentBlue = const Color(0xFF2196F3);
-  final Color _darkBlue = const Color(0xFF0D47A1);
-  final Color _navyBlue = const Color(0xFF0A2E5E);
-  final Color _white = Colors.white;
-  final Color _lightGrey = const Color(0xFFF5F5F5);
-  final Color _mediumGrey = const Color(0xFFE0E0E0);
-
+  // --- 1. MOVED HELPER METHOD AND MADE IT STATIC ---
   /// Helper to convert day abbreviations to full names.
-  String _expandDay(String dayAbbr) {
+  static String _expandDay(String dayAbbr) {
     const dayMap = {
       'Mon': 'Monday',
       'Tue': 'Tuesday',
@@ -64,62 +33,12 @@ class _CalendarPageState extends State<CalendarPage> {
     return dayMap[key] ?? dayAbbr;
   }
 
-  @override
-  void initState() {
-    super.initState();
-    final safeToken = widget.token ?? '';
-    _storageKey = 'calendar_events_$safeToken';
-    _initNotifications(); // Initialize notifications
-    _loadAllEvents(); // Load events (checks cache first)
-  }
-
-  /// Initializes the local notifications plugin.
-  Future<void> _initNotifications() async {
-    tz.initializeTimeZones();
-    const AndroidInitializationSettings initializationSettingsAndroid =
-    AndroidInitializationSettings('@mipmap/ic_launcher');
-
-    // **UPDATED:** Explicitly request default permissions during iOS initialization.
-    const DarwinInitializationSettings initializationSettingsIOS =
-    DarwinInitializationSettings(
-      requestAlertPermission: true,
-      requestBadgePermission: true,
-      requestSoundPermission: true,
-      // defaultPresentAlert: true,
-      // defaultPresentBadge: true,
-      // defaultPresentSound: true,
-    );
-
-    const InitializationSettings initializationSettings = InitializationSettings(
-      android: initializationSettingsAndroid,
-      iOS: initializationSettingsIOS,
-    );
-    await flutterLocalNotificationsPlugin.initialize(initializationSettings);
-  }
-
-
-  /// Loads all event data, checking the cache first for Firebase events.
-  Future<void> _loadAllEvents() async {
-    // Only fetch from Firebase if the cache is empty
-    if (CalendarPage.firebaseEventsCache == null) {
-      if (mounted) setState(() => _isFirebaseLoading = true);
-      await Future.wait([
-        _loadLocalEvents(),
-        _loadFirebaseEvents(), // Fetches and fills the cache
-      ]);
-      if (mounted) setState(() => _isFirebaseLoading = false);
-    } else {
-      // Firebase data is cached, just load local notes
-      await _loadLocalEvents();
-      if (mounted) setState(() {}); // Render local events
-    }
-  }
-
+  // --- 2. MOVED FETCH METHOD AND MADE IT STATIC ---
   /// Fetches academic calendar events from Firebase and populates the cache.
-  Future<void> _loadFirebaseEvents() async {
-    // Safety check (shouldn't be needed due to _loadAllEvents logic)
+  /// [context] is optional. If provided, it will show a SnackBar on failure.
+  static Future<void> loadFirebaseEvents([BuildContext? context]) async {
+    // Only fetch if the cache is empty
     if (CalendarPage.firebaseEventsCache != null) {
-      _firebaseEvents = CalendarPage.firebaseEventsCache!;
       return;
     }
 
@@ -150,7 +69,7 @@ class _CalendarPageState extends State<CalendarPage> {
         final matchDay = dayRegex.firstMatch(eventDesc);
         if (matchDay != null) {
           final dayAbbr = matchDay.group(1)!;
-          finalEventDesc = _expandDay(dayAbbr);
+          finalEventDesc = _expandDay(dayAbbr); // Use static helper
         } else {
           final matchEvent = eventRegex.firstMatch(eventDesc);
           if (matchEvent != null) {
@@ -167,11 +86,11 @@ class _CalendarPageState extends State<CalendarPage> {
         }
       });
 
-      // Populate both the state and the static cache
-      _firebaseEvents = fetchedEvents;
+      // Populate the static cache
       CalendarPage.firebaseEventsCache = fetchedEvents;
     } catch (e) {
-      if (mounted) {
+      // Only show snackbar if context was provided
+      if (context != null && context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Failed to load academic calendar: $e'),
@@ -181,6 +100,93 @@ class _CalendarPageState extends State<CalendarPage> {
       }
     }
   }
+
+
+  @override
+  _CalendarPageState createState() => _CalendarPageState();
+}
+
+class _CalendarPageState extends State<CalendarPage> {
+  DateTime _selectedDay = DateTime.now();
+  DateTime _focusedDay = DateTime.now();
+  late SharedPreferences _prefs;
+  late String _storageKey;
+
+  // Local user notes, loaded from SharedPreferences
+  Map<String, List<String>> localEvents = {};
+
+  // Firebase events, initialized from static cache
+  // --- 3. SIMPLIFIED: READS DIRECTLY FROM CACHE ---
+  Map<String, List<String>> get _firebaseEvents => CalendarPage.firebaseEventsCache ?? {};
+  // Loading state based on cache status
+  bool _isFirebaseLoading = CalendarPage.firebaseEventsCache == null;
+
+  final TextEditingController _noteController = TextEditingController();
+  final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
+  FlutterLocalNotificationsPlugin();
+
+  // Color scheme
+  final Color _primaryBlue = const Color(0xFF1976D2);
+  final Color _lightBlue = const Color(0xFF42A5F5);
+  final Color _accentBlue = const Color(0xFF2196F3);
+  final Color _darkBlue = const Color(0xFF0D47A1);
+  final Color _navyBlue = const Color(0xFF0A2E5E);
+  final Color _white = Colors.white;
+  final Color _lightGrey = const Color(0xFFF5F5F5);
+  final Color _mediumGrey = const Color(0xFFE0E0E0);
+
+  // --- _expandDay helper method REMOVED (it's static now) ---
+
+  @override
+  void initState() {
+    super.initState();
+    final safeToken = widget.token ?? '';
+    _storageKey = 'calendar_events_$safeToken';
+    _initNotifications(); // Initialize notifications
+    _loadAllEvents(); // Load events (checks cache first)
+  }
+
+  /// Initializes the local notifications plugin.
+  Future<void> _initNotifications() async {
+    tz.initializeTimeZones();
+    const AndroidInitializationSettings initializationSettingsAndroid =
+    AndroidInitializationSettings('@mipmap/ic_launcher');
+
+    const DarwinInitializationSettings initializationSettingsIOS =
+    DarwinInitializationSettings(
+      requestAlertPermission: true,
+      requestBadgePermission: true,
+      requestSoundPermission: true,
+    );
+
+    const InitializationSettings initializationSettings = InitializationSettings(
+      android: initializationSettingsAndroid,
+      iOS: initializationSettingsIOS,
+    );
+    await flutterLocalNotificationsPlugin.initialize(initializationSettings);
+  }
+
+
+  /// Loads all event data, checking the cache first for Firebase events.
+  Future<void> _loadAllEvents() async {
+    // Only fetch from Firebase if the cache is empty
+    if (CalendarPage.firebaseEventsCache == null) {
+      if (mounted) setState(() => _isFirebaseLoading = true);
+      await Future.wait([
+        _loadLocalEvents(),
+        // --- 4. CALLS THE STATIC METHOD ---
+        // Pass `context` so it can show an error *on this page* if it fails
+        CalendarPage.loadFirebaseEvents(context),
+      ]);
+      if (mounted) setState(() => _isFirebaseLoading = false);
+    } else {
+      // Firebase data is cached, just load local notes
+      await _loadLocalEvents();
+      // No need to call setState, build method will read the cache
+    }
+  }
+
+  // --- _loadFirebaseEvents METHOD REMOVED (it's static now) ---
 
   /// Loads user's personal notes from SharedPreferences.
   Future<void> _loadLocalEvents() async {
@@ -192,6 +198,8 @@ class _CalendarPageState extends State<CalendarPage> {
     } catch (e) {
       localEvents = {};
     }
+    // We need setState here to render the loaded local events
+    if (mounted) setState(() {});
   }
 
   /// Saves user's personal notes to SharedPreferences.
@@ -202,6 +210,7 @@ class _CalendarPageState extends State<CalendarPage> {
   /// Merges Firebase and local events for a given day.
   List<String> _getEventsForDay(DateTime day) {
     final key = _keyFromDate(day);
+    // Use the getter which directly reads the static cache
     final firebase = _firebaseEvents[key] ?? [];
     final local = localEvents[key] ?? [];
     return [...firebase, ...local]; // Firebase events first
@@ -242,7 +251,6 @@ class _CalendarPageState extends State<CalendarPage> {
 
   /// Requests notification permissions (primarily for iOS) and schedules a notification.
   Future<void> _requestNotificationPermissionAndSchedule(String note) async {
-    // For iOS, explicitly request permissions at runtime if needed
     final bool? granted = await flutterLocalNotificationsPlugin
         .resolvePlatformSpecificImplementation<IOSFlutterLocalNotificationsPlugin>()
         ?.requestPermissions(
@@ -251,8 +259,6 @@ class _CalendarPageState extends State<CalendarPage> {
       sound: true,
     );
 
-    // For Android, this check might return null or true depending on the OS version and settings.
-    // We proceed if granted is true (iOS) or null/true (Android).
     if (granted == true || granted == null) { // Modified check
       _scheduleNoteNotification(note);
       if (mounted) {
@@ -296,7 +302,7 @@ class _CalendarPageState extends State<CalendarPage> {
     );
   }
 
-  // --- Build Methods ---
+  // --- Build Methods (All Unchanged) ---
 
   @override
   Widget build(BuildContext context) {
