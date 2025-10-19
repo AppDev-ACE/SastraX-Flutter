@@ -34,7 +34,7 @@ class LeaveApplicationScreen extends StatefulWidget {
 
 class _LeaveApplicationScreenState extends State<LeaveApplicationScreen> {
   // Mock data for dropdown
-  final List<String> _leaveTypes = ['Casual Leave', 'Sick Leave', 'Special Leave', 'Exam Leave'];
+  final List<String> _leaveTypes = ['Casual Leave', 'Sick Leave', 'Special Leave', 'Exam Leave' , 'Weekday\\Weekend' , 'NSS\\NCC\\Moot Court'];
   String? _selectedLeaveType;
 
   // Mock data for previous applications
@@ -284,24 +284,6 @@ class _LeaveApplicationScreenState extends State<LeaveApplicationScreen> {
                         border: const OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(8))),
                         prefixIcon: Icon(Icons.note_alt, size: 20, color: appColor),
                         alignLabelWithHint: true,
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    OutlinedButton.icon(
-                      onPressed: () {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: const Text('File picker opened. (Max 250kb)'),
-                            backgroundColor: appColor,
-                          ),
-                        );
-                      },
-                      icon: const Icon(Icons.upload_file),
-                      label: const Text('Attach File (JPG, PNG, PDF | Max 250KB)'),
-                      style: OutlinedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                        foregroundColor: appColor,
                       ),
                     ),
                     const SizedBox(height: 24),

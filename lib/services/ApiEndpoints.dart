@@ -16,6 +16,7 @@ class ApiEndpoints {
   String get attendance => '$baseUrl/attendance';
   String get subjectWiseAttendance => '$baseUrl/subjectWiseAttendance';
   String get currentSemCredits => '$baseUrl/currentSemCredits';
+  String get hourWiseAttendance => '$baseUrl/hourWiseAttendance';
   String get sgpa => '$baseUrl/sgpa';
   String get cgpa => '$baseUrl/cgpa';
 
@@ -26,6 +27,7 @@ class ApiEndpoints {
   String get chatbot => '$baseUrl/chatbot';
   String get semGrades => '$baseUrl/semGrades';
   String get internalMarks => '$baseUrl/ciaWiseInternalMarks';
+  String get courseMap => '$baseUrl/courseMap';
 
   // Fees and Status
   String get sastraDue => '$baseUrl/sastraDue';

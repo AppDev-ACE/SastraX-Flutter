@@ -18,18 +18,27 @@ class CreditsScreen extends StatefulWidget {
   final String token;
   const CreditsScreen({super.key, required this.url, required this.token , required this.regNo});
 
+  // ✅ 1. CACHE MOVED HERE
+  /// This holds the credits/grades data after the first fetch.
+  static Map<String, dynamic>? creditsCache;
+
+
   @override
   State<CreditsScreen> createState() => _CreditsScreenState();
 }
 
 class _CreditsScreenState extends State<CreditsScreen>
     with TickerProviderStateMixin {
+
+  // ❌ 1. STATIC CACHE VARIABLE REMOVED FROM HERE
+
   int _selectedSemester = 0;
   late AnimationController _rotationController;
   late AnimationController _pulseController;
   late final ApiEndpoints _apiEndpoints;
 
-  bool _isLoading = true;
+  // ✅ 2. STATE INITIALIZED FROM WIDGET'S CACHE
+  bool _isLoading = CreditsScreen.creditsCache == null;
   String? _error;
   List<Map<String, dynamic>> _semesterData = [];
   int _currentSemester = 0;
@@ -60,6 +69,7 @@ class _CreditsScreenState extends State<CreditsScreen>
     super.dispose();
   }
 
+  // ✅ 3. ALL CACHE ACCESSES ARE PREFIXED WITH `CreditsScreen.`
   Future<void> _loadInitialData() async {
     if (widget.token.isEmpty || widget.token == "guest_token") {
       setState(() {
@@ -69,6 +79,15 @@ class _CreditsScreenState extends State<CreditsScreen>
       return;
     }
 
+    // CHECK CACHE FIRST
+    if (CreditsScreen.creditsCache != null) {
+      debugPrint("CreditsScreen: Data found in cache. Processing...");
+      _processFirestoreData(CreditsScreen.creditsCache!);
+      if (mounted) setState(() => _isLoading = false);
+      return; // We're done
+    }
+
+    // IF CACHE IS EMPTY (First time load)
     try {
       final docRef = FirebaseFirestore.instance.collection('studentDetails').doc(widget.regNo);
       final docSnapshot = await docRef.get();
@@ -76,10 +95,10 @@ class _CreditsScreenState extends State<CreditsScreen>
 
       if (docSnapshot.exists && data != null && data.containsKey('semGrades') && data.containsKey('cgpa')) {
         debugPrint("CreditsScreen: Data found in Firestore. Processing...");
-        _processFirestoreData(data);
+        _processFirestoreData(data); // This will also set the cache
       } else {
         debugPrint("CreditsScreen: Data missing in Firestore. Refreshing from API...");
-        await _refreshFromApi();
+        await _refreshFromApi(); // This will also set the cache
       }
     } catch (e) {
       if (mounted) setState(() => _error = "Error loading initial data: $e");
@@ -89,9 +108,10 @@ class _CreditsScreenState extends State<CreditsScreen>
   }
 
   Future<void> _refreshFromApi() async {
+    // ... (function is identical)
     setState(() => _isLoading = true);
     try {
-      // Trigger API refresh calls for both CGPA and Semester Grades
+      // Trigger API refresh calls
       await Future.wait([
         http.post(
           Uri.parse(_apiEndpoints.cgpa),
@@ -107,9 +127,10 @@ class _CreditsScreenState extends State<CreditsScreen>
 
       if (!mounted) return;
 
-      // After API calls complete, fetch the single, updated document from Firestore
+      // After API calls complete, fetch the single, updated document
       final doc = await FirebaseFirestore.instance.collection('studentDetails').doc(widget.regNo).get();
       if (doc.exists && doc.data() != null) {
+        // This will process the new data AND update the cache
         _processFirestoreData(doc.data()!);
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Credits data refreshed!'), backgroundColor: Colors.green));
       } else {
@@ -122,8 +143,9 @@ class _CreditsScreenState extends State<CreditsScreen>
     }
   }
 
+  // ✅ 4. POPULATE WIDGET'S CACHE
   void _processFirestoreData(Map<String, dynamic> data) {
-    // Process Semester Grades for SGPA and semester-specific details
+    // ... (state setting logic remains the same)
     final rawGrades = data['semGrades'] as List<dynamic>? ?? [];
     if (rawGrades.isNotEmpty) {
       _processSemesterData(rawGrades);
@@ -131,19 +153,22 @@ class _CreditsScreenState extends State<CreditsScreen>
       if (mounted) setState(() => _error = "No semester grade data found.");
     }
 
-    // Fetch the pre-calculated CGPA directly from its own field
     final cgpaList = data['cgpa'] as List<dynamic>? ?? [];
     final String fetchedCgpaValue = cgpaList.isNotEmpty ? (cgpaList[0]['cgpa']?.toString() ?? 'N/A') : 'N/A';
 
     if (mounted) {
       setState(() {
         _fetchedCgpa = fetchedCgpaValue;
-        _error = null; // Clear previous errors on successful data processing
+        _error = null; // Clear previous errors
       });
     }
+
+    // POPULATE THE CACHE
+    CreditsScreen.creditsCache = data;
   }
 
   void _processSemesterData(List<dynamic> rawGrades) {
+    // ... (function is identical)
     final Map<int, List<Map<String, dynamic>>> groupedBySem = {};
     for (var grade in rawGrades) {
       final int sem = int.tryParse(grade['sem']?.toString() ?? '0') ?? 0;
@@ -169,7 +194,7 @@ class _CreditsScreenState extends State<CreditsScreen>
       if (subjects.isEmpty) continue;
 
       double totalGradePoints = 0;
-      int totalCreditsAttempted = 0; // For SGPA, we use attempted credits
+      int totalCreditsAttempted = 0;
       int earnedCredits = 0;
 
       for (var subject in subjects) {
@@ -199,6 +224,7 @@ class _CreditsScreenState extends State<CreditsScreen>
   }
 
   double _getGradePoint(String grade) {
+    // ... (function is identical)
     switch (grade.toUpperCase()) {
       case 'S': return 10.0;
       case 'A+': return 9.0;
@@ -212,17 +238,20 @@ class _CreditsScreenState extends State<CreditsScreen>
   }
 
   bool _isGradePassed(String grade) {
+    // ... (function is identical)
     final failedGrades = ['F', 'U', 'RA', 'ABSENT', 'W'];
     return !failedGrades.contains(grade.toUpperCase());
   }
 
   double get _totalCredits {
+    // ... (function is identical)
     if (_semesterData.isEmpty) return 0.0;
     return _semesterData.fold(0.0, (sum, sem) => sum + (sem['earnedCredits'] as int));
   }
 
   @override
   Widget build(BuildContext context) {
+    // ... (build method is identical)
     final themeProvider = Provider.of<ThemeProvider>(context);
     final screenWidth = MediaQuery.of(context).size.width;
     const double baseWidth = 375.0;
@@ -259,7 +288,7 @@ class _CreditsScreenState extends State<CreditsScreen>
         ),
       )
           : RefreshIndicator(
-        onRefresh: _refreshFromApi,
+        onRefresh: _refreshFromApi, // This will overwrite the cache
         child: Padding(
           padding: EdgeInsets.all(16 * scaleFactor),
           child: Column(
@@ -279,6 +308,7 @@ class _CreditsScreenState extends State<CreditsScreen>
     );
   }
 
+  // ... (All other build methods, _buildCreditsCircleLayout, _buildCenterCircle, etc., are identical)
   Widget _buildCreditsCircleLayout() {
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -857,6 +887,7 @@ class _CreditsScreenState extends State<CreditsScreen>
   }
 }
 
+// ... (SgpaCalculatorWidget remains identical)
 class SgpaCalculatorWidget extends StatefulWidget {
   const SgpaCalculatorWidget({super.key});
 

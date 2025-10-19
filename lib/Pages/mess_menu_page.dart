@@ -10,18 +10,26 @@ class MessMenuPage extends StatefulWidget {
   final String url;
   const MessMenuPage({super.key, required this.url});
 
+  // ✅ 1. CACHE MOVED HERE
+  /// This holds the menu after the first fetch to prevent re-fetching.
+  static List<dynamic>? menuCache;
+
   @override
-  State<MessMenuPage> createState() => _MessMenuPageState();
+  State<MessMenuPage> createState() => MessMenuPageState();
 }
 
-class _MessMenuPageState extends State<MessMenuPage> {
+class MessMenuPageState extends State<MessMenuPage> {
+  // ❌ 1. STATIC CACHE VARIABLE REMOVED FROM HERE
+
   final List<String> weekDays = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
 
   late PageController _pageController;
   late final ApiEndpoints api;
-  List<dynamic> _fullMenu = [];
+
+  // ✅ 2. STATE INITIALIZED FROM WIDGET'S CACHE
+  List<dynamic> _fullMenu = MessMenuPage.menuCache ?? [];
   List<dynamic> _filtered = [];
-  bool isLoading = true;
+  bool isLoading = MessMenuPage.menuCache == null;
 
   late String selectedWeek;
   late String selectedDayAbbr;
@@ -35,7 +43,15 @@ class _MessMenuPageState extends State<MessMenuPage> {
     selectedDayAbbr = weekDays[todayIdx];
     _pageController = PageController(initialPage: todayIdx);
     selectedWeek = weekOfMonth(now).toString();
-    _fetchMenu();
+
+    // ✅ 3. CACHE-AWARE LOADING
+    if (MessMenuPage.menuCache == null) {
+      // Cache is empty, fetch from Firebase
+      _fetchMenu();
+    } else {
+      // Cache exists, just apply filters
+      _applyWeekFilter();
+    }
   }
 
   int weekOfMonth(DateTime date) {
@@ -45,7 +61,15 @@ class _MessMenuPageState extends State<MessMenuPage> {
     return (week - 1) % 4 + 1;
   }
 
+  // ✅ 4. POPULATE WIDGET'S CACHE
   Future<void> _fetchMenu() async {
+    // Safety check
+    if (MessMenuPage.menuCache != null) {
+      _fullMenu = MessMenuPage.menuCache!;
+      _applyWeekFilter();
+      return;
+    }
+
     try {
       final docSnapshot = await FirebaseFirestore.instance
           .collection('cache')
@@ -56,6 +80,7 @@ class _MessMenuPageState extends State<MessMenuPage> {
         final data = docSnapshot.data()!;
         if (data.containsKey('menu') && data['menu'] is List) {
           _fullMenu = data['menu'] as List<dynamic>;
+          MessMenuPage.menuCache = _fullMenu; // ✅ POPULATE THE CACHE
           _applyWeekFilter();
         } else {
           throw Exception("'menu' field is missing or not a list in the document.");
@@ -74,12 +99,15 @@ class _MessMenuPageState extends State<MessMenuPage> {
   }
 
   void _applyWeekFilter() {
+    // ... (function is identical)
     _filtered = _fullMenu
         .where((d) => d['week'].toString() == selectedWeek)
         .toList()
       ..sort((a, b) => _dayIndex(a['day']).compareTo(_dayIndex(b['day'])));
 
-    setState(() => isLoading = false);
+    if (mounted) {
+      setState(() => isLoading = false);
+    }
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final todayPos = _filtered.indexWhere((d) =>
@@ -95,6 +123,7 @@ class _MessMenuPageState extends State<MessMenuPage> {
 
   @override
   Widget build(BuildContext context) {
+    // ... (build method is identical)
     return Consumer<ThemeProvider>(
       builder: (_, theme, __) => Scaffold(
         backgroundColor: theme.backgroundColor,
@@ -114,7 +143,6 @@ class _MessMenuPageState extends State<MessMenuPage> {
               Expanded(
                 child: PageView.builder(
                   controller: _pageController,
-                  // ✅ Your original setting to disable swiping is restored.
                   physics: const NeverScrollableScrollPhysics(),
                   itemCount: _filtered.length,
                   itemBuilder: (_, idx) =>
@@ -129,6 +157,7 @@ class _MessMenuPageState extends State<MessMenuPage> {
   }
 
   Widget _buildDayMenu(int idx, ThemeProvider theme) {
+    // ... (build method is identical)
     final day = _filtered[idx];
     return ListView(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
@@ -142,6 +171,7 @@ class _MessMenuPageState extends State<MessMenuPage> {
   }
 
   Widget _dayRow(ThemeProvider theme) {
+    // ... (build method is identical)
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: weekDays.map((abbr) {
@@ -152,14 +182,12 @@ class _MessMenuPageState extends State<MessMenuPage> {
               final newPage = _filtered.indexWhere((d) =>
               (d['day'] as String?)?.substring(0, 3).toUpperCase() == abbr);
 
-              // ✅ This logic now correctly handles missing days.
               if (newPage != -1) {
                 setState(() => selectedDayAbbr = abbr);
                 if (_pageController.hasClients) {
                   _pageController.jumpToPage(newPage);
                 }
               } else {
-                // ✅ If the day isn't found, inform the user.
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
                     content: Text('Menu for $abbr is not available this week.'),
@@ -199,6 +227,7 @@ class _MessMenuPageState extends State<MessMenuPage> {
   }
 
   bool _isCurrentMeal(String mealName) {
+    // ... (function is identical)
     final now = TimeOfDay.now();
 
     bool inRange(TimeOfDay start, TimeOfDay end) {
@@ -231,6 +260,7 @@ class _MessMenuPageState extends State<MessMenuPage> {
   }
 
   Widget _mealCard(String title, String menu, ThemeProvider theme) {
+    // ... (build method is identical)
     final Map<String, Color> mealColors = {
       'Breakfast': Colors.amber.shade300,
       'Lunch': Colors.lightGreen.shade300,

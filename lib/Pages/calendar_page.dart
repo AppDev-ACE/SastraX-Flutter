@@ -6,10 +6,14 @@ import '../models/theme_model.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/data/latest_all.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class CalendarPage extends StatefulWidget {
-  final String token; // ✅ changed from regNo
+  final String token;
   const CalendarPage({required this.token, super.key});
+
+  /// Static cache for Firebase events to prevent re-fetching.
+  static Map<String, List<String>>? firebaseEventsCache;
 
   @override
   _CalendarPageState createState() => _CalendarPageState();
@@ -18,15 +22,22 @@ class CalendarPage extends StatefulWidget {
 class _CalendarPageState extends State<CalendarPage> {
   DateTime _selectedDay = DateTime.now();
   DateTime _focusedDay = DateTime.now();
-  Map<String, List<String>> _events = {};
-  final TextEditingController _noteController = TextEditingController();
   late SharedPreferences _prefs;
   late String _storageKey;
 
+  // Local user notes, loaded from SharedPreferences
+  Map<String, List<String>> localEvents = {};
+
+  // Firebase events, initialized from static cache
+  Map<String, List<String>> _firebaseEvents = CalendarPage.firebaseEventsCache ?? {};
+  // Loading state based on cache status
+  bool _isFirebaseLoading = CalendarPage.firebaseEventsCache == null;
+
+  final TextEditingController _noteController = TextEditingController();
   final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
   FlutterLocalNotificationsPlugin();
 
-  // Enhanced Color scheme - Blue family with white
+  // Color scheme
   final Color _primaryBlue = const Color(0xFF1976D2);
   final Color _lightBlue = const Color(0xFF42A5F5);
   final Color _accentBlue = const Color(0xFF2196F3);
@@ -36,22 +47,49 @@ class _CalendarPageState extends State<CalendarPage> {
   final Color _lightGrey = const Color(0xFFF5F5F5);
   final Color _mediumGrey = const Color(0xFFE0E0E0);
 
+  /// Helper to convert day abbreviations to full names.
+  String _expandDay(String dayAbbr) {
+    const dayMap = {
+      'Mon': 'Monday',
+      'Tue': 'Tuesday',
+      'Wed': 'Wednesday',
+      'Thu': 'Thursday',
+      'Fri': 'Friday',
+      'Sat': 'Saturday',
+      'Sun': 'Sunday',
+    };
+    final key = dayMap.keys.firstWhere(
+            (k) => k.toLowerCase() == dayAbbr.toLowerCase(),
+        orElse: () => '');
+    return dayMap[key] ?? dayAbbr;
+  }
+
   @override
   void initState() {
     super.initState();
-    // Ensure token is never null
     final safeToken = widget.token ?? '';
     _storageKey = 'calendar_events_$safeToken';
-    _loadEvents();
-    _initNotifications();
+    _initNotifications(); // Initialize notifications
+    _loadAllEvents(); // Load events (checks cache first)
   }
 
+  /// Initializes the local notifications plugin.
   Future<void> _initNotifications() async {
     tz.initializeTimeZones();
     const AndroidInitializationSettings initializationSettingsAndroid =
     AndroidInitializationSettings('@mipmap/ic_launcher');
+
+    // **UPDATED:** Explicitly request default permissions during iOS initialization.
     const DarwinInitializationSettings initializationSettingsIOS =
-    DarwinInitializationSettings();
+    DarwinInitializationSettings(
+      requestAlertPermission: true,
+      requestBadgePermission: true,
+      requestSoundPermission: true,
+      // defaultPresentAlert: true,
+      // defaultPresentBadge: true,
+      // defaultPresentSound: true,
+    );
+
     const InitializationSettings initializationSettings = InitializationSettings(
       android: initializationSettingsAndroid,
       iOS: initializationSettingsIOS,
@@ -59,101 +97,179 @@ class _CalendarPageState extends State<CalendarPage> {
     await flutterLocalNotificationsPlugin.initialize(initializationSettings);
   }
 
-  Future<void> _loadEvents() async {
+
+  /// Loads all event data, checking the cache first for Firebase events.
+  Future<void> _loadAllEvents() async {
+    // Only fetch from Firebase if the cache is empty
+    if (CalendarPage.firebaseEventsCache == null) {
+      if (mounted) setState(() => _isFirebaseLoading = true);
+      await Future.wait([
+        _loadLocalEvents(),
+        _loadFirebaseEvents(), // Fetches and fills the cache
+      ]);
+      if (mounted) setState(() => _isFirebaseLoading = false);
+    } else {
+      // Firebase data is cached, just load local notes
+      await _loadLocalEvents();
+      if (mounted) setState(() {}); // Render local events
+    }
+  }
+
+  /// Fetches academic calendar events from Firebase and populates the cache.
+  Future<void> _loadFirebaseEvents() async {
+    // Safety check (shouldn't be needed due to _loadAllEvents logic)
+    if (CalendarPage.firebaseEventsCache != null) {
+      _firebaseEvents = CalendarPage.firebaseEventsCache!;
+      return;
+    }
+
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('cache')
+          .doc('BtechCal')
+          .get();
+
+      if (!doc.exists || doc.data() == null) return;
+
+      final data = doc.data()!;
+      final eventsArray = data['Events'] as List<dynamic>?;
+      if (eventsArray == null || eventsArray.isEmpty) return;
+
+      final eventsMap = eventsArray[0] as Map<String, dynamic>?;
+      if (eventsMap == null) return;
+
+      final Map<String, List<String>> fetchedEvents = {};
+      final isNumericRegExp = RegExp(r'^-?\d+$');
+      final dayRegex = RegExp(r'^\d+\s*-\s*(Mon|Tue|Wed|Thu|Fri|Sat|Sun)$', caseSensitive: false);
+      final eventRegex = RegExp(r'^\d+\s*-\s*(.+)$');
+
+      eventsMap.forEach((key, value) {
+        final String eventDesc = value.toString().trim();
+        String finalEventDesc = eventDesc;
+
+        final matchDay = dayRegex.firstMatch(eventDesc);
+        if (matchDay != null) {
+          final dayAbbr = matchDay.group(1)!;
+          finalEventDesc = _expandDay(dayAbbr);
+        } else {
+          final matchEvent = eventRegex.firstMatch(eventDesc);
+          if (matchEvent != null) {
+            finalEventDesc = matchEvent.group(1)!.trim();
+          }
+        }
+
+        if (finalEventDesc.isNotEmpty && !isNumericRegExp.hasMatch(finalEventDesc)) {
+          final parts = key.split('-');
+          if (parts.length == 3) {
+            final yyyyMMddKey = '${parts[2]}-${parts[1]}-${parts[0]}';
+            fetchedEvents.putIfAbsent(yyyyMMddKey, () => []).add(finalEventDesc);
+          }
+        }
+      });
+
+      // Populate both the state and the static cache
+      _firebaseEvents = fetchedEvents;
+      CalendarPage.firebaseEventsCache = fetchedEvents;
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to load academic calendar: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  /// Loads user's personal notes from SharedPreferences.
+  Future<void> _loadLocalEvents() async {
     _prefs = await SharedPreferences.getInstance();
-    // Use empty JSON if nothing is stored
     final rawJson = _prefs.getString(_storageKey) ?? '{}';
     try {
       final decoded = jsonDecode(rawJson) as Map<String, dynamic>;
-      _events = decoded.map((key, value) =>
-          MapEntry(key, List<String>.from(value as List)));
+      localEvents = decoded.map((key, value) => MapEntry(key, List<String>.from(value as List)));
     } catch (e) {
-      // If decoding fails, initialize with default events
-      _events = {
-        '2024-01-15': ['Assignment Due - Mathematics'],
-        '2024-01-20': ['Project Presentation - Physics'],
-        '2024-01-25': ['Mid-term Exam - Chemistry'],
-      };
+      localEvents = {};
     }
-    setState(() {});
   }
 
-  Future<void> _saveEvents() async {
-    await _prefs.setString(_storageKey, jsonEncode(_events));
+  /// Saves user's personal notes to SharedPreferences.
+  Future<void> _saveLocalEvents() async {
+    await _prefs.setString(_storageKey, jsonEncode(localEvents));
   }
 
+  /// Merges Firebase and local events for a given day.
   List<String> _getEventsForDay(DateTime day) {
     final key = _keyFromDate(day);
-    return _events[key] ?? [];
+    final firebase = _firebaseEvents[key] ?? [];
+    final local = localEvents[key] ?? [];
+    return [...firebase, ...local]; // Firebase events first
   }
 
+  /// Adds a personal note for the selected day.
   void _addNote(DateTime day, String note) {
     final key = _keyFromDate(day);
     setState(() {
-      _events.putIfAbsent(key, () => []).add(note);
+      localEvents.putIfAbsent(key, () => []).add(note);
     });
-    _saveEvents();
+    _saveLocalEvents();
   }
 
+  /// Deletes a personal note for the selected day.
   void _deleteNote(DateTime day, String note) {
     final key = _keyFromDate(day);
     setState(() {
-      _events[key]?.remove(note);
-      if (_events[key]?.isEmpty ?? false) _events.remove(key);
+      localEvents[key]?.remove(note);
+      if (localEvents[key]?.isEmpty ?? false) localEvents.remove(key);
     });
-    _saveEvents();
+    _saveLocalEvents();
   }
 
+  /// Formats a DateTime into 'yyyy-MM-dd' string.
   String _keyFromDate(DateTime d) =>
       '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
 
+  /// Checks if two DateTime objects represent the same day.
   bool _isSameDay(DateTime a, DateTime b) =>
       a.year == b.year && a.month == b.month && a.day == b.day;
 
+  /// Returns the full month name for a given month number (1-12).
   String _monthName(int m) => const [
-    'January',
-    'February',
-    'March',
-    'April',
-    'May',
-    'June',
-    'July',
-    'August',
-    'September',
-    'October',
-    'November',
-    'December'
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December'
   ][m - 1];
 
+  /// Requests notification permissions (primarily for iOS) and schedules a notification.
   Future<void> _requestNotificationPermissionAndSchedule(String note) async {
+    // For iOS, explicitly request permissions at runtime if needed
     final bool? granted = await flutterLocalNotificationsPlugin
-        .resolvePlatformSpecificImplementation<
-        IOSFlutterLocalNotificationsPlugin>()
+        .resolvePlatformSpecificImplementation<IOSFlutterLocalNotificationsPlugin>()
         ?.requestPermissions(
       alert: true,
       badge: true,
       sound: true,
     );
 
-    if (granted == true) {
+    // For Android, this check might return null or true depending on the OS version and settings.
+    // We proceed if granted is true (iOS) or null/true (Android).
+    if (granted == true || granted == null) { // Modified check
       _scheduleNoteNotification(note);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Reminder scheduled!', style: TextStyle(color: _white)),
-          backgroundColor: _primaryBlue,
-        ),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Reminder scheduled!', style: TextStyle(color: _white)), backgroundColor: _primaryBlue),
+        );
+      }
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content:
-          Text('Notification permission denied', style: TextStyle(color: _white)),
-          backgroundColor: Colors.red,
-        ),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Notification permission denied', style: TextStyle(color: _white)), backgroundColor: Colors.red),
+        );
+      }
     }
   }
 
+  /// Schedules a local notification for the given note on the selected day.
   Future<void> _scheduleNoteNotification(String note) async {
     const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
       'note_channel_id',
@@ -163,34 +279,30 @@ class _CalendarPageState extends State<CalendarPage> {
       priority: Priority.high,
       color: Color(0xFF1976D2),
     );
-
     const DarwinNotificationDetails iOSDetails = DarwinNotificationDetails();
+    const NotificationDetails platformDetails = NotificationDetails(android: androidDetails, iOS: iOSDetails);
 
-    const NotificationDetails platformDetails = NotificationDetails(
-      android: androidDetails,
-      iOS: iOSDetails,
-    );
-
-    final DateTime scheduledTime = _selectedDay.add(const Duration(hours: 9));
+    // Schedule for 9:00 AM on the selected day
+    final DateTime scheduledTime = DateTime(_selectedDay.year, _selectedDay.month, _selectedDay.day, 9);
 
     await flutterLocalNotificationsPlugin.zonedSchedule(
-      note.hashCode,
-      'Note Reminder',
-      note,
-      tz.TZDateTime.from(scheduledTime, tz.local),
+      note.hashCode, // Unique ID for the notification
+      'Note Reminder', // Title
+      note, // Body
+      tz.TZDateTime.from(scheduledTime, tz.local), // Scheduled time in local timezone
       platformDetails,
-      uiLocalNotificationDateInterpretation:
-      UILocalNotificationDateInterpretation.absoluteTime,
-      androidScheduleMode: AndroidScheduleMode.exact,
+      uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
+      androidScheduleMode: AndroidScheduleMode.exact, // Use exact timing on Android
     );
   }
+
+  // --- Build Methods ---
 
   @override
   Widget build(BuildContext context) {
     return Consumer<ThemeProvider>(
       builder: (context, themeProvider, child) {
         final isDarkMode = themeProvider.isDarkMode;
-
         return Scaffold(
           backgroundColor: isDarkMode ? themeProvider.backgroundColor : _lightGrey,
           body: SafeArea(
@@ -216,19 +328,12 @@ class _CalendarPageState extends State<CalendarPage> {
       decoration: BoxDecoration(
         color: isDarkMode ? theme.cardBackgroundColor : _white,
         borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.blue.withOpacity(isDarkMode ? 0.2 : 0.1),
-            blurRadius: 15,
-            offset: const Offset(0, 5),
-          ),
-        ],
+        boxShadow: [BoxShadow(color: Colors.blue.withOpacity(isDarkMode ? 0.2 : 0.1), blurRadius: 15, offset: const Offset(0, 5))],
       ),
       child: Padding(
         padding: const EdgeInsets.all(20),
         child: Column(
           children: [
-            // Enhanced Calendar Header
             _buildEnhancedHeader(theme, isDarkMode),
             const SizedBox(height: 16),
             _buildMiniCalendar(theme, isDarkMode),
@@ -242,75 +347,32 @@ class _CalendarPageState extends State<CalendarPage> {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: isDarkMode
-              ? [_navyBlue, _darkBlue, _primaryBlue]
-              : [_primaryBlue, _lightBlue],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
+        gradient: LinearGradient(colors: isDarkMode ? [_navyBlue, _darkBlue, _primaryBlue] : [_primaryBlue, _lightBlue], begin: Alignment.topLeft, end: Alignment.bottomRight),
         borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: _primaryBlue.withOpacity(isDarkMode ? 0.4 : 0.3),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
+        boxShadow: [BoxShadow(color: _primaryBlue.withOpacity(isDarkMode ? 0.4 : 0.3), blurRadius: 10, offset: const Offset(0, 4))],
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          // Left navigation with improved design
           Container(
-            decoration: BoxDecoration(
-              color: _white.withOpacity(0.15),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: _navIcon(Icons.chevron_left, () {
-              setState(() => _focusedDay = DateTime(_focusedDay.year, _focusedDay.month - 1));
-            }, _white.withOpacity(0.9)),
+            decoration: BoxDecoration(color: _white.withOpacity(0.15), borderRadius: BorderRadius.circular(10)),
+            child: _navIcon(Icons.chevron_left, () => setState(() => _focusedDay = DateTime(_focusedDay.year, _focusedDay.month - 1)), _white.withOpacity(0.9)),
           ),
-
-          // Month and Year with improved styling
           Column(
             children: [
               Text(
                 _monthName(_focusedDay.month).toUpperCase(),
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: _white,
-                  letterSpacing: 1.2,
-                  shadows: [
-                    Shadow(
-                      color: Colors.black.withOpacity(0.2),
-                      blurRadius: 2,
-                      offset: const Offset(1, 1),
-                    ),
-                  ],
-                ),
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: _white, letterSpacing: 1.2, shadows: [Shadow(color: Colors.black.withOpacity(0.2), blurRadius: 2, offset: const Offset(1, 1))]),
               ),
               Text(
                 _focusedDay.year.toString(),
-                style: TextStyle(
-                  fontSize: 14,
-                  color: _white.withOpacity(0.9),
-                  fontWeight: FontWeight.w500,
-                ),
+                style: TextStyle(fontSize: 14, color: _white.withOpacity(0.9), fontWeight: FontWeight.w500),
               ),
             ],
           ),
-
-          // Right navigation with improved design
           Container(
-            decoration: BoxDecoration(
-              color: _white.withOpacity(0.15),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: _navIcon(Icons.chevron_right, () {
-              setState(() => _focusedDay = DateTime(_focusedDay.year, _focusedDay.month + 1));
-            }, _white.withOpacity(0.9)),
+            decoration: BoxDecoration(color: _white.withOpacity(0.15), borderRadius: BorderRadius.circular(10)),
+            child: _navIcon(Icons.chevron_right, () => setState(() => _focusedDay = DateTime(_focusedDay.year, _focusedDay.month + 1)), _white.withOpacity(0.9)),
           ),
         ],
       ),
@@ -320,12 +382,11 @@ class _CalendarPageState extends State<CalendarPage> {
   Widget _buildMiniCalendar(ThemeProvider theme, bool isDarkMode) {
     final first = DateTime(_focusedDay.year, _focusedDay.month, 1);
     final last = DateTime(_focusedDay.year, _focusedDay.month + 1, 0);
-    final firstWeekday = first.weekday;
+    final firstWeekday = first.weekday % 7; // Adjust Sunday to index 0
     final daysInMonth = last.day;
 
     return Column(
       children: [
-        // Weekday headers with improved styling
         GridView.builder(
           physics: const NeverScrollableScrollPhysics(),
           shrinkWrap: true,
@@ -335,30 +396,21 @@ class _CalendarPageState extends State<CalendarPage> {
             final weekdays = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
             return Container(
               margin: const EdgeInsets.all(4),
-              child: Center(
-                child: Text(
-                  weekdays[idx],
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    color: isDarkMode ? theme.textSecondaryColor : _primaryBlue,
-                    fontSize: 12,
-                  ),
-                ),
-              ),
+              child: Center(child: Text(weekdays[idx], style: TextStyle(fontWeight: FontWeight.bold, color: isDarkMode ? theme.textSecondaryColor : _primaryBlue, fontSize: 12))),
             );
           },
         ),
         const SizedBox(height: 8),
-        // Calendar days
         GridView.builder(
           physics: const NeverScrollableScrollPhysics(),
           shrinkWrap: true,
           gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 7),
-          itemCount: 42,
+          itemCount: 42, // Max grid size
           itemBuilder: (_, idx) {
-            final dayOffset = idx - (firstWeekday - 1);
-            if (dayOffset < 1 || dayOffset > daysInMonth) return Container();
-            final current = DateTime(_focusedDay.year, _focusedDay.month, dayOffset);
+            final dayOffset = idx - firstWeekday;
+            if (dayOffset < 0 || dayOffset >= daysInMonth) return Container(); // Empty cells before/after month
+            final currentDayNumber = dayOffset + 1;
+            final current = DateTime(_focusedDay.year, _focusedDay.month, currentDayNumber);
             final isToday = _isSameDay(current, DateTime.now());
             final isSel = _isSameDay(current, _selectedDay);
             final hasEvt = _getEventsForDay(current).isNotEmpty;
@@ -368,28 +420,14 @@ class _CalendarPageState extends State<CalendarPage> {
               child: Container(
                 margin: const EdgeInsets.all(4),
                 decoration: BoxDecoration(
-                  color: isSel
-                      ? _primaryBlue
-                      : isToday
-                      ? _lightBlue.withOpacity(0.3)
-                      : Colors.transparent,
+                  color: isSel ? _primaryBlue : (isToday ? _lightBlue.withOpacity(0.3) : Colors.transparent),
                   borderRadius: BorderRadius.circular(8),
-                  border: hasEvt
-                      ? Border.all(color: _accentBlue, width: 2)
-                      : isToday
-                      ? Border.all(color: _lightBlue, width: 1)
-                      : null,
+                  border: hasEvt ? Border.all(color: _accentBlue, width: 2) : (isToday ? Border.all(color: _lightBlue, width: 1) : null),
                 ),
                 child: Center(
                   child: Text(
-                    '$dayOffset',
-                    style: TextStyle(
-                      fontWeight: FontWeight.w600,
-                      color: isSel
-                          ? _white
-                          : (isDarkMode ? theme.textColor : _darkBlue),
-                      fontSize: 14,
-                    ),
+                    '$currentDayNumber',
+                    style: TextStyle(fontWeight: FontWeight.w600, color: isSel ? _white : (isDarkMode ? theme.textColor : _darkBlue), fontSize: 14),
                   ),
                 ),
               ),
@@ -402,120 +440,63 @@ class _CalendarPageState extends State<CalendarPage> {
 
   Widget _buildEventsCard(ThemeProvider theme, bool isDarkMode) {
     final events = _getEventsForDay(_selectedDay);
+    final localEventsOnDay = localEvents[_keyFromDate(_selectedDay)] ?? [];
 
     return Container(
       decoration: BoxDecoration(
         color: isDarkMode ? theme.cardBackgroundColor : _white,
         borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.blue.withOpacity(isDarkMode ? 0.2 : 0.1),
-            blurRadius: 15,
-            offset: const Offset(0, 5),
-          ),
-        ],
+        boxShadow: [BoxShadow(color: Colors.blue.withOpacity(isDarkMode ? 0.2 : 0.1), blurRadius: 15, offset: const Offset(0, 5))],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // Enhanced Events Header
           Container(
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: isDarkMode
-                    ? [_navyBlue, _darkBlue, _primaryBlue]
-                    : [_primaryBlue, _lightBlue],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
+              gradient: LinearGradient(colors: isDarkMode ? [_navyBlue, _darkBlue, _primaryBlue] : [_primaryBlue, _lightBlue], begin: Alignment.topLeft, end: Alignment.bottomRight),
               borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-              boxShadow: [
-                BoxShadow(
-                  color: _primaryBlue.withOpacity(isDarkMode ? 0.4 : 0.3),
-                  blurRadius: 10,
-                  offset: const Offset(0, 4),
-                ),
-              ],
+              boxShadow: [BoxShadow(color: _primaryBlue.withOpacity(isDarkMode ? 0.4 : 0.3), blurRadius: 10, offset: const Offset(0, 4))],
             ),
             child: Row(
               children: [
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: _white.withOpacity(0.2),
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(Icons.event_note, color: _white, size: 20),
-                ),
+                Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: _white.withOpacity(0.2), shape: BoxShape.circle), child: Icon(Icons.event_note, color: _white, size: 20)),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Text(
                     'Events for ${_selectedDay.day}/${_selectedDay.month}/${_selectedDay.year}',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: _white,
-                      shadows: [
-                        Shadow(
-                          color: Colors.black.withOpacity(0.2),
-                          blurRadius: 2,
-                          offset: const Offset(1, 1),
-                        ),
-                      ],
-                    ),
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: _white, shadows: [Shadow(color: Colors.black.withOpacity(0.2), blurRadius: 2, offset: const Offset(1, 1))]),
                   ),
                 ),
-                Container(
+                _isFirebaseLoading
+                    ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                    : Container(
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: _white.withOpacity(0.2),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Text(
-                    '${events.length}',
-                    style: TextStyle(
-                      color: _white,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 14,
-                    ),
-                  ),
+                  decoration: BoxDecoration(color: _white.withOpacity(0.2), borderRadius: BorderRadius.circular(12)),
+                  child: Text('${events.length}', style: TextStyle(color: _white, fontWeight: FontWeight.bold, fontSize: 14)),
                 ),
               ],
             ),
           ),
-          // Events List
-          if (events.isEmpty)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 40),
-              child: _emptyState(theme, isDarkMode),
-            )
+          if (events.isEmpty && !_isFirebaseLoading)
+            Padding(padding: const EdgeInsets.symmetric(vertical: 40), child: _emptyState(theme, isDarkMode))
           else
             Padding(
               padding: const EdgeInsets.all(16),
               child: Column(
-                children: events.map((event) => _eventTile(event, theme, isDarkMode)).toList(),
+                children: events.map((event) {
+                  final bool isLocal = localEventsOnDay.contains(event);
+                  return _eventTile(event, theme, isDarkMode, isLocal);
+                }).toList(),
               ),
             ),
-          // Add Event Button
           Padding(
             padding: const EdgeInsets.all(16),
             child: ElevatedButton.icon(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: _primaryBlue,
-                foregroundColor: _white,
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                elevation: 2,
-              ),
+              style: ElevatedButton.styleFrom(backgroundColor: _primaryBlue, foregroundColor: _white, padding: const EdgeInsets.symmetric(vertical: 16), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), elevation: 2),
               onPressed: () => _showAddNoteDialog(theme, isDarkMode),
               icon: const Icon(Icons.add, size: 20),
-              label: const Text(
-                'Add New Event',
-                style: TextStyle(fontWeight: FontWeight.bold),
-              ),
+              label: const Text('Add New Event', style: TextStyle(fontWeight: FontWeight.bold)),
             ),
           ),
         ],
@@ -523,97 +504,50 @@ class _CalendarPageState extends State<CalendarPage> {
     );
   }
 
-  Widget _eventTile(String event, ThemeProvider theme, bool isDarkMode) => Container(
-    margin: const EdgeInsets.only(bottom: 12),
-    padding: const EdgeInsets.all(16),
-    decoration: BoxDecoration(
-      color: isDarkMode ? theme.cardBackgroundColor : _lightGrey,
-      borderRadius: BorderRadius.circular(12),
-      border: Border.all(color: _mediumGrey, width: 1),
-    ),
-    child: Row(
-      children: [
-        Container(
-          width: 4,
-          height: 40,
-          decoration: BoxDecoration(
-            color: _accentBlue,
-            borderRadius: BorderRadius.circular(2),
+  Widget _eventTile(String event, ThemeProvider theme, bool isDarkMode, bool isLocal) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: isDarkMode ? (isLocal ? theme.cardBackgroundColor : _darkBlue.withOpacity(0.3)) : (isLocal ? _lightGrey : _lightBlue.withOpacity(0.1)),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: isLocal ? _mediumGrey : _primaryBlue.withOpacity(0.3), width: 1),
+      ),
+      child: Row(
+        children: [
+          Container(width: 4, height: 40, decoration: BoxDecoration(color: isLocal ? _accentBlue : Colors.orangeAccent, borderRadius: BorderRadius.circular(2))),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(event, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: isDarkMode ? theme.textColor : _darkBlue), maxLines: 2, overflow: TextOverflow.ellipsis),
+                const SizedBox(height: 4),
+                Text(isLocal ? 'Personal Note' : 'Academic Calendar', style: TextStyle(fontSize: 12, color: isDarkMode ? theme.textSecondaryColor : Colors.grey[600])),
+              ],
+            ),
           ),
-        ),
-        const SizedBox(width: 16),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                event,
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: isDarkMode ? theme.textColor : _darkBlue,
-                ),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-              ),
-              const SizedBox(height: 4),
-              Text(
-                'All day',
-                style: TextStyle(
-                  fontSize: 12,
-                  color: isDarkMode ? theme.textSecondaryColor : Colors.grey[600],
-                ),
-              ),
-            ],
-          ),
-        ),
-        IconButton(
-          icon: Icon(Icons.notifications_active, color: _accentBlue),
-          onPressed: () => _requestNotificationPermissionAndSchedule(event),
-          tooltip: 'Set reminder',
-        ),
-        IconButton(
-          icon: Icon(Icons.delete_outline, color: Colors.red[300]),
-          onPressed: () => _deleteNote(_selectedDay, event),
-          tooltip: 'Delete event',
-        ),
-      ],
-    ),
-  );
+          IconButton(icon: Icon(Icons.notifications_active, color: _accentBlue), onPressed: () => _requestNotificationPermissionAndSchedule(event), tooltip: 'Set reminder'),
+          if (isLocal)
+            IconButton(icon: Icon(Icons.delete_outline, color: Colors.red[300]), onPressed: () => _deleteNote(_selectedDay, event), tooltip: 'Delete event')
+          else
+            const SizedBox(width: 48), // Spacer to keep alignment
+        ],
+      ),
+    );
+  }
 
   Widget _emptyState(ThemeProvider theme, bool isDarkMode) => Column(
     children: [
-      Icon(
-        Icons.event_available,
-        size: 60,
-        color: isDarkMode ? theme.textSecondaryColor : _mediumGrey,
-      ),
+      Icon(Icons.event_available, size: 60, color: isDarkMode ? theme.textSecondaryColor : _mediumGrey),
       const SizedBox(height: 16),
-      Text(
-        'No events scheduled',
-        style: TextStyle(
-          fontSize: 16,
-          fontWeight: FontWeight.w500,
-          color: isDarkMode ? theme.textSecondaryColor : Colors.grey[600],
-        ),
-      ),
+      Text('No events scheduled', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500, color: isDarkMode ? theme.textSecondaryColor : Colors.grey[600])),
       const SizedBox(height: 8),
-      Text(
-        'Add your first event to get started!',
-        style: TextStyle(
-          color: isDarkMode ? theme.textSecondaryColor : Colors.grey[500],
-        ),
-        textAlign: TextAlign.center,
-      ),
+      Text('Add your first event to get started!', style: TextStyle(color: isDarkMode ? theme.textSecondaryColor : Colors.grey[500]), textAlign: TextAlign.center),
     ],
   );
 
-  IconButton _navIcon(IconData icon, VoidCallback cb, Color color) =>
-      IconButton(
-        icon: Icon(icon, color: color, size: 20),
-        onPressed: cb,
-        splashRadius: 20,
-      );
+  IconButton _navIcon(IconData icon, VoidCallback cb, Color color) => IconButton(icon: Icon(icon, color: color, size: 20), onPressed: cb, splashRadius: 20);
 
   void _showAddNoteDialog(ThemeProvider theme, bool isDarkMode) {
     _noteController.clear();
@@ -621,28 +555,19 @@ class _CalendarPageState extends State<CalendarPage> {
       context: context,
       isScrollControlled: true,
       backgroundColor: isDarkMode ? theme.cardBackgroundColor : _white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
       builder: (context) {
         final mediaQuery = MediaQuery.of(context);
         return MediaQuery(
-          data: mediaQuery.copyWith(textScaler: const TextScaler.linear(1.0)),
+          data: mediaQuery.copyWith(textScaler: const TextScaler.linear(1.0)), // Prevent text scaling
           child: Padding(
-            padding: EdgeInsets.only(bottom: mediaQuery.viewInsets.bottom),
+            padding: EdgeInsets.only(bottom: mediaQuery.viewInsets.bottom), // Adjust for keyboard
             child: SingleChildScrollView(
               padding: const EdgeInsets.fromLTRB(20, 20, 20, 20),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text(
-                    'Add New Event',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: isDarkMode ? theme.textColor : _darkBlue,
-                    ),
-                  ),
+                  Text('Add New Event', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: isDarkMode ? theme.textColor : _darkBlue)),
                   const SizedBox(height: 16),
                   TextField(
                     controller: _noteController,
@@ -651,14 +576,8 @@ class _CalendarPageState extends State<CalendarPage> {
                     decoration: InputDecoration(
                       hintText: 'Enter event description...',
                       hintStyle: TextStyle(color: isDarkMode ? theme.textSecondaryColor : Colors.grey[500]),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide(color: _mediumGrey),
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide(color: _primaryBlue, width: 2),
-                      ),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: _mediumGrey)),
+                      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: _primaryBlue, width: 2)),
                       filled: true,
                       fillColor: isDarkMode ? theme.backgroundColor : _lightGrey,
                     ),
@@ -667,23 +586,10 @@ class _CalendarPageState extends State<CalendarPage> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.end,
                     children: [
-                      TextButton(
-                        onPressed: () => Navigator.pop(context),
-                        style: TextButton.styleFrom(
-                          foregroundColor: isDarkMode ? theme.textSecondaryColor : Colors.grey[600],
-                        ),
-                        child: const Text('Cancel'),
-                      ),
+                      TextButton(onPressed: () => Navigator.pop(context), style: TextButton.styleFrom(foregroundColor: isDarkMode ? theme.textSecondaryColor : Colors.grey[600]), child: const Text('Cancel')),
                       const SizedBox(width: 12),
                       ElevatedButton(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: _primaryBlue,
-                          foregroundColor: _white,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                        ),
+                        style: ElevatedButton.styleFrom(backgroundColor: _primaryBlue, foregroundColor: _white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)), padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12)),
                         onPressed: () {
                           if (_noteController.text.trim().isNotEmpty) {
                             _addNote(_selectedDay, _noteController.text.trim());

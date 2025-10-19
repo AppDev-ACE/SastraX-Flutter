@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:ui'; // For ImageFilter.blur
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
@@ -31,18 +32,18 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  int _currentIndex = 0;
+  int _currentIndex = 2;
   late final List<Widget> _pages;
 
   @override
   void initState() {
     super.initState();
     _pages = [
-      DashboardScreen(token: widget.token, url: widget.url, regNo: widget.regNo),
-      CalendarPage(token: widget.token),
-      const CommunityPage(),
-      MessMenuPage(url: widget.url),
-      MoreOptionsScreen(token: widget.token, url: widget.url, regNo: widget.regNo),
+      CalendarPage(token: widget.token), // Index 0
+      const CommunityPage(), // Index 1
+      DashboardScreen(token: widget.token, url: widget.url, regNo: widget.regNo), // Index 2 (Home)
+      MessMenuPage(url: widget.url), // Index 3
+      MoreOptionsScreen(token: widget.token, url: widget.url, regNo: widget.regNo), // Index 4
     ];
   }
 
@@ -76,9 +77,9 @@ class _HomePageState extends State<HomePage> {
           selectedItemColor: theme.isDarkMode ? AppTheme.neonBlue : AppTheme.primaryBlue,
           unselectedItemColor: Colors.grey,
           items: const [
-            BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
             BottomNavigationBarItem(icon: Icon(Icons.calendar_today), label: 'Calendar'),
             BottomNavigationBarItem(icon: Icon(Icons.people), label: 'Community'),
+            BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
             BottomNavigationBarItem(icon: Icon(Icons.restaurant), label: 'Mess'),
             BottomNavigationBarItem(icon: Icon(Icons.more_horiz_outlined), label: 'More'),
           ],
@@ -96,18 +97,27 @@ class DashboardScreen extends StatefulWidget {
 
   const DashboardScreen({super.key, required this.token, required this.url, required this.regNo});
 
+  // ✅ 1. CACHE MOVED HERE
+  /// This holds the dashboard data after the first fetch.
+  static Map<String, dynamic>? dashboardCache;
+
   @override
   State<DashboardScreen> createState() => _DashboardScreenState();
 }
 
 class _DashboardScreenState extends State<DashboardScreen> {
+  // ❌ 1. STATIC CACHE VARIABLE REMOVED FROM HERE
+
   // UI State
   bool showAssignments = false;
-  bool isCgpaLoading = true;
-  bool isTimetableLoading = true;
+  // ✅ 2. STATE INITIALIZED FROM WIDGET'S CACHE
+  bool isCgpaLoading = DashboardScreen.dashboardCache == null;
+  bool isTimetableLoading = DashboardScreen.dashboardCache == null;
   String? _error;
+  bool _isRefreshing = false;
 
   // Data State
+  // ... (all other data state variables remain the same)
   double attendancePercent = -1;
   int attendedClasses = 0;
   int totalClasses = 0;
@@ -122,6 +132,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   List subjectAttendanceData = [];
   List courseMapData = [];
   Map<String, dynamic> bunkData = {};
+
 
   // Controllers
   late final ApiEndpoints api;
@@ -141,28 +152,40 @@ class _DashboardScreenState extends State<DashboardScreen> {
     super.dispose();
   }
 
+  // ✅ 3. ALL CACHE ACCESSES ARE PREFIXED WITH `DashboardScreen.`
   Future<void> _loadInitialData() async {
     if (widget.regNo.isEmpty) {
       setState(() { _error = "Running in Guest Mode."; });
       return;
     }
+
+    // CHECK CACHE FIRST
+    if (DashboardScreen.dashboardCache != null) {
+      // Load data instantly from the cache
+      _processFirestoreData(DashboardScreen.dashboardCache!);
+      return; // We're done
+    }
+
+    // IF CACHE IS EMPTY (First time load)
     try {
       final docRef = FirebaseFirestore.instance.collection('studentDetails').doc(widget.regNo);
       final doc = await docRef.get();
       final data = doc.data();
 
       if (doc.exists && data != null && data.containsKey('profile') && data.containsKey('bunkdata')) {
-        _processFirestoreData(data);
+        _processFirestoreData(data); // This will also set the cache
       } else {
-        await _refreshFromApi();
+        await _refreshFromApi(); // This will also set the cache
       }
     } catch (e) {
       if (mounted) setState(() => _error = "Error loading data: $e");
     }
   }
 
+  // ✅ 4. POPULATE WIDGET'S CACHE
   void _processFirestoreData(Map<String, dynamic> data) {
     setState(() {
+      // ... (all state setting logic remains the same)
       studentName = data['profile']?['name'] ?? 'Student';
       timetableData = data['timetable'] is List ? data['timetable'] as List : [];
       hourWiseAttendanceData = data['hourWiseAttendance'] is List ? data['hourWiseAttendance'] as List : [];
@@ -212,17 +235,27 @@ class _DashboardScreenState extends State<DashboardScreen> {
           if (parsed.day == today.day && parsed.month == today.month) {
             isBirthday = true;
             _confettiController.play();
+          } else {
+            isBirthday = false; // Ensure it's reset if not birthday
           }
-        } catch (_) {}
+        } catch (_) {
+          isBirthday = false;
+        }
       }
       isTimetableLoading = false;
       isCgpaLoading = false;
       _error = null;
     });
+
+    // POPULATE THE CACHE
+    DashboardScreen.dashboardCache = data;
   }
 
+  // This function will overwrite the cache, which is what we want for a refresh
   Future<void> _refreshFromApi() async {
-    setState(() { isTimetableLoading = true; isCgpaLoading = true; });
+    // ... (rest of the function is identical)
+    setState(() { _isRefreshing = true; });
+
     try {
       final bunkResponse = await http.post(
         Uri.parse('${widget.url}/bunk'),
@@ -234,12 +267,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
         http.post(Uri.parse(api.profile), headers: {'Content-Type': 'application/json'}, body: jsonEncode({'refresh': true, 'token': widget.token})),
         http.post(Uri.parse(api.profilePic), headers: {'Content-Type': 'application/json'}, body: jsonEncode({'refresh': true, 'token': widget.token})),
         http.post(Uri.parse(api.cgpa), headers: {'Content-Type': 'application/json'}, body: jsonEncode({'refresh': true, 'token': widget.token})),
-        http.post(Uri.parse('${widget.url}/subjectWiseAttendance'), headers: {'Content-Type': 'application/json'}, body: jsonEncode({'refresh': true, 'token': widget.token})),
+        http.post(Uri.parse(api.subjectWiseAttendance), headers: {'Content-Type': 'application/json'}, body: jsonEncode({'refresh': true, 'token': widget.token})),
         http.post(Uri.parse(api.timetable), headers: {'Content-Type': 'application/json'}, body: jsonEncode({'refresh': true, 'token': widget.token})),
-        http.post(Uri.parse('${widget.url}/hourWiseAttendance'), headers: {'Content-Type': 'application/json'}, body: jsonEncode({'refresh': true, 'token': widget.token})),
+        http.post(Uri.parse(api.hourWiseAttendance), headers: {'Content-Type': 'application/json'}, body: jsonEncode({'refresh': true, 'token': widget.token})),
         http.post(Uri.parse(api.sastraDue), headers: {'Content-Type': 'application/json'}, body: jsonEncode({'refresh': true, 'token': widget.token})),
         http.post(Uri.parse(api.hostelDue), headers: {'Content-Type': 'application/json'}, body: jsonEncode({'refresh': true, 'token': widget.token})),
-        http.post(Uri.parse('${widget.url}/courseMap'), headers: {'Content-Type': 'application/json'}, body: jsonEncode({'refresh': true, 'token': widget.token})),
+        http.post(Uri.parse(api.courseMap), headers: {'Content-Type': 'application/json'}, body: jsonEncode({'refresh': true, 'token': widget.token})),
       ]);
 
       if (!mounted) return;
@@ -256,6 +289,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
       final doc = await FirebaseFirestore.instance.collection('studentDetails').doc(widget.regNo).get();
       if (doc.exists && doc.data() != null) {
+        // This will process the new data AND update the cache
         _processFirestoreData(doc.data()!);
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Dashboard refreshed!'), backgroundColor: Colors.green));
@@ -269,11 +303,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
         isTimetableLoading = false;
         isCgpaLoading = false;
       });
+    } finally {
+      if (mounted) {
+        setState(() { _isRefreshing = false; });
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    // ... (build method remains identical, no changes needed here)
     final theme = Provider.of<ThemeProvider>(context);
     if (_error != null) {
       return Center(child: Padding(padding: const EdgeInsets.all(20.0), child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [Text(_error!, textAlign: TextAlign.center, style: const TextStyle(color: Colors.red)), const SizedBox(height: 10), ElevatedButton(onPressed: _loadInitialData, child: const Text("Retry"))])));
@@ -283,6 +322,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
       children: [
         RefreshIndicator(
           onRefresh: _refreshFromApi,
+          color: Colors.transparent,
+          backgroundColor: Colors.transparent,
           child: SingleChildScrollView(
             physics: const AlwaysScrollableScrollPhysics(),
             child: Padding(
@@ -333,7 +374,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           url: widget.url,
                           initialSubjectAttendance: subjectAttendanceData,
                           initialHourWiseAttendance: hourWiseAttendanceData,
-                          // ✅ PASS THE DATA HERE
                           timetable: timetableData,
                           courseMap: courseMapData,
                         ),
@@ -360,7 +400,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     height: 300,
                     child: TimetableWidget(
                       timetable: timetableData,
-                      isLoading: isTimetableLoading,
+                      isLoading: isTimetableLoading, // Still used for initial load
                       hourWiseAttendance: hourWiseAttendanceData,
                       courseMap: courseMapData,
                     ),
@@ -370,6 +410,22 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ),
           ),
         ),
+
+        if (_isRefreshing)
+          Positioned.fill(
+            child: ClipRRect(
+              child: BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 3.0, sigmaY: 3.0),
+                child: Container(
+                  color: Colors.black.withOpacity(0.1),
+                  child: const Center(
+                    child: CircularProgressIndicator(),
+                  ),
+                ),
+              ),
+            ),
+          ),
+
         if (isBirthday)
           Align(
             alignment: Alignment.topCenter,
@@ -380,6 +436,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Widget _buildFeeDueTile(ThemeProvider theme) {
+    // ... (identical)
     final hasDue = feeDue > 0;
     final isDark = theme.isDarkMode;
     return GestureDetector(
@@ -406,6 +463,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Widget _buildGpaAssignmentTile(ThemeProvider theme) {
+    // ... (identical)
     final isDark = theme.isDarkMode;
     return GestureDetector(
       onDoubleTap: () => setState(() => showAssignments = !showAssignments),
@@ -435,7 +493,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 Icon(Icons.grade, size: 40, color: isDark ? AppTheme.electricBlue : Colors.orange),
                 const SizedBox(height: 10),
                 const FittedBox(fit: BoxFit.scaleDown, child: Text('CGPA', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16))),
-                isCgpaLoading
+                isCgpaLoading // Still used for initial load
                     ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
                     : FittedBox(fit: BoxFit.scaleDown, child: Text('$cgpa / 10', style: TextStyle(fontSize: 14, color: isDark ? Colors.white70 : Colors.grey[600]))),
               ],

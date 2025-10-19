@@ -6,7 +6,13 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/theme_model.dart';
 import '../services/ApiEndpoints.dart';
+import 'credits_page.dart';
+import 'home_page.dart';
 import 'loginpage.dart';
+// For CreditsScreen cache (adjust filename if needed)
+import 'mess_menu_page.dart';    // For MessMenuPage cache
+import 'calendar_page.dart';     // For CalendarPage cache
+// No need to import profile_page.dart itself
 
 class ProfilePage extends StatefulWidget {
   final String token;
@@ -20,12 +26,15 @@ class ProfilePage extends StatefulWidget {
     required this.regNo,
   });
 
+  // Cache is correctly here
+  static Future<DocumentSnapshot<Map<String, dynamic>>>? _profileFutureCache;
+
   @override
-  State<ProfilePage> createState() => _ProfilePageState();
+  State<ProfilePage> createState() => ProfilePageState();
 }
 
-class _ProfilePageState extends State<ProfilePage> {
-  // ✅ Changed to allow re-assignment
+class ProfilePageState extends State<ProfilePage> {
+  // ... (initState, _fetchAndRefreshProfile, _refreshProfile are the same) ...
   late Future<DocumentSnapshot<Map<String, dynamic>>> _profileFuture;
   late final ApiEndpoints _apiEndpoints;
 
@@ -33,42 +42,65 @@ class _ProfilePageState extends State<ProfilePage> {
   void initState() {
     super.initState();
     _apiEndpoints = ApiEndpoints(widget.url);
-    // ✅ Call the new method that contains the refresh logic
-    _profileFuture = _fetchAndRefreshProfile();
+    _profileFuture = ProfilePage._profileFutureCache ??= _fetchAndRefreshProfile();
   }
 
-  // ✅ NEW METHOD to handle fetching and refreshing if the pic is missing
   Future<DocumentSnapshot<Map<String, dynamic>>> _fetchAndRefreshProfile() async {
     final docRef = FirebaseFirestore.instance.collection('studentDetails').doc(widget.regNo);
     final doc = await docRef.get();
 
-    // If the doc exists but the profilePic field is missing or empty, trigger a refresh.
     if (doc.exists && (doc.data()?['profilePic'] == null || doc.data()!['profilePic'].isEmpty)) {
       debugPrint("Profile picture missing in Firestore. Fetching from API...");
       try {
-        // Trigger the backend scrape for the profile picture
         await http.post(
           Uri.parse(_apiEndpoints.profilePic),
           headers: {'Content-Type': 'application/json'},
           body: jsonEncode({'token': widget.token, 'refresh': true}),
         );
-        // After triggering, refetch the document to get the updated data.
         return await docRef.get();
       } catch (e) {
         debugPrint("Failed to trigger profile pic refresh: $e");
-        // Return the original (incomplete) document on failure to avoid a crash
         return doc;
       }
     }
-
-    // If the picture exists or the document doesn't exist, return the initial result.
     return doc;
   }
 
+  Future<void> _refreshProfile() async {
+    try {
+      await Future.wait([
+        http.post(
+          Uri.parse(_apiEndpoints.profile),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({'token': widget.token, 'refresh': true}),
+        ),
+        http.post(
+          Uri.parse(_apiEndpoints.profilePic),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({'token': widget.token, 'refresh': true}),
+        ),
+      ]);
+    } catch (e) {
+      debugPrint("Failed to trigger profile refresh: $e");
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Refresh failed: $e"), backgroundColor: Colors.red));
+      }
+    }
 
-  /// 🔹 Handles the complete logout process
+    final newFuture = FirebaseFirestore.instance
+        .collection('studentDetails')
+        .doc(widget.regNo)
+        .get();
+
+    ProfilePage._profileFutureCache = newFuture;
+    setState(() {
+      _profileFuture = newFuture;
+    });
+  }
+
+
+  /// 🔹 Handles the complete logout process including cache clearing
   Future<void> _logout() async {
-    // Show a loading dialog for better UX
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -76,7 +108,6 @@ class _ProfilePageState extends State<ProfilePage> {
     );
 
     try {
-      // Call the logout endpoint on your server to invalidate the session there
       await http.post(
         Uri.parse(_apiEndpoints.logout),
         headers: {'Content-Type': 'application/json'},
@@ -86,14 +117,20 @@ class _ProfilePageState extends State<ProfilePage> {
       debugPrint("Error calling logout endpoint, but logging out locally anyway: $e");
     }
 
-    // Clear the saved session data from the device's local storage
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('session_token');
     await prefs.remove('regNo');
 
+    // ✅ CLEAR ALL STATIC CACHES USING THE CLASS NAME
+    // Ensure the class names match your file/class definitions exactly.
+    DashboardScreen.dashboardCache = null;
+    CreditsScreen.creditsCache = null;
+    MessMenuPage.menuCache = null;
+    CalendarPage.firebaseEventsCache = null;
+    ProfilePage._profileFutureCache = null; // Clear this page's own cache
+
     if (!mounted) return;
 
-    // Navigate to the LoginPage and remove all routes behind it
     Navigator.of(context).pushAndRemoveUntil(
       MaterialPageRoute(builder: (context) => LoginPage(url: widget.url)),
           (Route<dynamic> route) => false,
@@ -102,6 +139,7 @@ class _ProfilePageState extends State<ProfilePage> {
 
   @override
   Widget build(BuildContext context) {
+    // ... (build method remains identical) ...
     return Consumer<ThemeProvider>(
       builder: (context, themeProvider, child) {
         return Scaffold(
@@ -131,83 +169,87 @@ class _ProfilePageState extends State<ProfilePage> {
               final semester = profileData['semester'] ?? "";
               final picUrl = data['profilePic'] as String?;
 
-              return SingleChildScrollView(
-                child: Column(
-                  children: [
-                    Container(
-                      width: double.infinity,
-                      decoration: BoxDecoration(
-                        gradient: themeProvider.isDarkMode
-                            ? const LinearGradient(colors: [Colors.black, Color(0xFF1A1A1A)])
-                            : const LinearGradient(colors: [Color(0xFF1e3a8a), Color(0xFF3b82f6)]),
-                        borderRadius: const BorderRadius.only(
-                          bottomLeft: Radius.circular(30),
-                          bottomRight: Radius.circular(30),
+              return RefreshIndicator(
+                onRefresh: _refreshProfile,
+                child: SingleChildScrollView(
+                  physics: const AlwaysScrollableScrollPhysics(), // Ensure refresh works
+                  child: Column(
+                    children: [
+                      Container(
+                        width: double.infinity,
+                        decoration: BoxDecoration(
+                          gradient: themeProvider.isDarkMode
+                              ? const LinearGradient(colors: [Colors.black, Color(0xFF1A1A1A)])
+                              : const LinearGradient(colors: [Color(0xFF1e3a8a), Color(0xFF3b82f6)]),
+                          borderRadius: const BorderRadius.only(
+                            bottomLeft: Radius.circular(30),
+                            bottomRight: Radius.circular(30),
+                          ),
+                        ),
+                        child: Column(
+                          children: [
+                            const SizedBox(height: 20),
+                            ClipOval(
+                              child: (picUrl != null && picUrl.isNotEmpty)
+                                  ? Image.network(
+                                picUrl,
+                                width: 120,
+                                height: 120,
+                                fit: BoxFit.cover,
+                                errorBuilder: (_, __, ___) => _buildDefaultAvatar(themeProvider),
+                              )
+                                  : _buildDefaultAvatar(themeProvider),
+                            ),
+                            const SizedBox(height: 15),
+                            Text(
+                              name,
+                              style: TextStyle(
+                                fontSize: 24,
+                                fontWeight: FontWeight.bold,
+                                color: themeProvider.isDarkMode ? themeProvider.primaryColor : Colors.white,
+                              ),
+                            ),
+                            const SizedBox(height: 5),
+                            Text(
+                              regNo,
+                              style: TextStyle(
+                                fontSize: 16,
+                                color: themeProvider.isDarkMode ? themeProvider.textSecondaryColor : Colors.white70,
+                              ),
+                            ),
+                            const SizedBox(height: 30),
+                          ],
                         ),
                       ),
-                      child: Column(
-                        children: [
-                          const SizedBox(height: 20),
-                          ClipOval(
-                            child: (picUrl != null && picUrl.isNotEmpty) // ✅ Added isNotEmpty check
-                                ? Image.network(
-                              picUrl,
-                              width: 120,
-                              height: 120,
-                              fit: BoxFit.cover,
-                              errorBuilder: (_, __, ___) => _buildDefaultAvatar(themeProvider),
-                            )
-                                : _buildDefaultAvatar(themeProvider),
-                          ),
-                          const SizedBox(height: 15),
-                          Text(
-                            name,
-                            style: TextStyle(
-                              fontSize: 24,
-                              fontWeight: FontWeight.bold,
-                              color: themeProvider.isDarkMode ? themeProvider.primaryColor : Colors.white,
+                      const SizedBox(height: 30),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 20),
+                        child: Column(
+                          children: [
+                            _buildProfileCard('Department', department, Icons.school, themeProvider.primaryColor, themeProvider),
+                            const SizedBox(height: 15),
+                            _buildProfileCard('Semester', semester, Icons.calendar_today, Colors.green, themeProvider),
+                            const SizedBox(height: 15),
+                            _buildProfileCard('Batch', _getBatch(regNo, department), Icons.group, Colors.orange, themeProvider),
+                            const SizedBox(height: 15),
+                            _buildProfileCard('Email', _getEmail(regNo), Icons.email, themeProvider.primaryColor, themeProvider),
+                            const SizedBox(height: 30),
+                            ElevatedButton.icon(
+                              onPressed: _logout,
+                              icon: const Icon(Icons.logout, color: Colors.white),
+                              label: const Text('Log Out', style: TextStyle(color: Colors.white)),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.redAccent,
+                                padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 24),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                              ),
                             ),
-                          ),
-                          const SizedBox(height: 5),
-                          Text(
-                            regNo,
-                            style: TextStyle(
-                              fontSize: 16,
-                              color: themeProvider.isDarkMode ? themeProvider.textSecondaryColor : Colors.white70,
-                            ),
-                          ),
-                          const SizedBox(height: 30),
-                        ],
+                            const SizedBox(height: 30),
+                          ],
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 30),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 20),
-                      child: Column(
-                        children: [
-                          _buildProfileCard('Department', department, Icons.school, themeProvider.primaryColor, themeProvider),
-                          const SizedBox(height: 15),
-                          _buildProfileCard('Semester', semester, Icons.calendar_today, Colors.green, themeProvider),
-                          const SizedBox(height: 15),
-                          _buildProfileCard('Batch', _getBatch(regNo, department), Icons.group, Colors.orange, themeProvider),
-                          const SizedBox(height: 15),
-                          _buildProfileCard('Email', _getEmail(regNo), Icons.email, themeProvider.primaryColor, themeProvider),
-                          const SizedBox(height: 30),
-                          ElevatedButton.icon(
-                            onPressed: _logout,
-                            icon: const Icon(Icons.logout, color: Colors.white),
-                            label: const Text('Log Out', style: TextStyle(color: Colors.white)),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.redAccent,
-                              padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 24),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                            ),
-                          ),
-                          const SizedBox(height: 30),
-                        ],
-                      ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               );
             },
@@ -217,6 +259,7 @@ class _ProfilePageState extends State<ProfilePage> {
     );
   }
 
+  // ... (All other build/helper methods remain identical)
   Widget _buildDefaultAvatar(ThemeProvider themeProvider) {
     return Icon(
       Icons.person,
