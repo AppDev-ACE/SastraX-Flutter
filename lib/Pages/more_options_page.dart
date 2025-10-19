@@ -8,6 +8,10 @@ import 'about_team_screen.dart';
 import 'club_hub.dart';
 import 'credits_page.dart';
 import 'internals_page.dart';
+// --- Imports for the new screens ---
+import 'material_bot/material_bot.dart';
+import 'material_bot/study_material_bot.dart';
+// ---------------------------------
 
 class MoreOptionsScreen extends StatelessWidget {
   final String token;
@@ -22,7 +26,6 @@ class MoreOptionsScreen extends StatelessWidget {
     required this.regNo,
   });
   // -----------------------------------------------------------------
-
 
   static const List<Map<String, dynamic>> _options = [
     {
@@ -59,6 +62,20 @@ class MoreOptionsScreen extends StatelessWidget {
       'icon': Icons.info_outline,
       'color': Colors.indigo,
       'route': 'about_team',
+    },
+    {
+      'title': 'Study Material Bot',
+      'subtitle': 'Chat for Course Materials',
+      'icon': Icons.smart_toy_outlined,
+      'color': Colors.orange,
+      'route': 'material_bot',
+    },
+    {
+      'title': 'Study Wise PYQ Bot',
+      'subtitle': 'Find PYQs ',
+      'icon': Icons.menu_book_outlined,
+      'color': Colors.brown,
+      'route': 'study_material_bot',
     },
   ];
 
@@ -102,7 +119,8 @@ class MoreOptionsScreen extends StatelessWidget {
         final cache = DashboardScreen.dashboardCache;
 
         // 2. Extract the data, providing empty lists as a safe fallback
-        final List<dynamic> semGrades = cache?['semGrades'] as List<dynamic>? ?? [];
+        final List<dynamic> semGrades =
+            cache?['semGrades'] as List<dynamic>? ?? [];
         final List<dynamic> cgpa = cache?['cgpa'] as List<dynamic>? ?? [];
 
         // 3. Check if the necessary data is available in the cache
@@ -110,7 +128,8 @@ class MoreOptionsScreen extends StatelessWidget {
           // If data isn't loaded yet, inform the user.
           ScaffoldMessenger.of(ctx).showSnackBar(
             const SnackBar(
-              content: Text('Data not loaded yet. Please visit the Home screen first.'),
+              content: Text(
+                  'Data not loaded yet. Please visit the Home screen first.'),
               backgroundColor: Colors.orange,
             ),
           );
@@ -124,7 +143,7 @@ class MoreOptionsScreen extends StatelessWidget {
                 url: url,
                 regNo: regNo,
                 initialSemGrades: semGrades, // Pass the data from the cache
-                initialCgpa: cgpa,         // Pass the data from the cache
+                initialCgpa: cgpa, // Pass the data from the cache
               ),
             ),
           );
@@ -142,9 +161,21 @@ class MoreOptionsScreen extends StatelessWidget {
         break;
       case 'leave_application':
       // Corrected navigation to the screen widget
-        Navigator.push(
-            ctx, MaterialPageRoute(builder: (_) => const LeaveApplicationScreen()));
+        Navigator.push(ctx,
+            MaterialPageRoute(builder: (_) => const LeaveApplicationScreen()));
         break;
+
+    // --- ADDED NAVIGATION FOR BOTS ---
+      case 'material_bot':
+        Navigator.push(
+            ctx, MaterialPageRoute(builder: (_) => MaterialBot(url: url ,token: token)));
+        break;
+      case 'study_material_bot':
+        Navigator.push(
+            ctx, MaterialPageRoute(builder: (_) => StudyMaterialBot(url: url , token: token,)));
+        break;
+    // --- END OF ADDITIONS ---
+
       default:
         ScaffoldMessenger.of(ctx).showSnackBar(
           const SnackBar(content: Text('This feature is coming soon!')),

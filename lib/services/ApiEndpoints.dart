@@ -38,4 +38,5 @@ class ApiEndpoints {
   // Other
   String get bunk => '$baseUrl/bunk';
   String get messMenu => '$baseUrl/messMenu';
+  String get pyqBot => '$baseUrl/chatbot';
 }
