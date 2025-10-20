@@ -67,7 +67,8 @@ class AttendancePieChart extends StatelessWidget {
                                 ? Colors.red.shade400
                                 : Colors.green.shade400,
                             value: attendancePercentage,
-                            title: '${attendancePercentage.toInt()}%',
+                            // ✅ MODIFIED: Format the percentage to 2 decimal places
+                            title: '${attendancePercentage.toStringAsFixed(2)}%',
                             radius: 50,
                             titleStyle: const TextStyle(
                               fontSize: 12,

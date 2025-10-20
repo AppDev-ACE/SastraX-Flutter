@@ -1,4 +1,3 @@
-// subject_attendance_detail.dart
 import 'package:flutter/material.dart';
 import 'package:flutter/widgets.dart';
 import 'package:fl_chart/fl_chart.dart';
@@ -238,17 +237,6 @@ class _SubjectAttendanceDetailState extends State<SubjectAttendanceDetail> {
   Color _getSubjectColor(String subject) { final hash = subject.hashCode; return Color((hash & 0xFFFFFF) | 0xFF000000).withOpacity(1.0); }
   Color _getStatusColor(String status) { switch (status.toLowerCase()) { case 'present': return Colors.green; case 'absent': return Colors.red; case 'od': return Colors.orange; default: return Colors.grey; } }
 
-  // --- Chart Title Helpers ---
-  Widget monthTitles(double value, TitleMeta meta, BuildContext context, double scale) {
-    final style = TextStyle( color: _getTextColor(context), fontWeight: FontWeight.bold, fontSize: 10 * scale);
-    String text;
-    final now = DateTime.now();
-    final monthsToShow = List.generate(5, (index) => DateTime(now.year, now.month - index)).reversed.map((date) => DateFormat('MMM').format(date)).toList();
-    if (value.toInt() >= 0 && value.toInt() < monthsToShow.length) { text = monthsToShow[value.toInt()]; } else { text = ''; }
-    return SideTitleWidget( axisSide: meta.axisSide, space: 8 * scale, child: Text(text, style: style));
-  }
-  Widget leftTitles(double value, TitleMeta meta, BuildContext context, double scale) { final style = TextStyle( color: _getTextColor(context), fontWeight: FontWeight.bold, fontSize: 10 * scale); String text; switch (value.toInt()) { case 0: text = '0%'; break; case 20: text = '20%'; break; case 40: text = '40%'; break; case 60: text = '60%'; break; case 80: text = '80%'; break; case 100: text = '100%'; break; default: return Container(); } return SideTitleWidget( axisSide: meta.axisSide, space: 8 * scale, child: Text(text, style: style)); }
-
   // --- Recommendation Helper ---
   Widget _buildRecommendationItem(BuildContext context, String title, String value, IconData icon, Color color, double scale) { return Row( children: [ Icon(icon, color: color, size: 20 * scale), SizedBox(width: 8 * scale), Expanded( child: Column( crossAxisAlignment: CrossAxisAlignment.start, children: [ Text( title, style: TextStyle( fontSize: 12 * scale, color: _getSecondaryTextColor(context) ) ), Text( value?.toString() ?? '', style: TextStyle( fontWeight: FontWeight.bold, color: _getTextColor(context), fontSize: 14 * scale ), ), ], ), ), ], ); }
 
@@ -261,9 +249,6 @@ class _SubjectAttendanceDetailState extends State<SubjectAttendanceDetail> {
     final double rPadding = screenWidth * 0.04;
     final bool isDark = _isDarkMode(context);
     final Color goalIconColor = isDark ? SubjectAttendanceDetail.lightBlue : SubjectAttendanceDetail.primaryBlue;
-
-    // Example monthly data (replace with actual processed data if needed)
-    final List<Map<String, dynamic>> monthlyData = [ {'month': 'Jun', 'percentage': 75}, {'month': 'Jul', 'percentage': 78}, {'month': 'Aug', 'percentage': 82}, {'month': 'Sep', 'percentage': 79}, {'month': 'Oct', 'percentage': widget.attendancePercentage.toInt()}, ];
 
     return Scaffold(
       backgroundColor: _getBackgroundColor(context),
@@ -334,104 +319,7 @@ class _SubjectAttendanceDetailState extends State<SubjectAttendanceDetail> {
             ),
             SizedBox(height: 20 * scale),
 
-            // Monthly Trend Chart
-            Text('Monthly Trend',
-                style: TextStyle(
-                    fontSize: 18 * scale,
-                    fontWeight: FontWeight.bold,
-                    color: _getTextColor(context))),
-            SizedBox(height: 16 * scale),
-            SizedBox(
-              height: 200 * scale,
-              child: LineChart(
-                LineChartData(
-                  gridData: FlGridData(
-                      show: true,
-                      drawVerticalLine: false,
-                      horizontalInterval: 20,
-                      getDrawingHorizontalLine: (v) => FlLine(
-                          color: _getGridColor(context),
-                          strokeWidth: 1)),
-                  titlesData: FlTitlesData(
-                    show: true,
-                    bottomTitles: AxisTitles(
-                        sideTitles: SideTitles(
-                            showTitles: true,
-                            reservedSize: 30 * scale,
-                            interval: 1,
-                            getTitlesWidget: (v, m) =>
-                                monthTitles(v, m, context, scale))),
-                    leftTitles: AxisTitles(
-                        sideTitles: SideTitles(
-                            showTitles: true,
-                            reservedSize: 42 * scale,
-                            interval: 20,
-                            getTitlesWidget: (v, m) =>
-                                leftTitles(v, m, context, scale))),
-                    topTitles: const AxisTitles(
-                        sideTitles: SideTitles(showTitles: false)),
-                    rightTitles: const AxisTitles(
-                        sideTitles: SideTitles(showTitles: false)),
-                  ),
-                  borderData: FlBorderData(
-                      show: true,
-                      border: Border.all(color: _getGridColor(context))),
-                  minX: 0,
-                  maxX: (monthlyData.length - 1.0).clamp(0.0, double.infinity),
-                  minY: 0,
-                  maxY: 100,
-                  lineBarsData: [
-                    LineChartBarData(
-                      spots: monthlyData.asMap().entries.map((entry) {
-                        final percentage =
-                            (entry.value['percentage'] as num?)?.toDouble() ?? 0.0;
-                        return FlSpot(entry.key.toDouble(), percentage.clamp(0.0,100.0));
-                      }).toList(),
-                      isCurved: true,
-                      color: _getSubjectColor(widget.subjectName),
-                      barWidth: 3 * scale,
-                      isStrokeCapRound: true,
-                      dotData: const FlDotData(show: true),
-                      belowBarData: BarAreaData(
-                          show: true,
-                          color: _getSubjectColor(widget.subjectName).withOpacity(0.2)),
-                    ),
-                  ],
-                  lineTouchData: LineTouchData(
-                    touchTooltipData: LineTouchTooltipData(
-                      tooltipBgColor: _getCardColor(context).withOpacity(0.8),
-                      getTooltipItems: (List<LineBarSpot> touchedBarSpots) {
-                        return touchedBarSpots.map((barSpot) {
-                          final flSpot = barSpot;
-                          final index = flSpot.x.toInt();
-                          if (index < 0 || index >= monthlyData.length) return null;
-                          final month = monthlyData[index]['month'] as String? ?? '??';
-                          return LineTooltipItem(
-                            '$month\n',
-                            TextStyle(
-                              color: _getTextColor(context),
-                              fontWeight: FontWeight.bold,
-                              fontSize: 12 * scale,
-                            ),
-                            children: <TextSpan>[
-                              TextSpan(
-                                text: '${flSpot.y.toInt()}%',
-                                style: TextStyle(
-                                  color: _getAttendanceColor(flSpot.y),
-                                  fontWeight: FontWeight.w900,
-                                  fontSize: 14 * scale,
-                                ),
-                              ),
-                            ],
-                          );
-                        }).whereType<LineTooltipItem>().toList();
-                      },
-                    ),
-                  ),
-                ),
-              ),
-            ),
-            SizedBox(height: 20 * scale),
+            // ❌ GRAPH REMOVED
 
             // RECENT ATTENDANCE LIST (Using user's provided structure)
             Text('Recent Attendance Records',

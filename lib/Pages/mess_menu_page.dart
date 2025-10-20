@@ -2,34 +2,36 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/theme_model.dart';
 import '../services/ApiEndpoints.dart';
+import '../components/theme_toggle_button.dart';
 
 class MessMenuPage extends StatefulWidget {
   final String url;
-  const MessMenuPage({super.key, required this.url});
+  final bool isFemaleHosteler;
 
-  // ✅ 1. CACHE MOVED HERE
-  /// This holds the menu after the first fetch to prevent re-fetching.
-  static List<dynamic>? menuCache;
+  const MessMenuPage({
+    super.key,
+    required this.url,
+    required this.isFemaleHosteler,
+  });
+
+  static Map<String, List<dynamic>> menuCache = {};
 
   @override
   State<MessMenuPage> createState() => MessMenuPageState();
 }
 
 class MessMenuPageState extends State<MessMenuPage> {
-  // ❌ 1. STATIC CACHE VARIABLE REMOVED FROM HERE
-
   final List<String> weekDays = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
 
   late PageController _pageController;
   late final ApiEndpoints api;
+  late String _menuCacheKey;
 
-  // ✅ 2. STATE INITIALIZED FROM WIDGET'S CACHE
-  List<dynamic> _fullMenu = MessMenuPage.menuCache ?? [];
+  List<dynamic> _fullMenu = [];
   List<dynamic> _filtered = [];
-  bool isLoading = MessMenuPage.menuCache == null;
+  late bool isLoading;
 
   late String selectedWeek;
   late String selectedDayAbbr;
@@ -42,51 +44,69 @@ class MessMenuPageState extends State<MessMenuPage> {
     final todayIdx = now.weekday % 7;
     selectedDayAbbr = weekDays[todayIdx];
     _pageController = PageController(initialPage: todayIdx);
-    selectedWeek = weekOfMonth(now).toString();
 
-    // ✅ 3. CACHE-AWARE LOADING
-    if (MessMenuPage.menuCache == null) {
-      // Cache is empty, fetch from Firebase
-      _fetchMenu();
+    // --- ✅ CORRECTED WEEK CALCULATION ---
+    // Instead of calculating the week of the month, we now calculate
+    // the week within the continuous 4-week mess cycle.
+    selectedWeek = _getMenuWeekCycle(now).toString();
+    print("Calculated Menu Cycle Week: $selectedWeek");
+    // --- END CORRECTION ---
+
+    _menuCacheKey = widget.isFemaleHosteler ? 'messMenuGirls' : 'messMenu';
+
+    if (MessMenuPage.menuCache.containsKey(_menuCacheKey)) {
+      _fullMenu = MessMenuPage.menuCache[_menuCacheKey]!;
+      isLoading = false;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _applyWeekFilter();
+      });
     } else {
-      // Cache exists, just apply filters
-      _applyWeekFilter();
+      isLoading = true;
+      _fetchMenu();
     }
   }
 
-  int weekOfMonth(DateTime date) {
-    final firstDay = DateTime(date.year, date.month, 1);
-    final before = firstDay.weekday % 7;
-    final week = ((before + date.day - 1) ~/ 7) + 1;
-    return (week - 1) % 4 + 1;
+  // ❌ REMOVED: The old weekOfMonth function which was causing the issue.
+
+  // --- ✅ ADDED: New helper functions to calculate the correct menu cycle week ---
+  /// Calculates the day number within the year (e.g., Feb 1st is day 32).
+  int _dayOfYear(DateTime date) {
+    return date.difference(DateTime(date.year, 1, 1)).inDays + 1;
   }
 
-  // ✅ 4. POPULATE WIDGET'S CACHE
+  /// Calculates which week of the 4-week menu cycle the current date falls into.
+  int _getMenuWeekCycle(DateTime date) {
+    final dayOfYear = _dayOfYear(date);
+    // Determine the week number of the year.
+    final weekOfYear = (dayOfYear / 7).ceil();
+    // Map the week of the year to a repeating 1-4 cycle.
+    return (weekOfYear - 1) % 4 + 1;
+  }
+  // --- END ADDITIONS ---
+
   Future<void> _fetchMenu() async {
-    // Safety check
-    if (MessMenuPage.menuCache != null) {
-      _fullMenu = MessMenuPage.menuCache!;
+    if (MessMenuPage.menuCache.containsKey(_menuCacheKey)) {
+      _fullMenu = MessMenuPage.menuCache[_menuCacheKey]!;
       _applyWeekFilter();
       return;
     }
 
-    try {
-      final docSnapshot = await FirebaseFirestore.instance
-          .collection('cache')
-          .doc('messMenu')
-          .get();
+    final String endpointUrl =
+    widget.isFemaleHosteler ? api.messMenuGirls : api.messMenu;
 
-      if (docSnapshot.exists && docSnapshot.data() != null) {
-        final data = docSnapshot.data()!;
-        if (data.containsKey('menu') && data['menu'] is List) {
-          _fullMenu = data['menu'] as List<dynamic>;
-          MessMenuPage.menuCache = _fullMenu; // ✅ POPULATE THE CACHE
-          _applyWeekFilter();
-        } else {
-          throw Exception("'menu' field is missing or not a list in the document.");
-        }
+    print("Mess menu '$_menuCacheKey' not in cache. Fetching from API: $endpointUrl");
+
+    try {
+      final response = await http.get(Uri.parse(endpointUrl));
+
+      if (response.statusCode == 200) {
+        final List<dynamic> menuData = jsonDecode(response.body);
+        _fullMenu = menuData;
+        MessMenuPage.menuCache[_menuCacheKey] = _fullMenu;
+        print("Successfully fetched and cached '$_menuCacheKey' menu.");
+        _applyWeekFilter();
       } else {
-        throw Exception("The 'messMenu' document was not found in the 'cache' collection.");
+        throw Exception('Failed to load menu. Status code: ${response.statusCode}');
       }
     } catch (e) {
       if (mounted) {
@@ -99,7 +119,6 @@ class MessMenuPageState extends State<MessMenuPage> {
   }
 
   void _applyWeekFilter() {
-    // ... (function is identical)
     _filtered = _fullMenu
         .where((d) => d['week'].toString() == selectedWeek)
         .toList()
@@ -111,7 +130,8 @@ class MessMenuPageState extends State<MessMenuPage> {
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final todayPos = _filtered.indexWhere((d) =>
-      d['day'].toString().substring(0, 3).toUpperCase() == selectedDayAbbr);
+      d['day'].toString().substring(0, 3).toUpperCase() ==
+          selectedDayAbbr);
       if (_pageController.hasClients && todayPos != -1) {
         _pageController.jumpToPage(todayPos);
       }
@@ -123,15 +143,39 @@ class MessMenuPageState extends State<MessMenuPage> {
 
   @override
   Widget build(BuildContext context) {
-    // ... (build method is identical)
     return Consumer<ThemeProvider>(
       builder: (_, theme, __) => Scaffold(
+        appBar: AppBar(
+          title: const Text('Mess Menu'),
+          centerTitle: true,
+          backgroundColor:
+          theme.isDarkMode ? AppTheme.darkBackground : AppTheme.primaryBlue,
+          elevation: 0,
+          actions: [
+            Padding(
+              padding: const EdgeInsets.only(right: 16),
+              child: ThemeToggleButton(
+                isDarkMode: theme.isDarkMode,
+                onToggle: theme.toggleTheme,
+              ),
+            )
+          ],
+        ),
         backgroundColor: theme.backgroundColor,
         body: SafeArea(
           child: isLoading
               ? const Center(child: CircularProgressIndicator())
               : _filtered.isEmpty
-              ? const Center(child: Text('No menu found for this week'))
+              ? Center(
+            child: Padding(
+              padding: const EdgeInsets.all(20.0),
+              child: Text(
+                'No menu found for the current cycle (Week $selectedWeek).',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: theme.textSecondaryColor),
+              ),
+            ),
+          )
               : Column(
             children: [
               const SizedBox(height: 12),
@@ -145,8 +189,7 @@ class MessMenuPageState extends State<MessMenuPage> {
                   controller: _pageController,
                   physics: const NeverScrollableScrollPhysics(),
                   itemCount: _filtered.length,
-                  itemBuilder: (_, idx) =>
-                      _buildDayMenu(idx, theme),
+                  itemBuilder: (_, idx) => _buildDayMenu(idx, theme),
                 ),
               ),
             ],
@@ -157,12 +200,12 @@ class MessMenuPageState extends State<MessMenuPage> {
   }
 
   Widget _buildDayMenu(int idx, ThemeProvider theme) {
-    // ... (build method is identical)
     final day = _filtered[idx];
     return ListView(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
       children: [
-        _mealCard('Breakfast', (day['breakfast'] as List<dynamic>).join(', '), theme),
+        _mealCard(
+            'Breakfast', (day['breakfast'] as List<dynamic>).join(', '), theme),
         _mealCard('Lunch', (day['lunch'] as List<dynamic>).join(', '), theme),
         _mealCard('Snacks', (day['snacks'] as List<dynamic>).join(', '), theme),
         _mealCard('Dinner', (day['dinner'] as List<dynamic>).join(', '), theme),
@@ -171,7 +214,6 @@ class MessMenuPageState extends State<MessMenuPage> {
   }
 
   Widget _dayRow(ThemeProvider theme) {
-    // ... (build method is identical)
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: weekDays.map((abbr) {
@@ -180,7 +222,8 @@ class MessMenuPageState extends State<MessMenuPage> {
           child: GestureDetector(
             onTap: () {
               final newPage = _filtered.indexWhere((d) =>
-              (d['day'] as String?)?.substring(0, 3).toUpperCase() == abbr);
+              (d['day'] as String?)?.substring(0, 3).toUpperCase() ==
+                  abbr);
 
               if (newPage != -1) {
                 setState(() => selectedDayAbbr = abbr);
@@ -227,7 +270,6 @@ class MessMenuPageState extends State<MessMenuPage> {
   }
 
   bool _isCurrentMeal(String mealName) {
-    // ... (function is identical)
     final now = TimeOfDay.now();
 
     bool inRange(TimeOfDay start, TimeOfDay end) {
@@ -239,20 +281,16 @@ class MessMenuPageState extends State<MessMenuPage> {
 
     switch (mealName) {
       case 'Breakfast':
-        return inRange(
-            const TimeOfDay(hour: 7, minute: 30),
+        return inRange(const TimeOfDay(hour: 7, minute: 30),
             const TimeOfDay(hour: 9, minute: 0));
       case 'Lunch':
-        return inRange(
-            const TimeOfDay(hour: 12, minute: 0),
+        return inRange(const TimeOfDay(hour: 12, minute: 0),
             const TimeOfDay(hour: 14, minute: 0));
       case 'Snacks':
-        return inRange(
-            const TimeOfDay(hour: 17, minute: 30),
+        return inRange(const TimeOfDay(hour: 17, minute: 30),
             const TimeOfDay(hour: 18, minute: 30));
       case 'Dinner':
-        return inRange(
-            const TimeOfDay(hour: 19, minute: 30),
+        return inRange(const TimeOfDay(hour: 19, minute: 30),
             const TimeOfDay(hour: 21, minute: 0));
       default:
         return false;
@@ -260,7 +298,6 @@ class MessMenuPageState extends State<MessMenuPage> {
   }
 
   Widget _mealCard(String title, String menu, ThemeProvider theme) {
-    // ... (build method is identical)
     final Map<String, Color> mealColors = {
       'Breakfast': Colors.amber.shade300,
       'Lunch': Colors.lightGreen.shade300,
@@ -346,3 +383,4 @@ class MessMenuPageState extends State<MessMenuPage> {
     );
   }
 }
+

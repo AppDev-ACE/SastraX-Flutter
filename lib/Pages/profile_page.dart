@@ -124,7 +124,7 @@ class ProfilePageState extends State<ProfilePage> {
     // ✅ CLEAR ALL STATIC CACHES USING THE CLASS NAME
     // Ensure the class names match your file/class definitions exactly.
     DashboardScreen.dashboardCache = null;
-    MessMenuPage.menuCache = null;
+    MessMenuPage.menuCache.clear();
     CalendarPage.firebaseEventsCache = null;
     ProfilePage._profileFutureCache = null; // Clear this page's own cache
 

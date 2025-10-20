@@ -104,20 +104,6 @@ class InternalsPage extends StatelessWidget {
     return Scaffold(
       // The AppBar has been updated as you requested
       backgroundColor: _getBackgroundColor(context),
-      appBar: AppBar(
-        actions: [
-          Padding(
-              padding: const EdgeInsets.only(right: 16),
-              child: ThemeToggleButton(
-                  isDarkMode: _isDarkMode(context), onToggle: themeProvider.toggleTheme)),
-        ],
-        title: Text(
-          'Internal Marks',
-          style: theme.textTheme.titleLarge?.copyWith(
-            color: Colors.white,
-          ),
-        ),
-      ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(20),
         child: Column(

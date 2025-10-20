@@ -1,40 +1,28 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
-// --- ADD THIS IMPORT ---
-import 'home_page.dart'; // Or the correct path to your HomePage file
-// -----------------------
+import 'home_page.dart';
+import 'mess_menu_page.dart';
 import 'LeaveApplication.dart';
 import 'about_team_screen.dart';
 import 'club_hub.dart';
 import 'credits_page.dart';
-import 'internals_page.dart';
-// --- Imports for the new screens ---
 import 'material_bot/material_bot.dart';
 import 'material_bot/study_material_bot.dart';
-// ---------------------------------
 
 class MoreOptionsScreen extends StatelessWidget {
   final String token;
   final String url;
   final String regNo;
 
-  // --- REMOVED initialSemGrades and initialCgpa from constructor ---
   const MoreOptionsScreen({
     super.key,
     required this.token,
     required this.url,
     required this.regNo,
   });
-  // -----------------------------------------------------------------
 
-  static const List<Map<String, dynamic>> _options = [
-    {
-      'title': 'Student Internals',
-      'subtitle': 'View marks & grades',
-      'icon': Icons.assessment,
-      'color': Colors.blue,
-      'route': 'internals',
-    },
+  // --- ✅ MODIFIED: This list now only contains options visible to EVERYONE ---
+  static const List<Map<String, dynamic>> _baseOptions = [
     {
       'title': 'Credits',
       'subtitle': 'View Credits',
@@ -49,13 +37,7 @@ class MoreOptionsScreen extends StatelessWidget {
       'color': Colors.teal,
       'route': 'clubs',
     },
-    {
-      'title': 'Leave Application',
-      'subtitle': 'Apply for leave',
-      'icon': Icons.outbox,
-      'color': Colors.purple,
-      'route': 'leave_application',
-    },
+    // 'Mess Menu' & 'Leave Application' are removed and added conditionally
     {
       'title': 'About Team',
       'subtitle': 'Meet the developers',
@@ -79,8 +61,44 @@ class MoreOptionsScreen extends StatelessWidget {
     },
   ];
 
+  // --- Data blocks for conditional options ---
+  static const Map<String, dynamic> _messMenuOption = {
+    'title': 'Mess Menu',
+    'subtitle': 'Check weekly food schedule',
+    'icon': Icons.restaurant,
+    'color': Colors.red,
+    'route': 'mess',
+  };
+
+  // ✅ ADDED: Leave Application data block
+  static const Map<String, dynamic> _leaveApplicationOption = {
+    'title': 'Leave Application',
+    'subtitle': 'Apply for leave',
+    'icon': Icons.outbox,
+    'color': Colors.purple,
+    'route': 'leave_application',
+  };
+
+
   @override
   Widget build(BuildContext context) {
+    // --- ✅ MODIFIED: Logic now handles both conditional options ---
+    final List<Map<String, dynamic>> displayedOptions = List.from(_baseOptions);
+
+    // Read the parsed student info from the static cache
+    final cache = DashboardScreen.dashboardCache;
+    final studentInfo = cache?['studentInfo'] as Map<String, dynamic>? ?? {};
+    print("The Student Info is : ${cache?['studentInfo']}");
+    final isHosteler = (studentInfo['status'] ?? '').toLowerCase() == 'hosteler';
+
+    // Conditionally add the options only for hostelers
+    if (isHosteler) {
+      // Insert Mess Menu at index 2
+      displayedOptions.insert(2, _messMenuOption);
+      // Insert Leave Application after Mess Menu (now at index 3)
+      displayedOptions.insert(3, _leaveApplicationOption);
+    }
+
     return Scaffold(
       backgroundColor: Theme.of(context).colorScheme.background,
       body: Padding(
@@ -92,10 +110,11 @@ class MoreOptionsScreen extends StatelessWidget {
             crossAxisSpacing: 20,
             childAspectRatio: 0.95,
           ),
-          itemCount: _options.length,
+          // Use the new dynamic list
+          itemCount: displayedOptions.length,
           itemBuilder: (ctx, i) => _OptionCard(
-            data: _options[i],
-            onTap: () => _handleTap(context, _options[i]['route'] as String),
+            data: displayedOptions[i],
+            onTap: () => _handleTap(context, displayedOptions[i]['route'] as String),
             index: i,
           ),
         ),
@@ -103,38 +122,25 @@ class MoreOptionsScreen extends StatelessWidget {
     );
   }
 
+  // --- (No changes needed in _handleTap) ---
   void _handleTap(BuildContext ctx, String route) {
+    final cache = DashboardScreen.dashboardCache;
+    final studentInfo = cache?['studentInfo'] as Map<String, dynamic>? ?? {};
+    final isFemale = (studentInfo['gender'] ?? '').toLowerCase() == 'female';
+
     switch (route) {
-      case 'internals':
-        Navigator.push(
-            ctx,
-            MaterialPageRoute(
-                builder: (_) =>
-                    InternalsPage(token: token, url: url, regNo: regNo)));
-        break;
-
-    // --- MODIFIED CREDITS CASE ---
       case 'credits':
-      // 1. Access the static cache directly from DashboardScreen
-        final cache = DashboardScreen.dashboardCache;
-
-        // 2. Extract the data, providing empty lists as a safe fallback
-        final List<dynamic> semGrades =
-            cache?['semGrades'] as List<dynamic>? ?? [];
+        final List<dynamic> semGrades = cache?['semGrades'] as List<dynamic>? ?? [];
         final List<dynamic> cgpa = cache?['cgpa'] as List<dynamic>? ?? [];
 
-        // 3. Check if the necessary data is available in the cache
         if (cache == null || semGrades.isEmpty || cgpa.isEmpty) {
-          // If data isn't loaded yet, inform the user.
           ScaffoldMessenger.of(ctx).showSnackBar(
             const SnackBar(
-              content: Text(
-                  'Data not loaded yet. Please visit the Home screen first.'),
+              content: Text('Data not loaded yet. Please visit the Home screen first.'),
               backgroundColor: Colors.orange,
             ),
           );
         } else {
-          // If data exists, navigate and pass it to CreditsScreen
           Navigator.push(
             ctx,
             MaterialPageRoute(
@@ -142,39 +148,37 @@ class MoreOptionsScreen extends StatelessWidget {
                 token: token,
                 url: url,
                 regNo: regNo,
-                initialSemGrades: semGrades, // Pass the data from the cache
-                initialCgpa: cgpa, // Pass the data from the cache
+                initialSemGrades: semGrades,
+                initialCgpa: cgpa,
               ),
             ),
           );
         }
         break;
-    // --- END OF MODIFICATION ---
 
       case 'about_team':
-        Navigator.push(
-            ctx, MaterialPageRoute(builder: (_) => AboutTeamScreen()));
+        Navigator.push(ctx, MaterialPageRoute(builder: (_) => AboutTeamScreen()));
         break;
       case 'clubs':
-        Navigator.push(
-            ctx, MaterialPageRoute(builder: (_) => const ClubHubPage()));
-        break;
-      case 'leave_application':
-      // Corrected navigation to the screen widget
-        Navigator.push(ctx,
-            MaterialPageRoute(builder: (_) => LeaveApplicationScreen(token: token , regNo: regNo, apiUrl: url,)));
+        Navigator.push(ctx, MaterialPageRoute(builder: (_) => const ClubHubPage()));
         break;
 
-    // --- ADDED NAVIGATION FOR BOTS ---
+      case 'mess':
+        Navigator.push(ctx, MaterialPageRoute(builder: (_) => MessMenuPage(
+          url: url,
+          isFemaleHosteler: isFemale,
+        )));
+        break;
+      case 'leave_application':
+        Navigator.push(ctx, MaterialPageRoute(builder: (_) => LeaveApplicationScreen(token: token , regNo: regNo, apiUrl: url,)));
+        break;
+
       case 'material_bot':
-        Navigator.push(
-            ctx, MaterialPageRoute(builder: (_) => MaterialBot(url: url ,token: token)));
+        Navigator.push(ctx, MaterialPageRoute(builder: (_) => MaterialBot(url: url ,token: token)));
         break;
       case 'study_material_bot':
-        Navigator.push(
-            ctx, MaterialPageRoute(builder: (_) => StudyMaterialBot(url: url , token: token,)));
+        Navigator.push(ctx, MaterialPageRoute(builder: (_) => StudyMaterialBot(url: url , token: token,)));
         break;
-    // --- END OF ADDITIONS ---
 
       default:
         ScaffoldMessenger.of(ctx).showSnackBar(
@@ -261,9 +265,11 @@ class _OptionCard extends StatelessWidget {
           ).animate().scale(
               delay: (index * 50).ms,
               curve: Curves.elasticOut,
-              duration: 400.ms);
+              duration: 400.ms
+          );
         },
       ),
     );
   }
 }
+
