@@ -162,7 +162,7 @@ class MoreOptionsScreen extends StatelessWidget {
       case 'leave_application':
       // Corrected navigation to the screen widget
         Navigator.push(ctx,
-            MaterialPageRoute(builder: (_) => const LeaveApplicationScreen()));
+            MaterialPageRoute(builder: (_) => LeaveApplicationScreen(token: token , regNo: regNo, apiUrl: url,)));
         break;
 
     // --- ADDED NAVIGATION FOR BOTS ---

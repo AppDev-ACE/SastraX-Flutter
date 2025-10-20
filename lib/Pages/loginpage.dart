@@ -474,42 +474,9 @@ class _LoginPageState extends State<LoginPage> {
                     ),
                   ),
                   const SizedBox(height: 10),
-                  TextButton(
-                    onPressed: _isLoggingIn ? null : () { // Disable button when logging in
-                      print("Navigating as guest...");
-                      const guestToken = "guest_token";
-                      // Simple check for the constant
-                      if (guestToken.isEmpty) {
-                        print("Error: Guest token is empty!");
-                        ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Error entering guest mode.'))
-                        );
-                        return;
-                      }
-                      Navigator.pushReplacement(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => HomePage(
-                            token: guestToken,
-                            url: widget.url,
-                            regNo: "",
-                          ),
-                        ),
-                      );
-                    },
-                    child: Text(
-                      'Continue without Login',
-                      style: TextStyle(
-                        color: themeProvider.isDarkMode
-                            ? Colors.blue.shade300
-                            : Colors.blue.shade700, // Your original style
-                      ),
-                    ),
-                  ),
                 ],
               ),
             ),
-            const SizedBox(height: 30), // Added padding at the bottom
           ],
         ),
       ),

@@ -254,7 +254,7 @@ class _StudyMaterialBotState extends State<StudyMaterialBot> {
       });
 
     } catch (e) {
-      final err = 'Network / timeout error: ${e.toString()}';
+      final err = 'Wrong Subject Name ! Please enter a valid subject name';
       final errMessage = ChatMessage(text: err, fromUser: false);
       setState(() {
         _lastError = err;
@@ -267,10 +267,17 @@ class _StudyMaterialBotState extends State<StudyMaterialBot> {
     }
   }
 
-  // --- RENAMED and MODIFIED: To find all URLs ---
+  // --- MODIFIED: To find all URLs and clean up trailing punctuation ---
   List<String> _extractAllUrls(String text) {
-    final matches = RegExp(r'(https?:\/\/[^\s<>,;"]+)').allMatches(text);
-    return matches.map((m) => m.group(0)!).toList();
+    final matches = RegExp(r'(https?:\/\/[^\s]+)').allMatches(text);
+    return matches.map((m) {
+      String url = m.group(0)!;
+      // Trim trailing comma, period, or closing parenthesis
+      while (url.endsWith(',') || url.endsWith('.') || url.endsWith(')')) {
+        url = url.substring(0, url.length - 1);
+      }
+      return url;
+    }).toList();
   }
 
   void _scrollToTop() {
@@ -280,19 +287,53 @@ class _StudyMaterialBotState extends State<StudyMaterialBot> {
     }
   }
 
+  // --- MODIFIED: Enhanced _openLink for robust URL parsing and launching ---
   Future<void> _openLink(String link) async {
-    final uri = Uri.tryParse(link);
+    Uri? uri;
+    try {
+      // 1. Try to parse the link first
+      uri = Uri.parse(link);
+    } catch (e) {
+      // 2. If parsing fails, try to encode and parse
+      final encodedLink = Uri.encodeFull(link);
+      uri = Uri.tryParse(encodedLink);
+    }
+
     if (uri == null) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('Invalid link')));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Error: Could not parse URL.')),
+        );
+      }
       return;
     }
-    if (!await canLaunchUrl(uri)) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('Cannot open link')));
-      return;
+
+    // 3. Attempt to launch the URL.
+    try {
+      final success = await launchUrl(
+        uri,
+        // Use externalApplication for guaranteed browser opening on all platforms
+        mode: LaunchMode.externalApplication,
+      );
+
+      if (!success) {
+        // 4. If launchUrl returns false (failure to find an app)
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+                content: Text('Could not open $link. Please check the URL.')),
+          );
+        }
+      }
+    } catch (e) {
+      // 5. Catch any platform-specific launch errors.
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+              content: Text('Failed to launch link: $e')),
+        );
+      }
     }
-    await launchUrl(uri, mode: LaunchMode.externalApplication);
   }
 
   // --- ADDED: Retry function ---
@@ -410,27 +451,6 @@ class _StudyMaterialBotState extends State<StudyMaterialBot> {
       body: SafeArea(
         child: Column(
           children: [
-            // --- ADDED: Retry Bar ---
-            if (_lastError != null)
-              Material(
-                color: Colors.red.shade100,
-                child: Padding(
-                  padding:
-                  const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  child: Row(
-                    children: [
-                      Expanded(
-                          child: Text(_lastError!,
-                              style: const TextStyle(color: Colors.red))),
-                      TextButton.icon(
-                          onPressed: _retryLast,
-                          icon: const Icon(Icons.refresh, color: Colors.red),
-                          label: const Text('Retry', style: TextStyle(color: Colors.red))),
-                    ],
-                  ),
-                ),
-              ),
-            // ------------------------
             Expanded(
               child: Padding(
                 padding:

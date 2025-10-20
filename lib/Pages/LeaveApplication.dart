@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
 
 // --- Data Model ---
 // All parameters are optional in the constructor.
@@ -22,11 +24,57 @@ class LeaveApplication {
     this.status,
     this.attachment,
   });
+
+  // Factory constructor for API/JSON data
+  factory LeaveApplication.fromJson(Map<String, dynamic> json) {
+    // Helper function to parse Date/Time string from API response
+    DateTime? parseDateTime(String? dateString) {
+      if (dateString == null || dateString.isEmpty) return null;
+      try {
+        // Assuming the API returns 'dd-MM-yyyy HH:mm' (e.g., '16-10-2025 10:00')
+        List<String> parts = dateString.split(RegExp(r'[ \/:-]'));
+        if (parts.length >= 5) {
+          return DateTime(
+            int.parse(parts[2]), // Year
+            int.parse(parts[1]), // Month
+            int.parse(parts[0]), // Day
+            int.parse(parts[3]), // Hour
+            int.parse(parts[4]), // Minute
+          );
+        }
+      } catch (e) {
+        debugPrint('Error parsing date: $dateString, Error: $e');
+      }
+      return null;
+    }
+
+    return LeaveApplication(
+      id: int.tryParse(json['sno'] ?? '0'),
+      leaveType: json['leaveType'],
+      from: parseDateTime(json['fromDate']),
+      to: parseDateTime(json['toDate']),
+      numberOfDays: double.tryParse(json['noOfDays'] ?? '0'),
+      reason: json['reason'],
+      status: json['status'],
+    );
+  }
 }
 
-// --- UI Screen Widget ---
+// ----------------------------------------------------
+// --- UI Screen Widget - MODIFIED CONSTRUCTOR ---
+// ----------------------------------------------------
 class LeaveApplicationScreen extends StatefulWidget {
-  const LeaveApplicationScreen({super.key});
+  // Required parameters for API interaction
+  final String token;
+  final String regNo;
+  final String apiUrl;
+
+  const LeaveApplicationScreen({
+    super.key,
+    required this.token,
+    required this.regNo,
+    required this.apiUrl,
+  });
 
   @override
   State<LeaveApplicationScreen> createState() => _LeaveApplicationScreenState();
@@ -34,39 +82,15 @@ class LeaveApplicationScreen extends StatefulWidget {
 
 class _LeaveApplicationScreenState extends State<LeaveApplicationScreen> {
   // Mock data for dropdown
-  final List<String> _leaveTypes = ['Casual Leave', 'Sick Leave', 'Special Leave', 'Exam Leave' , 'Weekday\\Weekend' , 'NSS\\NCC\\Moot Court'];
+  final List<String> _leaveTypes = ['Casual Leave', 'Sick Leave', 'Special Leave', 'Exam Leave', 'Weekday\\Weekend', 'NSS\\NCC\\Moot Court'];
   String? _selectedLeaveType;
 
-  // Mock data for previous applications
-  final List<LeaveApplication> _previousApplications = [
-    LeaveApplication(
-      id: 1,
-      leaveType: 'Open Holiday',
-      from: DateTime(2025, 8, 6, 14, 0),
-      to: DateTime(2025, 8, 11, 8, 0),
-      numberOfDays: 4.0,
-      reason: 'Open Holiday',
-      status: 'Approved',
-    ),
-    LeaveApplication(
-      id: 2,
-      leaveType: 'Weekday/Weekend',
-      from: DateTime(2025, 10, 17, 15, 0),
-      to: DateTime(2025, 10, 23, 10, 0),
-      numberOfDays: 7.0,
-      reason: 'Diwali Holidays',
-      status: 'Pending',
-    ),
-    LeaveApplication(
-      id: 3,
-      leaveType: 'Casual Leave',
-      from: DateTime(2025, 10, 1, 9, 0),
-      to: DateTime(2025, 10, 1, 18, 0),
-      numberOfDays: 1.0,
-      reason: 'Doctor\'s appointment',
-      status: 'Rejected',
-    ),
-  ];
+  // --- Leave History Data Storage (Initialised empty) ---
+  // The local variable to store the fetched data (replaces _previousApplications mock list)
+  List<LeaveApplication> _previousApplications = [];
+  bool _isLoading = true;
+  String? _errorMessage;
+  // --------------------------------------------------------
 
   // Form field controllers
   final TextEditingController _fromDateController = TextEditingController(text: '16-10-2025    10:00');
@@ -81,7 +105,11 @@ class _LeaveApplicationScreenState extends State<LeaveApplicationScreen> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _calculateDays());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _calculateDays();
+      // Start fetching history data on initialization
+      _fetchLeaveHistory();
+    });
   }
 
   @override
@@ -92,6 +120,61 @@ class _LeaveApplicationScreenState extends State<LeaveApplicationScreen> {
     _daysController.dispose();
     super.dispose();
   }
+
+  // --- Data Fetching Logic ---
+  Future<void> _fetchLeaveHistory({bool refresh = false}) async {
+    if (!mounted) return;
+
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    try {
+      final url = Uri.parse('${widget.apiUrl}/leaveHistory');
+      final response = await http.post(
+        url,
+        headers: {'Content-Type': 'application/json'},
+        // Accessing widget parameters from the State class
+        body: json.encode({
+          'token': widget.token,
+          'regNo': widget.regNo,
+          'refresh': refresh,
+        }),
+      );
+
+      if (response.statusCode == 200) {
+        final Map<String, dynamic> data = json.decode(response.body);
+
+        if (data['success'] == true) {
+          final List<dynamic> historyJson = data['leaveHistory'] ?? [];
+          // Store the fetched data in the local state variable
+          _previousApplications = historyJson
+              .map<LeaveApplication>((json) => LeaveApplication.fromJson(json as Map<String, dynamic>))
+              .toList();
+
+          if (refresh) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Leave history refreshed successfully!')),
+            );
+          }
+        } else {
+          _errorMessage = data['message'] ?? 'Failed to fetch leave history.';
+        }
+      } else {
+        _errorMessage = 'API failed with status: ${response.statusCode}';
+      }
+    } catch (e) {
+      _errorMessage = 'An unexpected error occurred: $e';
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
+  // ---------------------------
 
   void _calculateDays() {
     if (_fromDateTime == null || _toDateTime == null) {
@@ -167,22 +250,6 @@ class _LeaveApplicationScreenState extends State<LeaveApplicationScreen> {
         backgroundColor: Colors.green,
       ),
     );
-  }
-
-  void _refreshScreen() {
-    setState(() {
-      _selectedLeaveType = null;
-      _fromDateTime = null;
-      _toDateTime = null;
-      _fromDateController.text = '';
-      _toDateController.text = '';
-      _reasonController.text = '';
-      _daysController.text = '0';
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Form cleared and data refreshed.')),
-      );
-    });
   }
 
   Color _getStatusColor(String status) {
@@ -290,7 +357,6 @@ class _LeaveApplicationScreenState extends State<LeaveApplicationScreen> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.end,
                       children: [
-                        const SizedBox(width: 16),
                         ElevatedButton.icon(
                           onPressed: _submitApplication,
                           icon: const Icon(Icons.send_rounded),
@@ -309,14 +375,45 @@ class _LeaveApplicationScreenState extends State<LeaveApplicationScreen> {
               ),
             ),
             const SizedBox(height: 32),
-            Text(
-              'Previous Leave History',
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: appColor),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Previous Leave History',
+                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: appColor),
+                ),
+                IconButton(
+                  icon: Icon(Icons.refresh, color: appColor),
+                  onPressed: () => _fetchLeaveHistory(refresh: true),
+                  tooltip: 'Refresh History',
+                ),
+              ],
             ),
             const Divider(height: 20, thickness: 2),
-            Column(
-              children: _previousApplications.map((app) => _buildHistoryCard(app, context)).toList(),
-            ),
+
+            // --- Displaying History Based on State ---
+            if (_isLoading)
+              const Center(child: Padding(padding: EdgeInsets.all(20), child: CircularProgressIndicator()))
+            else if (_errorMessage != null)
+              Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(20),
+                  child: Text('Error: $_errorMessage', style: const TextStyle(color: Colors.red)),
+                ),
+              )
+            else if (_previousApplications.isEmpty)
+                const Center(
+                  child: Padding(
+                    padding: EdgeInsets.all(20),
+                    child: Text('No previous leave applications found.'),
+                  ),
+                )
+              else
+                Column(
+                  children: _previousApplications.map((app) => _buildHistoryCard(app, context)).toList(),
+                ),
+            // ------------------------------------------
+
             const SizedBox(height: 50),
           ],
         ),

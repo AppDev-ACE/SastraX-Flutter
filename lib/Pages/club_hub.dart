@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
-
 import '../models/theme_model.dart'; // ✅ Import ThemeProvider
 
 class ClubHubPage extends StatelessWidget {
@@ -29,35 +28,14 @@ class ClubHubPage extends StatelessWidget {
     final themeProvider = Provider.of<ThemeProvider>(context);
 
     return Scaffold(
-      backgroundColor: themeProvider.isDarkMode
-          ? themeProvider.primaryColor
-          : AppColors.navyBlue, // ✅ Added background color logic
+      backgroundColor: themeProvider.isDarkMode ? Colors.black : Colors.white,
       appBar: AppBar(
         title: const Text(
-          "🏫 Club Hub",
+          "Club Hub",
           style: TextStyle(fontWeight: FontWeight.bold, fontSize: 22),
         ),
         centerTitle: true,
-        flexibleSpace: Container(
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              colors: [
-                Color(0xFF00C9FF), // Light Cyan
-                Color(0xFF92FE9D), // Soft Green
-                Color(0xFF2F80ED), // Blue (depth)
-              ],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black26,
-                blurRadius: 8,
-                offset: Offset(2, 4),
-              )
-            ],
-          ),
-        ),
+        backgroundColor: themeProvider.isDarkMode ? Colors.black : themeProvider.primaryColor,
       ),
       body: LayoutBuilder(
         builder: (context, constraints) {
@@ -116,7 +94,11 @@ class ClubHubPage extends StatelessWidget {
                               ),
                             ),
                             onPressed: () => _launchURL(club["url"]!),
-                            child: const Text("Visit Website"),
+                            child: const Text("Visit Website" , style: TextStyle(
+                              color: Colors.white ,
+                              fontWeight: FontWeight.bold,
+                              fontSize : 13
+                            ),),
                           ),
                         ],
                       ),

@@ -36,7 +36,7 @@ class LoginUI extends StatelessWidget {
                 margin: const EdgeInsets.only(left: 20, bottom: 20),
                 decoration: const BoxDecoration(
                   image: DecorationImage(
-                    image: AssetImage('assets/images/Logo.png'),
+                    image: AssetImage('assets/icon/Logo.png'),
                   ),
                 ),
               ),
