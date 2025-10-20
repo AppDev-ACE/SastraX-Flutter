@@ -8,13 +8,15 @@ import 'package:confetti/confetti.dart';
 import 'package:provider/provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:lottie/lottie.dart'; // ✅ ADDED Lottie
+// ❌ REMOVED video_player import
 import '../services/ApiEndpoints.dart'; // Ensure this path is correct
 import 'FeeDuePage.dart'; // Ensure this path is correct
 import 'more_options_page.dart'; // Ensure this path is correct
 import 'subject_wise_attendance.dart'; // Ensure this path is correct
 import '../components/timetable_widget.dart'; // Ensure this path is correct
 import '../models/theme_model.dart'; // Ensure this path is correct
-import '../components/theme_toggle_button.dart'; // Ensure this path is correct
+import '../components/theme_toggle_button.dart'; // Ensure this- path is correct
 import '../components/neon_container.dart'; // Ensure this path is correct
 import '../components/attendance_pie_chart.dart'; // Ensure this path is correct
 import 'profile_page.dart'; // Ensure this path is correct
@@ -39,8 +41,6 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   int _currentIndex = 2;
-  // ❌ REMOVED: The _pages list is no longer a state variable.
-  // late List<Widget> _pages;
   late String _currentToken;
 
   @override
@@ -51,10 +51,7 @@ class _HomePageState extends State<HomePage> {
       print("Error: HomePage initState invalid token");
       _currentToken = "";
     }
-    // ❌ REMOVED: _buildPages() call is no longer needed here.
   }
-
-  // ❌ REMOVED: The _buildPages method is no longer needed.
 
   Future<void> _updateToken(String newToken) async {
     final prefs = await SharedPreferences.getInstance();
@@ -62,7 +59,6 @@ class _HomePageState extends State<HomePage> {
     if (mounted) {
       setState(() {
         _currentToken = newToken;
-        // No need to call _buildPages(), the build method will handle it.
       });
     }
   }
@@ -85,9 +81,6 @@ class _HomePageState extends State<HomePage> {
           body: const Center(child: Text("Invalid session state.")));
     }
 
-    // ✅ ADDED: The list of pages is now built here, inside the build method.
-    // This ensures that when HomePage rebuilds, it creates fresh instances
-    // of its children, allowing them to read the updated cache.
     final List<Widget> pages = [
       CalendarPage(token: _currentToken),
       const CommunityPage(),
@@ -135,7 +128,6 @@ class _HomePageState extends State<HomePage> {
                           isDarkMode: theme.isDarkMode,
                           onToggle: theme.toggleTheme))
                 ]),
-            // Use the locally defined 'pages' list.
             body: IndexedStack(index: _currentIndex, children: pages),
             bottomNavigationBar: BottomNavigationBar(
                 currentIndex: _currentIndex,
@@ -189,7 +181,7 @@ class DashboardScreen extends StatefulWidget {
 }
 
 class _DashboardScreenState extends State<DashboardScreen> {
-  // ... (Implementation remains the same as your last correct version) ...
+  // ... (all other state variables like showExamSchedule, _error, etc. remain the same) ...
   bool showExamSchedule = false;
   String? _error;
   bool _isLoading = true;
@@ -217,6 +209,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
     'studentStatus'
   ];
 
+  // ℹ️ REPLACED: _isDiwali boolean with a nullable string for the Lottie path
+  String? _specialEventLottiePath;
+
   @override
   void initState() {
     super.initState();
@@ -230,6 +225,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   @override
   void dispose() {
     _confettiController.dispose();
+    // ℹ️ MODIFIED: No video controller to dispose
     super.dispose();
   }
 
@@ -245,7 +241,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
       if (cacheComplete) {
         print("DashboardScreen _loadInitialData: Loading from complete cache.");
         _processFirestoreData(DashboardScreen.dashboardCache!);
-        if (CalendarPage.firebaseEventsCache == null) CalendarPage.loadFirebaseEvents(context).then((_) { if (mounted) setState(() {}); });
+        if (CalendarPage.firebaseEventsCache == null) {
+          CalendarPage.loadFirebaseEvents(context).then((_) {
+            _checkHolidayStatus(); // ✅ MODIFIED: Now checks for all holidays
+            if (mounted) setState(() {});
+          });
+        } else {
+          _checkHolidayStatus(); // ✅ MODIFIED: Now checks for all holidays
+        }
         if(mounted) setState(() => _isLoading = false);
         return;
       } else {
@@ -266,7 +269,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
         } else {
           _processFirestoreData(data!);
           if(mounted) setState(() => _isLoading = false);
-          if (CalendarPage.firebaseEventsCache == null) CalendarPage.loadFirebaseEvents(context).then((_) { if (mounted) setState(() {}); });
+          if (CalendarPage.firebaseEventsCache == null) {
+            CalendarPage.loadFirebaseEvents(context).then((_) {
+              _checkHolidayStatus(); // ✅ MODIFIED: Now checks for all holidays
+              if (mounted) setState(() {});
+            });
+          } else {
+            _checkHolidayStatus(); // ✅ MODIFIED: Now checks for all holidays
+          }
           return;
         }
       }
@@ -283,6 +293,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     if (!mounted) return;
     print("DashboardScreen _processFirestoreData: Processing data...");
 
+    // ... (rest of the data processing logic is unchanged) ...
     Map<String, String> parsedStudentInfo = {'status': 'Unknown', 'gender': 'Unknown'};
     if (data['studentStatus'] is List && (data['studentStatus'] as List).length >= 2) {
       List<dynamic> statusList = data['studentStatus'];
@@ -293,12 +304,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
         parsedStudentInfo['gender'] = statusList[1]['gender']?.toString() ?? 'Unknown';
       }
     }
-
     final updatedCacheData = Map<String, dynamic>.from(data);
     updatedCacheData['studentInfo'] = parsedStudentInfo;
     DashboardScreen.dashboardCache = updatedCacheData;
-    print("DashboardScreen: Updated cache synchronously with studentInfo: ${DashboardScreen.dashboardCache?['studentInfo']}");
-
     setState(() {
       studentName = data['profile']?['name'] ?? 'Student';
       timetableData = data['timetable'] as List? ?? [];
@@ -341,6 +349,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
       _error = null;
       _isLoading = false;
     });
+    // ... (end of unchanged data processing logic) ...
+
+    _checkHolidayStatus(); // ✅ MODIFIED: Now checks for all holidays
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
@@ -349,6 +360,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     });
   }
 
+  // ... (_fetchAndPollData method remains unchanged) ...
   Future<void> _fetchAndPollData({bool isInitialFetch = false, String? updatedToken}) async {
     final effectiveToken = updatedToken ?? widget.token;
     if (_isRefreshing && !isInitialFetch) { return; }
@@ -405,6 +417,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
   }
 
+  // ... (_refreshFromApi method remains unchanged) ...
   Future<void> _refreshFromApi() async {
     if (_isRefreshing || widget.regNo.isEmpty || widget.token.isEmpty) { return; }
     setState(() { _isLoading = true; _isRefreshing = true; _error = null; });
@@ -429,12 +442,146 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
   }
 
+  // ... (_getNextExamInfo method remains unchanged) ...
   String _getNextExamInfo() { final eventsCache = CalendarPage.firebaseEventsCache; if (eventsCache == null || eventsCache.isEmpty) return "Loading Schedule..."; final today = DateTime.now(); final todayDateOnly = DateTime(today.year, today.month, today.day); DateTime? findFirstEventDate(RegExp regex) { final sortedDates = eventsCache.keys.toList()..sort(); for (final dateKey in sortedDates) { final eventDate = DateTime.tryParse(dateKey); if (eventDate == null || eventDate.isBefore(todayDateOnly)) continue; final events = eventsCache[dateKey]!; if (events.any((event) => regex.hasMatch(event))) return eventDate; } return null; } final examTypes = [ MapEntry("CIA I", RegExp(r'cia\s+i\b', caseSensitive: false)), MapEntry("CIA II", RegExp(r'cia\s+ii\b', caseSensitive: false)), MapEntry("CIA III", RegExp(r'cia\s+iii\b', caseSensitive: false)), MapEntry("Lab Exam", RegExp(r'lab exam', caseSensitive: false)), MapEntry("End Semester Exam", RegExp(r'(even|odd|end)?\s*semester\s+exam\s+starts', caseSensitive: false)), ]; final upcomingExams = <MapEntry<String, DateTime>>[]; for (final exam in examTypes) { final examDate = findFirstEventDate(exam.value); if (examDate != null) upcomingExams.add(MapEntry(exam.key, examDate)); } if (upcomingExams.isEmpty) return "No upcoming exams"; upcomingExams.sort((a, b) => a.value.compareTo(b.value)); final nextExam = upcomingExams.first; final daysRemaining = nextExam.value.difference(todayDateOnly).inDays; if (daysRemaining == 0) return "${nextExam.key} is Today!"; if (daysRemaining == 1) return "${nextExam.key} is Tomorrow!"; return "${nextExam.key} in $daysRemaining days"; }
-  Widget _buildDashboardUI(BuildContext context) { final theme = Provider.of<ThemeProvider>(context); return Padding( padding: const EdgeInsets.all(16.0), child: Column( mainAxisSize: MainAxisSize.min, children: [ if (_error != null && !_isLoading) Padding( padding: const EdgeInsets.only(bottom: 10.0), child: MaterialBanner( padding: const EdgeInsets.all(10), content: Text(_error!, style: const TextStyle(color: Colors.white)), backgroundColor: Colors.orange.shade800, forceActionsBelow: true, actions: [ TextButton( onPressed: () => setState(() => _error = null), child: const Text('DISMISS', style: TextStyle(color: Colors.white))) ], ), ), GestureDetector( onTap: () { Navigator.push( context, MaterialPageRoute(builder: (_) => ProfilePage(token: widget.token, url: widget.url, regNo: widget.regNo))); }, child: NeonContainer( borderColor: theme.isDarkMode ? AppTheme.neonBlue : AppTheme.primaryBlue, child: Row( children: [ CircleAvatar( radius: 28, backgroundColor: theme.isDarkMode ? AppTheme.neonBlue : AppTheme.primaryBlue, child: Icon(Icons.person, color: theme.isDarkMode ? Colors.black : Colors.white) ), const SizedBox(width: 16), Expanded( child: Column( crossAxisAlignment: CrossAxisAlignment.start, children: [ if (isBirthday) const FittedBox(fit: BoxFit.scaleDown, child: Text('🎉 Happy Birthday! 🎉', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.amber))) else FittedBox( fit: BoxFit.scaleDown, child: Text( (studentName != null && studentName!.isNotEmpty ? 'Welcome, $studentName!' : 'Welcome Back!'), style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: theme.isDarkMode ? AppTheme.neonBlue : AppTheme.primaryBlue) ), ), FittedBox(fit: BoxFit.scaleDown, child: Text('Student Dashboard', style: TextStyle(color: theme.isDarkMode ? Colors.white70 : Colors.grey[600]))), ], ), ), ], ), ), ), const SizedBox(height: 16), GestureDetector( onTap: () { Navigator.push( context, MaterialPageRoute( builder: (_) => SubjectWiseAttendancePage( regNo: widget.regNo, token: widget.token, url: widget.url, initialSubjectAttendance: subjectAttendanceData, initialHourWiseAttendance: hourWiseAttendanceData, timetable: timetableData, courseMap: courseMapData, ), ), ); }, child: AttendancePieChart( attendancePercentage: attendancePercent, attendedClasses: attendedClasses, totalClasses: totalClasses, bunkingDaysLeft: bunks, ), ), const SizedBox(height: 16), Row( crossAxisAlignment: CrossAxisAlignment.start, children: [ Expanded(child: _buildFeeDueTile(theme, feeDue)), const SizedBox(width: 12), Expanded(child: _buildGpaExamTile(theme, cgpa ?? 'N/A')), ], ), const SizedBox(height: 16), SizedBox( height: 300, child: TimetableWidget( timetable: timetableData, isLoading: false, hourWiseAttendance: hourWiseAttendanceData, courseMap: courseMapData, ), ), ], ), ); }
+
+  // ✅ RENAMED & MODIFIED: Checks for multiple events and returns Lottie path
+  String? _getSpecialEventToday() {
+    final eventsCache = CalendarPage.firebaseEventsCache;
+    if (eventsCache == null || eventsCache.isEmpty) {
+      print("Checking Special Event: Cache not ready.");
+      return null;
+    }
+    // Calendar cache keys are 'yyyy-MM-dd' strings
+    final todayKey = DateFormat('yyyy-MM-dd').format(DateTime.now());
+    final events = eventsCache[todayKey];
+
+    if (events != null && events.isNotEmpty) {
+      // Map of event keywords (lowercase) to their Lottie assets
+      // ⚠️ Make sure these Lottie files exist in your assets!
+      const eventMap = {
+        'deepavali': 'assets/lottieJson/diwaliOne.json',
+        'independence day': 'assets/lottieJson/independence.json',
+        'christmas': 'assets/lottieJson/christmas.json',
+        'new year': 'assets/lottieJson/newYear.json', // ✅ ADDED
+        'republic day': 'assets/lottieJson/republic.json', // ✅ ADDED
+      };
+
+      for (final event in events) {
+        final lowerEvent = event.toLowerCase();
+        for (final entry in eventMap.entries) {
+          if (lowerEvent.contains(entry.key)) {
+            print("Checking Special Event: Found '${entry.key}' for $todayKey");
+            return entry.value; // Return the Lottie path
+          }
+        }
+      }
+    }
+    print("Checking Special Event: No special events for $todayKey");
+    return null; // No special event found
+  }
+
+  // ✅ MODIFIED: Function to check holiday status and set Lottie path
+  void _checkHolidayStatus() {
+    if (_specialEventLottiePath != null) return; // Already initialized
+
+    final lottiePath = _getSpecialEventToday();
+    if (mounted && lottiePath != null) {
+      setState(() {
+        _specialEventLottiePath = lottiePath;
+      });
+      print("It's a special event! Preparing Lottie: $lottiePath");
+    }
+  }
+
+  // ✅ RENAMED & GENERALIZED: This widget now builds a Lottie from a path
+  Widget _buildSpecialEventLottie(String lottiePath) {
+    // A generic placeholder title
+    String title = "Happy Holidays!";
+    if (lottiePath.contains('diwali')) {
+      title = "🪔 Happy Diwali! 🪔";
+    } else if (lottiePath.contains('independence')) {
+      title = "🇮🇳 Happy Independence Day! 🇮🇳";
+    } else if (lottiePath.contains('christmas')) { // ✅ Corrected casing
+      title = "🎄 Merry Christmas! 🎄";
+    } else if (lottiePath.contains('newYear')) { // ✅ ADDED
+      title = "🎉 Happy New Year! 🎉";
+    } else if (lottiePath.contains('republicDay')) { // ✅ ADDED
+      title = "🇮🇳 Happy Republic Day! 🇮🇳";
+    }
+
+    return Lottie.asset(
+      lottiePath, // Use the provided path
+      frameBuilder: (context, child, composition) {
+        if (composition != null) {
+          // Animation is loaded, show it
+          return ClipRRect(
+            borderRadius: BorderRadius.circular(12.0),
+            child: child,
+          );
+        } else {
+          // Animation is loading, show placeholder
+          return Container(
+            decoration: BoxDecoration(
+              color: Colors.black,
+              borderRadius: BorderRadius.circular(12.0),
+            ),
+            child: Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const CircularProgressIndicator(color: Colors.amber),
+                  const SizedBox(height: 20),
+                  Text(
+                    title, // Use the dynamic title
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 22,
+                      fontWeight: FontWeight.bold,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
+      },
+    );
+  }
+
+  Widget _buildDashboardUI(BuildContext context) {
+    final theme = Provider.of<ThemeProvider>(context);
+    return Padding(
+      padding: const EdgeInsets.all(16.0),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // ... (MaterialBanner, Profile NeonContainer, PieChart, Fee/GPA tiles are all unchanged) ...
+          if (_error != null && !_isLoading) Padding( padding: const EdgeInsets.only(bottom: 10.0), child: MaterialBanner( padding: const EdgeInsets.all(10), content: Text(_error!, style: const TextStyle(color: Colors.white)), backgroundColor: Colors.orange.shade800, forceActionsBelow: true, actions: [ TextButton( onPressed: () => setState(() => _error = null), child: const Text('DISMISS', style: TextStyle(color: Colors.white))) ], ), ), GestureDetector( onTap: () { Navigator.push( context, MaterialPageRoute(builder: (_) => ProfilePage(token: widget.token, url: widget.url, regNo: widget.regNo))); }, child: NeonContainer( borderColor: theme.isDarkMode ? AppTheme.neonBlue : AppTheme.primaryBlue, child: Row( children: [ CircleAvatar( radius: 28, backgroundColor: theme.isDarkMode ? AppTheme.neonBlue : AppTheme.primaryBlue, child: Icon(Icons.person, color: theme.isDarkMode ? Colors.black : Colors.white) ), const SizedBox(width: 16), Expanded( child: Column( crossAxisAlignment: CrossAxisAlignment.start, children: [ if (isBirthday) const FittedBox(fit: BoxFit.scaleDown, child: Text('🎉 Happy Birthday! 🎉', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.amber))) else FittedBox( fit: BoxFit.scaleDown, child: Text( (studentName != null && studentName!.isNotEmpty ? 'Welcome, $studentName!' : 'Welcome Back!'), style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: theme.isDarkMode ? AppTheme.neonBlue : AppTheme.primaryBlue) ), ), FittedBox(fit: BoxFit.scaleDown, child: Text('Student Dashboard', style: TextStyle(color: theme.isDarkMode ? Colors.white70 : Colors.grey[600]))), ], ), ), ], ), ), ), const SizedBox(height: 16), GestureDetector( onTap: () { Navigator.push( context, MaterialPageRoute( builder: (_) => SubjectWiseAttendancePage( regNo: widget.regNo, token: widget.token, url: widget.url, initialSubjectAttendance: subjectAttendanceData, initialHourWiseAttendance: hourWiseAttendanceData, timetable: timetableData, courseMap: courseMapData, ), ), ); }, child: AttendancePieChart( attendancePercentage: attendancePercent, attendedClasses: attendedClasses, totalClasses: totalClasses, bunkingDaysLeft: bunks, ), ), const SizedBox(height: 16), Row( crossAxisAlignment: CrossAxisAlignment.start, children: [ Expanded(child: _buildFeeDueTile(theme, feeDue)), const SizedBox(width: 12), Expanded(child: _buildGpaExamTile(theme, cgpa ?? 'N/A')), ], ),
+          const SizedBox(height: 16),
+          // ℹ️ MODIFIED: Conditionally show Lottie or timetable
+          SizedBox(
+            height: 300,
+            // ✅ CHANGED: Check if the Lottie path is set
+            child: _specialEventLottiePath != null
+                ? _buildSpecialEventLottie(_specialEventLottiePath!) // ✅ CHANGED: Pass the path
+                : TimetableWidget(
+              timetable: timetableData,
+              isLoading: false,
+              hourWiseAttendance: hourWiseAttendanceData,
+              courseMap: courseMapData,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ... (build, _buildConditionalContent, _buildConfettiIfNeeded, _buildFeeDueTile, _buildGpaExamTile methods remain unchanged) ...
   @override Widget build(BuildContext context) { final theme = Provider.of<ThemeProvider>(context); return RefreshIndicator( onRefresh: _refreshFromApi, color: theme.isDarkMode ? AppTheme.neonBlue : AppTheme.primaryBlue, backgroundColor: theme.isDarkMode ? AppTheme.darkSurface : Colors.white, child: LayoutBuilder( builder: (context, constraints) { return SingleChildScrollView( physics: const AlwaysScrollableScrollPhysics(), child: ConstrainedBox( constraints: BoxConstraints(minHeight: constraints.maxHeight), child: Center( child: _buildConditionalContent(context, theme), ), ), ); } ), ); }
   Widget _buildConditionalContent(BuildContext context, ThemeProvider theme) { if (_isLoading) { return Padding( padding: const EdgeInsets.all(32.0), child: CircularProgressIndicator(color: theme.isDarkMode ? AppTheme.neonBlue : AppTheme.primaryBlue), ); } if (_error != null) { return Padding( padding: const EdgeInsets.all(20.0), child: Column( mainAxisAlignment: MainAxisAlignment.center, children: [ Text(_error!, textAlign: TextAlign.center, style: const TextStyle(color: Colors.red)), const SizedBox(height: 10), ElevatedButton(onPressed: _loadInitialData, child: const Text("Retry Load")) ], ), ); } return Stack( alignment: Alignment.topCenter, children: [ _buildDashboardUI(context), _buildConfettiIfNeeded(), ], ); }
   Widget _buildConfettiIfNeeded() { return isBirthday ? Align( alignment: Alignment.topCenter, child: ConfettiWidget( confettiController: _confettiController, blastDirectionality: BlastDirectionality.explosive), ) : const SizedBox.shrink(); }
   Widget _buildFeeDueTile(ThemeProvider theme, int feeDue) { final hasDue = feeDue > 0; final isDark = theme.isDarkMode; return GestureDetector( onTap: () { Navigator.push(context, MaterialPageRoute(builder: (context) => FeeDueStatusPage())); }, child: SizedBox( width: 180, height: 150, child: NeonContainer( borderColor: hasDue ? Colors.red.shade400 : (isDark ? AppTheme.neonBlue : AppTheme.primaryBlue), padding: const EdgeInsets.all(12), child: Column( mainAxisAlignment: MainAxisAlignment.center, children: [ Icon(Icons.account_balance_wallet, size: 40, color: hasDue ? Colors.red.shade400 : (isDark ? AppTheme.neonBlue : AppTheme.primaryBlue)), const SizedBox(height: 8), const FittedBox(fit: BoxFit.scaleDown, child: Text('Fee Status', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16))), const SizedBox(height: 4), FittedBox(fit: BoxFit.scaleDown, child: Text( (hasDue ? '₹$feeDue' : 'Paid'), style: TextStyle(fontSize: 14, color: isDark ? Colors.white70 : Colors.grey[600]))), ], ), ), ), ); }
   Widget _buildGpaExamTile(ThemeProvider theme, String cgpa) { final isDark = theme.isDarkMode; return GestureDetector( onDoubleTap: () => setState(() => showExamSchedule = !showExamSchedule), child: SizedBox( width: 180, height: 150, child: NeonContainer( borderColor: isDark ? AppTheme.neonBlue : AppTheme.primaryBlue, padding: const EdgeInsets.all(12), child: AnimatedSwitcher( duration: const Duration(milliseconds: 300), child: showExamSchedule ? Column( key: const ValueKey('exam'), mainAxisAlignment: MainAxisAlignment.center, children: [ Icon(Icons.event, size: 40, color: isDark ? AppTheme.neonBlue : AppTheme.primaryBlue), const SizedBox(height: 10), const FittedBox(fit: BoxFit.scaleDown, child: Text('Exam Schedule', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16))), const SizedBox(height: 4), FittedBox(fit: BoxFit.scaleDown, child: Text(_getNextExamInfo(), style: TextStyle(fontSize: 14, color: isDark ? Colors.white70 : Colors.grey[600]), textAlign: TextAlign.center,)), ]) : Column( key: const ValueKey('gpa'), mainAxisAlignment: MainAxisAlignment.center, children: [ Icon(Icons.grade, size: 40, color: isDark ? AppTheme.neonBlue : Colors.orange), const SizedBox(height: 10), const FittedBox(fit: BoxFit.scaleDown, child: Text('CGPA', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16))), FittedBox(fit: BoxFit.scaleDown, child: Text('$cgpa / 10', style: TextStyle(fontSize: 14, color: isDark ? Colors.white70 : Colors.grey[600]))), ]), ), ), ), ); }
 }
-

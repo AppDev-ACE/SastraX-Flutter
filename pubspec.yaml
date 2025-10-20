@@ -71,6 +71,7 @@ dependencies:
   firebase_core: ^3.15.1
   cloud_firestore: ^5.6.12
   firebase_auth: ^5.6.2
+  lottie:
 
 dev_dependencies:
   flutter_test:
@@ -90,12 +91,14 @@ flutter:
   # the material Icons class.
   uses-material-design: true
   assets:
+    - assets/lottieJson/
     - assets/images/
     - assets/icon/
     - assets/images/sunrise.jpg
     - assets/images/sunshine.jpg
     - assets/images/sunset.jpg
     - assets/images/moon.jpg
+    - assets/lottieJson/diwali.json
 
   # To add assets to your application, add an assets section, like this:
   # assets:

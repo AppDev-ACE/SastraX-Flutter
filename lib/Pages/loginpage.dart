@@ -9,7 +9,7 @@ import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/theme_model.dart';                   // Ensure correct path
-import '../services/ApiEndpoints.dart';                 // Ensure correct path
+import '../services/ApiEndpoints.dart';                // Ensure correct path
 
 class LoginPage extends StatefulWidget {
   final String url; // Base backend URL
@@ -32,10 +32,23 @@ class _LoginPageState extends State<LoginPage> {
   late final ApiEndpoints api;
   bool _isLoggingIn = false; // Add loading state
 
+  // <-- CHANGED: Create a persistent HTTP client
+  final http.Client _client = http.Client();
+
   @override
   void initState() {
     super.initState();
     api = ApiEndpoints(widget.url);
+  }
+
+  // <-- CHANGED: Add dispose method to close the client and controllers
+  @override
+  void dispose() {
+    _client.close(); // Close the client to free resources
+    userController.dispose();
+    passwordController.dispose();
+    captchaController.dispose();
+    super.dispose();
   }
 
   /// 🔹 Fetch Captcha Image (Returns bytes for dialog state update)
@@ -54,7 +67,8 @@ class _LoginPageState extends State<LoginPage> {
     }
 
     try {
-      final response = await http.post(
+      // <-- CHANGED: Use _client.post instead of http.post
+      final response = await _client.post(
         Uri.parse(api.captcha),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({'regNo': regNo}),
@@ -131,7 +145,8 @@ class _LoginPageState extends State<LoginPage> {
     Uint8List? newCaptchaBytes; // Variable to hold refreshed captcha on error
 
     try {
-      final response = await http.post(
+      // <-- CHANGED: Use _client.post instead of http.post
+      final response = await _client.post(
         Uri.parse(api.login),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
@@ -139,7 +154,7 @@ class _LoginPageState extends State<LoginPage> {
           'pwd': pwd,
           'captcha': captcha,
         }),
-      ).timeout(const Duration(seconds: 20)); // Add timeout
+      ).timeout(const Duration(seconds: 60)); // Add timeout
 
       final result = jsonDecode(response.body);
 
