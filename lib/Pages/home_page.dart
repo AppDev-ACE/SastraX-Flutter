@@ -154,11 +154,13 @@ class _HomePageState extends State<HomePage> {
   }
 }
 
-// --- The rest of DashboardScreen remains unchanged as its logic is correct ---
-// It correctly calls `onDataLoaded` which now triggers the desired effect.
+// [ No changes to HomePage.dart, it is correct ]
+// ... (imports, HomePage, _HomePageState)
+// ...
 
 /// -------------------- DashboardScreen (Using Polling Logic) --------------------
 class DashboardScreen extends StatefulWidget {
+  // ... (Constructor remains unchanged) ...
   final String token;
   final String url;
   final String regNo;
@@ -181,7 +183,7 @@ class DashboardScreen extends StatefulWidget {
 }
 
 class _DashboardScreenState extends State<DashboardScreen> {
-  // ... (all other state variables like showExamSchedule, _error, etc. remain the same) ...
+  // ... (All other state variables and methods like initState, dispose, _loadInitialData, _processFirestoreData, _fetchAndPollData, _refreshFromApi, and _getNextExamInfo remain unchanged) ...
   bool showExamSchedule = false;
   String? _error;
   bool _isLoading = true;
@@ -209,7 +211,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     'studentStatus'
   ];
 
-  // ℹ️ REPLACED: _isDiwali boolean with a nullable string for the Lottie path
   String? _specialEventLottiePath;
 
   @override
@@ -225,7 +226,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
   @override
   void dispose() {
     _confettiController.dispose();
-    // ℹ️ MODIFIED: No video controller to dispose
     super.dispose();
   }
 
@@ -360,7 +360,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     });
   }
 
-  // ... (_fetchAndPollData method remains unchanged) ...
   Future<void> _fetchAndPollData({bool isInitialFetch = false, String? updatedToken}) async {
     final effectiveToken = updatedToken ?? widget.token;
     if (_isRefreshing && !isInitialFetch) { return; }
@@ -417,7 +416,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
   }
 
-  // ... (_refreshFromApi method remains unchanged) ...
   Future<void> _refreshFromApi() async {
     if (_isRefreshing || widget.regNo.isEmpty || widget.token.isEmpty) { return; }
     setState(() { _isLoading = true; _isRefreshing = true; _error = null; });
@@ -442,29 +440,31 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
   }
 
-  // ... (_getNextExamInfo method remains unchanged) ...
+  // ... (_getNextExamInfo method remains unchanged as requested) ...
   String _getNextExamInfo() { final eventsCache = CalendarPage.firebaseEventsCache; if (eventsCache == null || eventsCache.isEmpty) return "Loading Schedule..."; final today = DateTime.now(); final todayDateOnly = DateTime(today.year, today.month, today.day); DateTime? findFirstEventDate(RegExp regex) { final sortedDates = eventsCache.keys.toList()..sort(); for (final dateKey in sortedDates) { final eventDate = DateTime.tryParse(dateKey); if (eventDate == null || eventDate.isBefore(todayDateOnly)) continue; final events = eventsCache[dateKey]!; if (events.any((event) => regex.hasMatch(event))) return eventDate; } return null; } final examTypes = [ MapEntry("CIA I", RegExp(r'cia\s+i\b', caseSensitive: false)), MapEntry("CIA II", RegExp(r'cia\s+ii\b', caseSensitive: false)), MapEntry("CIA III", RegExp(r'cia\s+iii\b', caseSensitive: false)), MapEntry("Lab Exam", RegExp(r'lab exam', caseSensitive: false)), MapEntry("End Semester Exam", RegExp(r'(even|odd|end)?\s*semester\s+exam\s+starts', caseSensitive: false)), ]; final upcomingExams = <MapEntry<String, DateTime>>[]; for (final exam in examTypes) { final examDate = findFirstEventDate(exam.value); if (examDate != null) upcomingExams.add(MapEntry(exam.key, examDate)); } if (upcomingExams.isEmpty) return "No upcoming exams"; upcomingExams.sort((a, b) => a.value.compareTo(b.value)); final nextExam = upcomingExams.first; final daysRemaining = nextExam.value.difference(todayDateOnly).inDays; if (daysRemaining == 0) return "${nextExam.key} is Today!"; if (daysRemaining == 1) return "${nextExam.key} is Tomorrow!"; return "${nextExam.key} in $daysRemaining days"; }
 
-  // ✅ RENAMED & MODIFIED: Checks for multiple events and returns Lottie path
+
+  // ✅ MODIFIED: Now checks for CIAs *after* checking for holidays
   String? _getSpecialEventToday() {
     final eventsCache = CalendarPage.firebaseEventsCache;
     if (eventsCache == null || eventsCache.isEmpty) {
       print("Checking Special Event: Cache not ready.");
       return null;
     }
-    // Calendar cache keys are 'yyyy-MM-dd' strings
     final todayKey = DateFormat('yyyy-MM-dd').format(DateTime.now());
     final events = eventsCache[todayKey];
 
     if (events != null && events.isNotEmpty) {
-      // Map of event keywords (lowercase) to their Lottie assets
-      // ⚠️ Make sure these Lottie files exist in your assets!
+      // 1. Check for Holidays first (they take priority)
       const eventMap = {
+        'tamil new year': 'assets/lottieJson/tamilNewYear.json',
         'deepavali': 'assets/lottieJson/diwaliOne.json',
         'independence day': 'assets/lottieJson/independence.json',
         'christmas': 'assets/lottieJson/christmas.json',
-        'new year': 'assets/lottieJson/newYear.json', // ✅ ADDED
-        'republic day': 'assets/lottieJson/republic.json', // ✅ ADDED
+        'new year': 'assets/lottieJson/newYear.json',
+        'republic day': 'assets/lottieJson/republic.json',
+        'boghi': 'assets/lottieJson/boghi.json',
+        'pongal': 'assets/lottieJson/pongal.json',
       };
 
       for (final event in events) {
@@ -472,8 +472,20 @@ class _DashboardScreenState extends State<DashboardScreen> {
         for (final entry in eventMap.entries) {
           if (lowerEvent.contains(entry.key)) {
             print("Checking Special Event: Found '${entry.key}' for $todayKey");
-            return entry.value; // Return the Lottie path
+            return entry.value; // Return the Holiday Lottie path
           }
+        }
+      }
+
+      // 2. If no holiday, check for CIA Exam
+      // ⚠️ ASSUMPTION: You must have a Lottie file at this path
+      const String examLottiePath = 'assets/lottieJson/cia.json';
+      const ciaRegex = r'cia\s+(i|ii|iii)\b';
+      for (final event in events) {
+        final lowerEvent = event.toLowerCase();
+        if (RegExp(ciaRegex, caseSensitive: false).hasMatch(lowerEvent)) {
+          print("Checking Special Event: Found 'CIA Exam' for $todayKey");
+          return examLottiePath; // Return a generic exam Lottie path
         }
       }
     }
@@ -481,7 +493,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return null; // No special event found
   }
 
-  // ✅ MODIFIED: Function to check holiday status and set Lottie path
+  // ... (_checkHolidayStatus method remains unchanged) ...
   void _checkHolidayStatus() {
     if (_specialEventLottiePath != null) return; // Already initialized
 
@@ -494,33 +506,38 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
   }
 
-  // ✅ RENAMED & GENERALIZED: This widget now builds a Lottie from a path
+  // ✅ MODIFIED: Added title for 'exam.json'
   Widget _buildSpecialEventLottie(String lottiePath) {
-    // A generic placeholder title
     String title = "Happy Holidays!";
     if (lottiePath.contains('diwali')) {
       title = "🪔 Happy Diwali! 🪔";
     } else if (lottiePath.contains('independence')) {
       title = "🇮🇳 Happy Independence Day! 🇮🇳";
-    } else if (lottiePath.contains('christmas')) { // ✅ Corrected casing
+    } else if (lottiePath.contains('christmas')) {
       title = "🎄 Merry Christmas! 🎄";
-    } else if (lottiePath.contains('newYear')) { // ✅ ADDED
+    } else if (lottiePath.contains('newYear')) {
       title = "🎉 Happy New Year! 🎉";
-    } else if (lottiePath.contains('republicDay')) { // ✅ ADDED
+    } else if (lottiePath.contains('republic')) {
       title = "🇮🇳 Happy Republic Day! 🇮🇳";
+    } else if (lottiePath.contains('tamilNewYear')) {
+      title = "🎉 Happy Tamil New Year! 🎉";
+    } else if (lottiePath.contains('boghi')) {
+      title = "🔥 Happy Boghi! 🔥";
+    } else if (lottiePath.contains('pongal')) {
+      title = "🌾 Happy Pongal! 🌾";
+    } else if (lottiePath.contains('exam')) { // ✅ ADDED CHECK FOR EXAM LOTTIE
+      title = "CIA Exam Today! 📚";
     }
 
     return Lottie.asset(
-      lottiePath, // Use the provided path
+      lottiePath,
       frameBuilder: (context, child, composition) {
         if (composition != null) {
-          // Animation is loaded, show it
           return ClipRRect(
             borderRadius: BorderRadius.circular(12.0),
             child: child,
           );
         } else {
-          // Animation is loading, show placeholder
           return Container(
             decoration: BoxDecoration(
               color: Colors.black,
@@ -533,7 +550,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   const CircularProgressIndicator(color: Colors.amber),
                   const SizedBox(height: 20),
                   Text(
-                    title, // Use the dynamic title
+                    title,
                     style: const TextStyle(
                       color: Colors.white,
                       fontSize: 22,
@@ -550,6 +567,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
+  // ... (_buildDashboardUI method remains unchanged) ...
   Widget _buildDashboardUI(BuildContext context) {
     final theme = Provider.of<ThemeProvider>(context);
     return Padding(
