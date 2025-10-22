@@ -6,13 +6,11 @@ import '../services/ApiEndpoints.dart';
 class FeeDueScreen extends StatefulWidget {
   final String url;
   final String token;
-  final String regNo;
 
   const FeeDueScreen({
     super.key,
     required this.url,
     required this.token,
-    required this.regNo,
   });
 
   @override
@@ -22,9 +20,11 @@ class FeeDueScreen extends StatefulWidget {
 class _FeeDueScreenState extends State<FeeDueScreen> {
   bool _isLoading = false;
   String? _error;
-  Map<String, dynamic>? _sastraDue;
-  Map<String, dynamic>? _hostelDue;
-  late final ApiEndpoints api;
+  List<Map<String, dynamic>> _sastraItems = [];
+  List<Map<String, dynamic>> _hostelItems = [];
+  String _sastraTotal = '0.00';
+  String _hostelTotal = '0.00';
+  late ApiEndpoints api;
 
   @override
   void initState() {
@@ -33,41 +33,66 @@ class _FeeDueScreenState extends State<FeeDueScreen> {
     _fetchDues();
   }
 
-  Future<Map<String, dynamic>> _fetchDueApi(String endpoint) async {
-    final headers = {'Content-Type': 'application/json'};
-    final body = jsonEncode({'token': widget.token, 'regNo': widget.regNo});
-    final response = await http.post(
-      Uri.parse(endpoint),
-      headers: headers,
-      body: body,
-    );
-    if (response.statusCode == 200) {
-      final data = jsonDecode(response.body);
-      if (data is Map<String, dynamic>) return data;
-      return {};
-    } else {
-      throw Exception('Failed to load FeeDue: ${response.statusCode}');
-    }
-  }
-
   Future<void> _fetchDues() async {
     setState(() {
       _isLoading = true;
       _error = null;
-      _sastraDue = null;
-      _hostelDue = null;
+      _sastraItems = [];
+      _hostelItems = [];
+      _sastraTotal = '0.00';
+      _hostelTotal = '0.00';
     });
     try {
-      final dues = await Future.wait([
-        _fetchDueApi(api.sastraDue),
-        _fetchDueApi(api.hostelDue),
-      ]);
+      final headers = {'Content-Type': 'application/json'};
+      final body = jsonEncode({'token': widget.token});
+
+      // --- University dues ---
+      final uniResp = await http.post(
+        Uri.parse(api.sastraDue),
+        headers: headers,
+        body: body,
+      );
+      if (uniResp.statusCode == 200) {
+        final data = jsonDecode(uniResp.body);
+        _sastraItems = (data['sastraDue'] as List?)?.map<Map<String, dynamic>>(
+                (e) => Map<String, dynamic>.from(e)
+        ).where((e) =>
+        ((e['sem'] ?? '') as String).trim().isNotEmpty ||
+            ((e['feeDetails'] ?? '') as String).trim().isNotEmpty ||
+            ((e['dueDate'] ?? '') as String).trim().isNotEmpty ||
+            ((e['dueAmount'] ?? '') as String).trim().isNotEmpty
+        ).toList() ?? [];
+        _sastraTotal = data['totalDue']?.toString() ?? '0.00';
+      } else {
+        throw Exception('University response not OK: ${uniResp.statusCode}');
+      }
+
+      // --- Hostel dues ---
+      final hostelResp = await http.post(
+        Uri.parse(api.hostelDue),
+        headers: headers,
+        body: body,
+      );
+      if (hostelResp.statusCode == 200) {
+        final data = jsonDecode(hostelResp.body);
+        _hostelItems = (data['hostelDue'] as List?)?.map<Map<String, dynamic>>(
+                (e) => Map<String, dynamic>.from(e)
+        ).where((e) =>
+        ((e['sem'] ?? '') as String).trim().isNotEmpty ||
+            ((e['feeDetails'] ?? '') as String).trim().isNotEmpty ||
+            ((e['dueDate'] ?? '') as String).trim().isNotEmpty ||
+            ((e['dueAmount'] ?? '') as String).trim().isNotEmpty
+        ).toList() ?? [];
+        _hostelTotal = data['totalDue']?.toString() ?? '0.00';
+      } else {
+        throw Exception('Hostel response not OK: ${hostelResp.statusCode}');
+      }
+
       setState(() {
-        _sastraDue = dues[0];
-        _hostelDue = dues[1];
         _isLoading = false;
       });
-    } catch (e) {
+    } catch (e, st) {
+      print('Error: $e\n$st');
       setState(() {
         _error = "Error fetching dues: $e";
         _isLoading = false;
@@ -87,26 +112,15 @@ class _FeeDueScreenState extends State<FeeDueScreen> {
       return Scaffold(
         backgroundColor: Colors.white,
         body: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(20.0),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(_error!, textAlign: TextAlign.center, style: const TextStyle(color: Colors.red)),
-                const SizedBox(height: 10),
-                ElevatedButton(onPressed: _fetchDues, child: const Text("Retry"))
-              ],
+          child: SingleChildScrollView(
+            child: Padding(
+              padding: const EdgeInsets.all(30.0),
+              child: Text(_error!, style: const TextStyle(color: Colors.red, fontSize: 16)),
             ),
           ),
         ),
       );
     }
-
-    final sastraTotal = _parseDouble(_sastraDue?["totalSastraDue"]) ?? 0.0;
-    final List sastraItems = _extractList(_sastraDue, "dueDetails");
-
-    final hostelTotal = _parseDouble(_hostelDue?["totalDue"]) ?? 0.0;
-    final List hostelItems = _extractList(_hostelDue, "hostelDue");
 
     return Scaffold(
       appBar: AppBar(
@@ -120,146 +134,85 @@ class _FeeDueScreenState extends State<FeeDueScreen> {
       body: ListView(
         padding: EdgeInsets.zero,
         children: [
-          // SASTRA Due Section
-          _buildTotalDueCard(
-            title: "University Fee Due",
-            amount: sastraTotal,
-            gradient: const LinearGradient(
-              colors: [Color(0xFF9443e3), Color(0xFF6d2bef)],
-              begin: Alignment.topLeft, end: Alignment.bottomRight,
-            ),
-          ),
-          ..._renderDueList(sastraItems, accent: const Color(0xFF6d2bef)),
-          // Hostel Due Section
-          _buildTotalDueCard(
-            title: "Hostel Fee Due",
-            amount: hostelTotal,
-            gradient: const LinearGradient(
-              colors: [Color(0xFFf55951), Color(0xFFff7e67)],
-              begin: Alignment.topLeft, end: Alignment.bottomRight,
-            ),
-          ),
-          ..._renderDueList(hostelItems, accent: Colors.deepOrange),
+          _buildTotalDueCard("University Fee Due", _sastraTotal, const LinearGradient(colors: [Color(0xFF9443e3), Color(0xFF6d2bef)], begin: Alignment.topLeft, end: Alignment.bottomRight)),
+          _buildTableHeader(),
+          ..._renderTableRows(_sastraItems, accent: const Color(0xFF6d2bef)),
+          _buildTotalDueCard("Hostel Fee Due", _hostelTotal, const LinearGradient(colors: [Color(0xFFf55951), Color(0xFFff7e67)], begin: Alignment.topLeft, end: Alignment.bottomRight)),
+          _buildTableHeader(),
+          ..._renderTableRows(_hostelItems, accent: Colors.deepOrange),
         ],
       ),
     );
   }
 
-  Widget _buildTotalDueCard({
-    required String title,
-    required double amount,
-    required Gradient gradient,
-  }) {
+  Widget _buildTotalDueCard(String title, String amount, Gradient gradient) {
     return Container(
       margin: const EdgeInsets.fromLTRB(20, 20, 20, 8),
       padding: const EdgeInsets.symmetric(vertical: 30, horizontal: 26),
       decoration: BoxDecoration(
-        gradient: gradient,
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.deepPurple.withOpacity(0.08),
-            blurRadius: 18, offset: const Offset(0, 5)),
-        ],
+        gradient: gradient, borderRadius: BorderRadius.circular(24),
+        boxShadow: [BoxShadow(color: Colors.deepPurple.withOpacity(0.08), blurRadius: 18, offset: const Offset(0, 5))],
       ),
       child: Column(
         children: [
-          Text(
-            title,
-            style: const TextStyle(color: Colors.white70, fontWeight: FontWeight.bold, fontSize: 19),
-          ),
+          Text(title, style: const TextStyle(color: Colors.white70, fontWeight: FontWeight.bold, fontSize: 19)),
           const SizedBox(height: 12),
-          Text(
-            "Rs. ${amount.toStringAsFixed(2).replaceAllMapped(RegExp(r'\B(?=(\d{3})+(?!\d))'), (m) => ',')}",
-            style: const TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: Colors.white),
-          ),
+          Text("Rs. $amount", style: const TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: Colors.white)),
         ],
       ),
     );
   }
 
-  List<Widget> _renderDueList(List items, {required Color accent}) {
+  Widget _buildTableHeader() {
+    return Container(
+      margin: const EdgeInsets.only(left: 21, right: 21, bottom: 6, top: 10),
+      padding: const EdgeInsets.symmetric(vertical: 7, horizontal: 2),
+      decoration: BoxDecoration(
+        color: Colors.grey[100], borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.grey[300]!, width: 1.1),
+      ),
+      child: Row(
+        children: const [
+          Expanded(flex: 2, child: Text('Sem.', style: TextStyle(fontWeight: FontWeight.bold))),
+          Expanded(flex: 4, child: Text('Fee Details', style: TextStyle(fontWeight: FontWeight.bold))),
+          Expanded(flex: 3, child: Text('Due Date', style: TextStyle(fontWeight: FontWeight.bold))),
+          Expanded(flex: 3, child: Text('Due Amount', style: TextStyle(fontWeight: FontWeight.bold))),
+        ],
+      ),
+    );
+  }
+
+  List<Widget> _renderTableRows(List<Map<String, dynamic>> items, {required Color accent}) {
     if (items.isEmpty) {
       return [
-
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 20),
+          child: Text('No dues found.', style: TextStyle(color: accent, fontSize: 15)),
+        )
       ];
     }
 
     return items.map((item) {
-      String name = item["name"] ?? item["title"] ?? "Due Item";
-      String dueDate = item["dueDate"] ??
-                 item["date"] ??
-                 item["due_date"] ??
-                 item["duedate"] ??
-                 item["DueDate"] ??
-                 "";
+      String sem = item["sem"] ?? "";
+      String feeDetails = item["feeDetails"] ?? "";
+      String dueDate = item["dueDate"] ?? "";
+      String amount = item["dueAmount"] ?? "";
 
-      String amount = item["amount"]?.toString() ?? item["due"]?.toString() ?? "";
-      return Card(
-        elevation: 0,
-        margin: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-          side: BorderSide(color: accent.withOpacity(0.3), width: 1.5),
+      return Container(
+        margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
+        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+        decoration: BoxDecoration(
+          color: accent.withOpacity(0.07),
+          borderRadius: BorderRadius.circular(14),
         ),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 14),
-          child: Row(
-            children: [
-              Container(
-                width: 6, height: 38,
-                decoration: BoxDecoration(
-                  color: accent,
-                  borderRadius: BorderRadius.circular(6),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(name,
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16,
-                        color: accent,
-                      )),
-                    if (dueDate.isNotEmpty)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 4.0),
-                        child: Text(
-                          "Due: $dueDate",
-                          style: TextStyle(fontSize: 12, color: accent.withOpacity(0.7)),
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 10),
-              Text(
-                "Rs. $amount",
-                style: TextStyle(
-                  fontSize: 15, color: accent, fontWeight: FontWeight.bold),
-              ),
-            ],
-          ),
+        child: Row(
+          children: [
+            Expanded(flex: 2, child: Text(sem, style: TextStyle(fontWeight: FontWeight.bold, color: accent))),
+            Expanded(flex: 4, child: Text(feeDetails, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15))),
+            Expanded(flex: 3, child: Text(dueDate, style: TextStyle(color: accent, fontSize: 14))),
+            Expanded(flex: 3, child: Text("Rs. $amount", style: const TextStyle(fontWeight: FontWeight.bold))),
+          ],
         ),
       );
     }).toList();
-  }
-
-  // Helper for safer numeric parsing
-  double? _parseDouble(dynamic value) {
-    if (value == null) return null;
-    if (value is num) return value.toDouble();
-    return double.tryParse(value.toString().replaceAll(',', '').replaceAll('Rs.', '').trim());
-  }
-
-  // Helper for list extraction
-  List _extractList(Map<String, dynamic>? root, String key) {
-    if (root == null) return [];
-    final value = root[key];
-    if (value is List) return value;
-    return [];
   }
 }

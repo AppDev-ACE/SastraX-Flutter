@@ -23,7 +23,6 @@ class TimetableWidget extends StatefulWidget {
 
 class _TimetableWidgetState extends State<TimetableWidget> {
   late final ScrollController _scrollController;
-  bool _hasAutoScrolled = false;
 
   static const List<String> _timeSlots = [
     '08:45 - 09:45', '09:45 - 10:45', '10:45 - 11:00', '11:00 - 12:00',
@@ -42,15 +41,20 @@ class _TimetableWidgetState extends State<TimetableWidget> {
   void initState() {
     super.initState();
     _scrollController = ScrollController();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _autoScrollToCurrent());
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _autoScrollToCurrent());
   }
 
   @override
   void didUpdateWidget(covariant TimetableWidget oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.isLoading && !widget.isLoading) {
-      setState(() {
-        _hasAutoScrolled = false;
-      });
+      WidgetsBinding.instance.addPostFrameCallback((_) => _autoScrollToCurrent());
     }
   }
 
@@ -58,6 +62,22 @@ class _TimetableWidgetState extends State<TimetableWidget> {
   void dispose() {
     _scrollController.dispose();
     super.dispose();
+  }
+
+  void _autoScrollToCurrent() {
+    final currentIndex = _getCurrentIndex();
+    if (currentIndex == null || !_scrollController.hasClients) return;
+
+    final targetOffset = (currentIndex * 80.0).clamp(
+      0.0,
+      _scrollController.position.maxScrollExtent,
+    );
+
+    _scrollController.animateTo(
+      targetOffset,
+      duration: const Duration(milliseconds: 700),
+      curve: Curves.easeInOut,
+    );
   }
 
   DateTime _parseTime(String timeStr, DateTime now) {
@@ -184,10 +204,9 @@ class _TimetableWidgetState extends State<TimetableWidget> {
             room = roomMatch.group(1)!;
           }
 
-          // ✅ FIX: Use a more generic Regex to remove suffixes like '-N', '-S', etc.
           String cleanCode = code
-              .replaceAll(RegExp(r'\((.*?)\)'), '') // Remove venue
-              .replaceAll(RegExp(r'-[A-Z0-9]+$'), '') // Remove suffix
+              .replaceAll(RegExp(r'\((.*?)\)'), '')
+              .replaceAll(RegExp(r'-[A-Z0-9]+$'), '')
               .trim()
               .toUpperCase();
 
@@ -211,27 +230,6 @@ class _TimetableWidgetState extends State<TimetableWidget> {
     }
 
     final currentIndex = _getCurrentIndex();
-    final List<GlobalKey> itemKeys = List.generate(transformedTimetable.length, (_) => GlobalKey());
-
-    if (!_hasAutoScrolled && currentIndex != null) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (currentIndex < itemKeys.length) {
-          final key = itemKeys[currentIndex];
-          final context = key.currentContext;
-          if (context != null) {
-            Scrollable.ensureVisible(
-              context,
-              duration: const Duration(milliseconds: 700),
-              curve: Curves.easeInOut,
-              alignment: 0.3,
-            );
-            setState(() {
-              _hasAutoScrolled = true;
-            });
-          }
-        }
-      });
-    }
 
     return Container(
       decoration: BoxDecoration(
@@ -282,7 +280,6 @@ class _TimetableWidgetState extends State<TimetableWidget> {
                 }
 
                 return Container(
-                  key: itemKeys[index],
                   margin: const EdgeInsets.only(bottom: 12),
                   decoration: BoxDecoration(
                     color: themeProvider.cardBackgroundColor,

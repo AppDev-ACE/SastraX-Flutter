@@ -11,9 +11,9 @@ class SubjectDetailPage extends StatefulWidget {
   final String subjectCode;
   final int maxInternals;
   final int maxEndSem;
-  final int? cia1;
-  final int? cia2;
-  final int? cia3;
+  final double? cia1;
+  final double? cia2;
+  final double? cia3;
 
   const SubjectDetailPage({
     Key? key,
@@ -42,8 +42,7 @@ class _SubjectDetailPageState extends State<SubjectDetailPage> {
 
   String internalsPredictorResult = "";
 
-  // --- ### CORRECTED TABLE ### ---
-  // This map now correctly matches the image provided.
+  // ... (gradeLookupTable remains the same) ...
   static const Map<int, Map<String, int?>> gradeLookupTable = {
     0: {"S": null, "A+": null, "A": null, "B": null, "C": null, "D": 100},
     1: {"S": null, "A+": null, "A": null, "B": null, "C": null, "D": 98},
@@ -100,9 +99,11 @@ class _SubjectDetailPageState extends State<SubjectDetailPage> {
 
   final List<String> gradeKeys = ["S", "A+", "A", "B", "C", "D"];
 
-  double _to20(int markOutOf50) => markOutOf50 * 0.4;
+  // <-- FIX 1: This function must accept a double, not an int
+  double _to20(double markOutOf50) => markOutOf50 * 0.4;
 
-  double computeBestTwoOutOf40(int? cia1, int? cia2, int? cia3) {
+  // <-- FIX 2: This function must accept double? to match the widget's properties
+  double computeBestTwoOutOf40(double? cia1, double? cia2, double? cia3) {
     final List<double> list = [];
     if (cia1 != null) list.add(_to20(cia1));
     if (cia2 != null) list.add(_to20(cia2));
@@ -114,6 +115,7 @@ class _SubjectDetailPageState extends State<SubjectDetailPage> {
   }
 
   double currentInternalsOutOf50() {
+    // This call is now correct because computeBestTwoOutOf40 accepts double?
     final bestTwo =
     computeBestTwoOutOf40(widget.cia1, widget.cia2, widget.cia3);
     return bestTwo + 10.0;
@@ -134,7 +136,8 @@ class _SubjectDetailPageState extends State<SubjectDetailPage> {
     super.dispose();
   }
 
-  Widget _ciaBox(String label, int? value, ThemeProvider theme) {
+  // <-- FIX 3: This function must accept double? to match the widget's properties
+  Widget _ciaBox(String label, double? value, ThemeProvider theme) {
     final isDark = theme.isDarkMode;
     final bool hasValue = value != null;
 
@@ -176,6 +179,7 @@ class _SubjectDetailPageState extends State<SubjectDetailPage> {
         borderRadius: BorderRadius.circular(10),
       ),
       child: Text(
+        // This logic works fine for double?
         value?.toString() ?? label,
         style: TextStyle(
           fontWeight: FontWeight.w700,
@@ -201,11 +205,11 @@ class _SubjectDetailPageState extends State<SubjectDetailPage> {
     setState(() {
       if (diff <= 0) {
         internalsPredictorResult =
-        "You already have ${current.toStringAsFixed(1)} /50. No extra marks needed!";
+        "You already have ${current.toStringAsFixed(1)} /40. No extra marks needed!";
       } else {
         final diffOutOf50 = (diff / 0.4).round();
         internalsPredictorResult =
-        "You need $diffOutOf50 more marks (out of 50) to reach $targetInternal /50.";
+        "You need $diffOutOf50 more marks (out of 40) to reach $targetInternal /50.";
       }
     });
   }
@@ -217,11 +221,10 @@ class _SubjectDetailPageState extends State<SubjectDetailPage> {
 
     if (enteredInternals == null) {
       setState(() {
-        endSemResult = "Enter valid internals (out of 50).";
+        endSemResult = "Enter valid internals (out of 40).";
       });
       return;
     }
-
 
     final int internalKey = enteredInternals.round().clamp(0, 50);
 
@@ -334,6 +337,7 @@ class _SubjectDetailPageState extends State<SubjectDetailPage> {
 
   @override
   Widget build(BuildContext context) {
+    // This call is now correct
     final bestTwoOutOf40 =
     computeBestTwoOutOf40(widget.cia1, widget.cia2, widget.cia3);
     final internalOutOf50 = bestTwoOutOf40 + 10;
@@ -405,7 +409,7 @@ class _SubjectDetailPageState extends State<SubjectDetailPage> {
                           crossAxisAlignment: CrossAxisAlignment.end,
                           children: [
                             Text(
-                              "${internalOutOf50.toStringAsFixed(1)}/50",
+                              "${internalOutOf50.toStringAsFixed(1)}/40",
                               style: TextStyle(
                                 fontWeight: FontWeight.bold,
                                 fontSize: 16,
@@ -440,6 +444,7 @@ class _SubjectDetailPageState extends State<SubjectDetailPage> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
+                    // These calls are now correct as _ciaBox accepts double?
                     _ciaBox("CIA 1", widget.cia1, theme),
                     _ciaBox("CIA 2", widget.cia2, theme),
                     _ciaBox("CIA 3", widget.cia3, theme),
@@ -479,7 +484,7 @@ class _SubjectDetailPageState extends State<SubjectDetailPage> {
                         _buildThemedTextField(
                           theme: theme,
                           controller: targetController,
-                          labelText: "Target internal (out of 50)",
+                          labelText: "Target internal (out of 40)",
                         ),
                         const SizedBox(height: 12),
                         _buildThemedButton(
@@ -529,7 +534,7 @@ class _SubjectDetailPageState extends State<SubjectDetailPage> {
                         _buildThemedTextField(
                           theme: theme,
                           controller: expectedInternalsController,
-                          labelText: "Expected Internals (out of 50)",
+                          labelText: "Expected Internals (out of 40)",
                           hintText:
                           "Current: ${currentInternalsOutOf50().toStringAsFixed(1)}",
                           keyboardType: const TextInputType.numberWithOptions(
