@@ -18,6 +18,7 @@ import '../components/timetable_widget.dart'; // Ensure this path is correct
 import '../models/theme_model.dart'; // Ensure this path is correct
 import '../components/theme_toggle_button.dart'; // Ensure this path is correct
 import '../components/neon_container.dart'; // Ensure this path is correct
+// ⭐️ Step 4a: Assume AttendancePieChart now takes canSkipClasses
 import '../components/attendance_pie_chart.dart'; // Ensure this path is correct
 import 'profile_page.dart'; // Ensure this path is correct
 import 'calendar_page.dart'; // Ensure this path is correct
@@ -26,6 +27,7 @@ import 'mess_menu_page.dart'; // Ensure this path is correct
 import 'captcha_dialog.dart'; // Ensure this path is correct
 import 'internals_page.dart'; // Still needed for navigation
 
+// --- HomePage remains unchanged ---
 class HomePage extends StatefulWidget {
   final String token;
   final String url;
@@ -160,6 +162,8 @@ class _HomePageState extends State<HomePage> {
     // --- End of HomePage UI ---
   }
 }
+// --- End HomePage ---
+
 
 /// ==========================================================================
 /// DashboardScreen (Handles Fetching, Caching, and UI for the Home Tab)
@@ -200,7 +204,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
   bool isBirthday = false;
   String? studentName;
   int feeDue = 0;
-  int bunks = 0;
+  // ⭐️ Step 3a: Rename bunks to canSkipClasses
+  int canSkipClasses = 0; // Was 'bunks'
   List timetableData = [];
   List hourWiseAttendanceData = [];
   List subjectAttendanceData = [];
@@ -212,17 +217,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
   String? _specialEventLottiePath;
   // --- End State Variables ---
 
-  // List of keys *expected* to be written by the backend to Firestore
+  // ⭐️ Step 1: Add 'bunk' to essential keys
   final List<String> _essentialKeys = [
     'profile', 'semGrades', 'cgpa', 'studentStatus', 'attendance',
     'timetable', 'hourWiseAttendance', 'subjectAttendance', 'courseMap',
-    'totalDue', 'dob', 'profilePic' // Ensure profilePic is checked too if essential
+    'totalDue', 'dob', 'profilePic', 'bunk' // Added 'bunk'
   ];
 
-  // Keys that must also be non-empty lists for the data to be considered valid
+  // Keys that must also be non-empty lists/maps for the data to be considered valid
   final List<String> _apiTriggerKeys = [
     'timetable',
-    'subjectAttendance'
+    'subjectAttendance',
+    'bunk' // Added 'bunk' here as well, assuming it's a map
   ];
 
 
@@ -301,7 +307,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     if (shouldFetchFromApi) {
       print("[${DateTime.now()}] DashboardScreen: Fetching data from API...");
       if (DashboardScreen.dashboardCache != null && mounted) {
-        // If we have old cache data (e.g., from a previous session), show it while refreshing
         _processAndCacheData(DashboardScreen.dashboardCache!);
         setState(() { _isLoading = false; _isRefreshing = true; });
       }
@@ -314,13 +319,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   /// Helper to check if a data map contains all essential keys written by the backend.
   bool _checkDataCompleteness(Map<String, dynamic>? data) {
-    // Handle potential null data from incomplete Firestore doc
     if (data == null) {
       print("[DEBUG] _checkDataCompleteness: Failed (data is null)");
       return false;
     }
-    // Check if all keys *expected from the backend* are present.
-    // We REMOVED the check for 'studentInfo' because it's derived locally in the app.
     bool allKeysPresent = _essentialKeys.every((key) {
       bool hasKey = data.containsKey(key);
       if (!hasKey) {
@@ -328,15 +330,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
       }
       return hasKey;
     });
-    // Optional: Log success
-    // if (allKeysPresent) {
-    //     print("[DEBUG] _checkDataCompleteness: Passed (all essential keys found)");
-    // }
     return allKeysPresent;
   }
 
-
-  /// Helper to check if specific trigger keys are present AND non-empty lists.
+  /// Helper to check if specific trigger keys are present AND non-empty.
   bool _checkTriggerKeysPopulated(Map<String, dynamic>? data) {
     if (data == null) {
       print("[DEBUG] _checkTriggerKeysPopulated: Failed (data is null)");
@@ -344,16 +341,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
     bool allTriggersPopulated = _apiTriggerKeys.every((key) {
       final value = data[key];
-      bool isPopulated = data.containsKey(key) && value != null && (value is! List || value.isNotEmpty);
+      // Check if key exists, is not null, AND is either not a List/Map OR is a non-empty List/Map
+      bool isPopulated = data.containsKey(key) &&
+          value != null &&
+          ((value is! List && value is! Map) ||
+              (value is List && value.isNotEmpty) ||
+              (value is Map && value.isNotEmpty));
       if (!isPopulated) {
-        print("[DEBUG] _checkTriggerKeysPopulated: Failed (key '$key' is missing, null, or an empty list)");
+        print("[DEBUG] _checkTriggerKeysPopulated: Failed (key '$key' is missing, null, or an empty List/Map)");
       }
       return isPopulated;
     });
-    // Optional: Log success
-    // if (allTriggersPopulated) {
-    //     print("[DEBUG] _checkTriggerKeysPopulated: Passed (all trigger keys populated)");
-    // }
     return allTriggersPopulated;
   }
 
@@ -373,7 +371,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
     // --- Parsing Logic (with added safety) ---
     Map<String, String> parsedStudentInfo = {'status': 'Unknown', 'gender': 'Unknown'};
-    // Use putIfAbsent for safer access to potentially missing studentStatus
     dynamic statusRaw = data.putIfAbsent('studentStatus', () => []);
     if (statusRaw is List && statusRaw.length >= 2) {
       if (statusRaw[0] is Map && statusRaw[0].containsKey('status')) {
@@ -383,7 +380,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         parsedStudentInfo['gender'] = statusRaw[1]['gender']?.toString() ?? 'Unknown';
       }
     } else {
-      print("[WARN] studentStatus data missing or malformed in Firestore data during processing.");
+      print("[WARN] studentStatus data missing or malformed during processing.");
     }
 
     // Update static cache *before* setState
@@ -408,23 +405,54 @@ class _DashboardScreenState extends State<DashboardScreen> {
       final cgpaList = _getAsList(data['cgpa']);
       cgpa = (cgpaList.isNotEmpty && cgpaList[0] is Map) ? (cgpaList[0]['cgpa']?.toString() ?? "N/A") : "N/A";
 
-      // Use putIfAbsent for fee keys too
       feeDue = (_parseFee(data.putIfAbsent('sastraDue', () => 0)) ?? 0) +
           (_parseFee(data.putIfAbsent('totalDue', () => 0)) ?? 0);
 
       // --- Attendance Calculation ---
-      attendancePercent = 0.0; attendedClasses = 0; totalClasses = 0; bunks = 0;
+      attendancePercent = 0.0; attendedClasses = 0; totalClasses = 0;
       int tempTotalHrs = 0; int tempAttendedHrs = 0;
-      for (final subject in subjectAttendanceData) { // subjectAttendanceData might be empty if check failed
+      int totalMissedClasses = 0; // A = T - Pr
+      for (final subject in subjectAttendanceData) {
         if (subject is Map) {
-          tempTotalHrs += int.tryParse(subject['totalHrs']?.toString() ?? '0') ?? 0;
-          tempAttendedHrs += int.tryParse(subject['presentHrs']?.toString() ?? '0') ?? 0;
+          int subjectTotal = int.tryParse(subject['totalHrs']?.toString() ?? '0') ?? 0;
+          int subjectAttended = int.tryParse(subject['presentHrs']?.toString() ?? '0') ?? 0;
+          tempTotalHrs += subjectTotal;
+          tempAttendedHrs += subjectAttended;
+          totalMissedClasses += (subjectTotal - subjectAttended); // Accumulate missed classes
         }
       }
       totalClasses = tempTotalHrs;
       attendedClasses = tempAttendedHrs;
       attendancePercent = totalClasses > 0 ? (attendedClasses / totalClasses) * 100 : 0.0;
-      // --- End Attendance Calculation ---
+
+      // ⭐️ Step 2: Calculate 'Can Skip' Classes
+      int totalAllowedSkips = 0; // P20
+      final bunkData = data['bunk'];
+      if (bunkData is Map && bunkData.containsKey('perSem20')) {
+        final perSem20Data = bunkData['perSem20'];
+        if (perSem20Data is Map) {
+          perSem20Data.forEach((subjectCode, allowedSkips) {
+            // Ensure allowedSkips is treated as a number
+            if (allowedSkips is num) {
+              totalAllowedSkips += allowedSkips.toInt();
+            } else {
+              int? parsedSkips = int.tryParse(allowedSkips?.toString() ?? '0');
+              totalAllowedSkips += parsedSkips ?? 0;
+            }
+          });
+        } else {
+          print("[WARN] 'perSem20' in bunk data is not a Map.");
+        }
+      } else {
+        print("[WARN] 'bunk' data or 'perSem20' key is missing or not a Map.");
+      }
+
+      canSkipClasses = totalAllowedSkips - totalMissedClasses; // C = P20 - A
+      // Ensure it's not negative
+      if (canSkipClasses < 0) {
+        canSkipClasses = 0;
+      }
+      // ⭐️ End Step 2
 
       // --- Birthday Check ---
       isBirthday = false;
@@ -482,15 +510,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
     if (mounted) setState(() {
       _isRefreshing = true;
-      _isLoading = DashboardScreen.dashboardCache == null; // Only show full loading spinner if no cache
+      _isLoading = DashboardScreen.dashboardCache == null;
       _error = null;
     });
 
-    const apiTimeout = Duration(seconds: 80); // Increased timeout
+    const apiTimeout = Duration(seconds: 80);
 
     try {
       print("[${DateTime.now()}] DashboardScreen: Starting API calls (timeout: ${apiTimeout.inSeconds}s)...");
 
+      // ⭐️ Step 5: Add api.bunk to the parallel calls
       final List<Future<http.Response>> parallelFutures = [
         http.post( Uri.parse(api.profile), headers: {'Content-Type': 'application/json'}, body: jsonEncode({'token': effectiveToken}), ).timeout(apiTimeout),
         http.post( Uri.parse(api.profilePic), headers: {'Content-Type': 'application/json'}, body: jsonEncode({'token': effectiveToken}), ).timeout(apiTimeout),
@@ -504,7 +533,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
         http.post( Uri.parse(api.semGrades), headers: {'Content-Type': 'application/json'}, body: jsonEncode({'token': effectiveToken}), ).timeout(apiTimeout),
         http.post( Uri.parse(api.studentStatus), headers: {'Content-Type': 'application/json'}, body: jsonEncode({'token': effectiveToken}), ).timeout(apiTimeout),
         http.post( Uri.parse(api.attendance), headers: {'Content-Type': 'application/json'}, body: jsonEncode({'token': effectiveToken}), ).timeout(apiTimeout),
+        http.post( Uri.parse(api.bunk), headers: {'Content-Type': 'application/json'}, body: jsonEncode({'token': effectiveToken}), ).timeout(apiTimeout), // Added bunk call
       ];
+      // ⭐️ End Step 5
 
       // Handle API call errors gracefully
       final results = await Future.wait(parallelFutures.map((f) => f.catchError((e) {
@@ -532,13 +563,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
         bool triggerKeysPopulated = false;
 
         try {
-          // Fetch fresh data in each loop iteration
           doc = await FirebaseFirestore.instance.collection('studentDetails').doc(widget.regNo).get()
               .timeout(const Duration(seconds: 5));
-          data = doc.data() as Map<String, dynamic>?; // Cast safely
+          data = doc.data() as Map<String, dynamic>?;
 
           if (doc.exists && data != null) {
-            // Perform checks on the freshly fetched data
             dataComplete = _checkDataCompleteness(data);
             triggerKeysPopulated = _checkTriggerKeysPopulated(data);
           } else {
@@ -547,20 +576,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
         } catch (pollError) {
           print("[${DateTime.now()}] DashboardScreen: Error during Firestore poll try ${i + 1}: $pollError");
-          // Continue to next retry
         }
 
-        // Check conditions *after* fetching and potential errors
         if (dataComplete && triggerKeysPopulated) {
           print("[${DateTime.now()}] DashboardScreen: Polling successful on try ${i + 1}.");
-          polledData = data; // Assign the validated data
-          break; // Exit loop on success
+          polledData = data;
+          break;
         } else {
-          // More detailed log on failure
           print("[${DateTime.now()}] DashboardScreen: Poll try ${i + 1}: Data check failed (complete: $dataComplete, triggers: $triggerKeysPopulated).");
         }
 
-        // Delay before next retry
         if (i < maxRetries - 1) await Future.delayed(const Duration(milliseconds: 1200));
       }
 
@@ -568,17 +593,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
       if (!mounted) return;
 
       if (polledData != null) {
-        // Success!
         _processAndCacheData(polledData);
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(isInitialFetch ? 'Data loaded!' : 'Data refreshed!'), backgroundColor: Colors.green, duration: Duration(seconds: 2)));
         }
       } else {
-        // Polling timed out
         print("[${DateTime.now()}] DashboardScreen: Polling timed out after $maxRetries tries.");
         if(DashboardScreen.dashboardCache != null){
           print("[${DateTime.now()}] DashboardScreen: Polling failed, using existing cache.");
-          _processAndCacheData(DashboardScreen.dashboardCache!); // Reset to cache
+          _processAndCacheData(DashboardScreen.dashboardCache!);
           throw Exception("Failed to refresh all data (polling timeout). Showing last known data.");
         } else {
           throw Exception("Failed to load initial data (polling timeout).");
@@ -636,7 +659,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(_error!), backgroundColor: Colors.red));
       }
     } finally {
-      // Ensure flags are reset even if errors occurred before fetch completed
       if (mounted && (_isRefreshing || _isLoading)) {
         setState(() { _isRefreshing = false; _isLoading = false; });
       }
@@ -731,36 +753,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   Widget _buildDashboardUI(BuildContext context) {
     final theme = Provider.of<ThemeProvider>(context);
-    // Use cached data if available, otherwise expect state variables to be populated
-    final dataToDisplay = DashboardScreen.dashboardCache ?? {};
-
-    // Recalculate based on dataToDisplay to ensure consistency, using defaults if keys missing
-    final currentStudentName = (dataToDisplay.putIfAbsent('profile', () => {}) is Map && dataToDisplay['profile']['name'] != null)
-        ? dataToDisplay['profile']['name'].toString()
-        : 'Student';
-    final currentTimetableData = _getAsList(dataToDisplay['timetable']);
-    final currentHourWiseAttendanceData = _getAsList(dataToDisplay['hourWiseAttendance']);
-    final currentSubjectAttendanceData = _getAsList(dataToDisplay['subjectAttendance']);
-    final currentCourseMapData = _getAsList(dataToDisplay['courseMap']);
-    // final currentSemGradesData = _getAsList(dataToDisplay['semGrades']); // Not directly used in UI?
-    final currentCgpaList = _getAsList(dataToDisplay['cgpa']);
-    final currentCgpa = (currentCgpaList.isNotEmpty && currentCgpaList[0] is Map) ? (currentCgpaList[0]['cgpa']?.toString() ?? "N/A") : "N/A";
-    final currentFeeDue = (_parseFee(dataToDisplay.putIfAbsent('sastraDue', () => 0)) ?? 0) +
-        (_parseFee(dataToDisplay.putIfAbsent('totalDue', () => 0)) ?? 0);
-
-    // Recalculate attendance locally for display consistency
-    double currentAttendancePercent = 0.0;
-    int currentAttendedClasses = 0;
-    int currentTotalClasses = 0;
-    for (final subject in currentSubjectAttendanceData) {
-      if (subject is Map) {
-        currentTotalClasses += int.tryParse(subject['totalHrs']?.toString() ?? '0') ?? 0;
-        currentAttendedClasses += int.tryParse(subject['presentHrs']?.toString() ?? '0') ?? 0;
-      }
-    }
-    currentAttendancePercent = currentTotalClasses > 0 ? (currentAttendedClasses / currentTotalClasses) * 100 : 0.0;
-    // Note: 'bunks' calculation might need adjustment based on its logic
-
+    // Use state variables which are updated in _processAndCacheData
+    // This avoids recalculating everything in the build method.
 
     return Padding(
       padding: const EdgeInsets.all(16.0),
@@ -768,7 +762,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         mainAxisSize: MainAxisSize.min,
         children: [
           // Show error banner *over* the cached content if refresh failed
-          if (_error != null && !_isLoading) // Show error banner if error exists and not initial loading
+          if (_error != null && !_isLoading)
             Padding(
               padding: const EdgeInsets.only(bottom: 10.0),
               child: MaterialBanner(
@@ -780,24 +774,26 @@ class _DashboardScreenState extends State<DashboardScreen> {
               ),
             ),
           GestureDetector( /* ... Profile Container ... */
-            onTap: () { Navigator.push( context, MaterialPageRoute(builder: (_) => ProfilePage(token: widget.token, url: widget.url, regNo: widget.regNo))); }, child: NeonContainer( borderColor: theme.isDarkMode ? AppTheme.neonBlue : AppTheme.primaryBlue, child: Row( children: [ CircleAvatar( radius: 28, backgroundColor: theme.isDarkMode ? AppTheme.neonBlue : AppTheme.primaryBlue, child: Icon(Icons.person, color: theme.isDarkMode ? Colors.black : Colors.white) ), const SizedBox(width: 16), Expanded( child: Column( crossAxisAlignment: CrossAxisAlignment.start, children: [ if (isBirthday) const FittedBox(fit: BoxFit.scaleDown, child: Text('🎉 Happy Birthday! 🎉', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.amber))) else FittedBox( fit: BoxFit.scaleDown, child: Text( (currentStudentName.isNotEmpty ? 'Welcome, $currentStudentName!' : 'Welcome Back!'), style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: theme.isDarkMode ? AppTheme.neonBlue : AppTheme.primaryBlue) ), ), FittedBox(fit: BoxFit.scaleDown, child: Text('Student Dashboard', style: TextStyle(color: theme.isDarkMode ? Colors.white70 : Colors.grey[600]))), ], ), ), ], ), ),
+            onTap: () { Navigator.push( context, MaterialPageRoute(builder: (_) => ProfilePage(token: widget.token, url: widget.url, regNo: widget.regNo))); }, child: NeonContainer( borderColor: theme.isDarkMode ? AppTheme.neonBlue : AppTheme.primaryBlue, child: Row( children: [ CircleAvatar( radius: 28, backgroundColor: theme.isDarkMode ? AppTheme.neonBlue : AppTheme.primaryBlue, child: Icon(Icons.person, color: theme.isDarkMode ? Colors.black : Colors.white) ), const SizedBox(width: 16), Expanded( child: Column( crossAxisAlignment: CrossAxisAlignment.start, children: [ if (isBirthday) const FittedBox(fit: BoxFit.scaleDown, child: Text('🎉 Happy Birthday! 🎉', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.amber))) else FittedBox( fit: BoxFit.scaleDown, child: Text( (studentName != null && studentName!.isNotEmpty ? 'Welcome, $studentName!' : 'Welcome Back!'), style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: theme.isDarkMode ? AppTheme.neonBlue : AppTheme.primaryBlue) ), ), FittedBox(fit: BoxFit.scaleDown, child: Text('Student Dashboard', style: TextStyle(color: theme.isDarkMode ? Colors.white70 : Colors.grey[600]))), ], ), ), ], ), ),
           ),
           const SizedBox(height: 16),
           GestureDetector( /* ... Attendance Pie Chart ... */
-            onTap: () { Navigator.push( context, MaterialPageRoute( builder: (_) => SubjectWiseAttendancePage( regNo: widget.regNo, token: widget.token, url: widget.url, initialSubjectAttendance: currentSubjectAttendanceData, initialHourWiseAttendance: currentHourWiseAttendanceData, timetable: currentTimetableData, courseMap: currentCourseMapData, ), ), ); },
+            onTap: () { Navigator.push( context, MaterialPageRoute( builder: (_) => SubjectWiseAttendancePage( regNo: widget.regNo, token: widget.token, url: widget.url, initialSubjectAttendance: subjectAttendanceData, initialHourWiseAttendance: hourWiseAttendanceData, timetable: timetableData, courseMap: courseMapData, ), ), ); },
+            // ⭐️ Step 4b: Pass canSkipClasses to the Pie Chart
             child: AttendancePieChart(
-              attendancePercentage: currentAttendancePercent, // Use calculated value
-              attendedClasses: currentAttendedClasses, // Use calculated value
-              totalClasses: currentTotalClasses, // Use calculated value
-              bunkingDaysLeft: bunks, // bunks calculation needs review if it depends on state only
+              attendancePercentage: attendancePercent,
+              attendedClasses: attendedClasses,
+              totalClasses: totalClasses,
+              bunkingDaysLeft: canSkipClasses,
             ),
+            // ⭐️ End Step 4b
           ),
           const SizedBox(height: 16),
           Row( /* ... Fee and GPA Tiles ... */
             crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Expanded(child: _buildFeeDueTile(theme, currentFeeDue)), // Use calculated value
+            Expanded(child: _buildFeeDueTile(theme, feeDue)),
             const SizedBox(width: 12),
-            Expanded(child: _buildGpaExamTile(theme, currentCgpa)), // Use calculated value
+            Expanded(child: _buildGpaExamTile(theme, cgpa ?? 'N/A')),
           ],
           ),
           const SizedBox(height: 16),
@@ -806,11 +802,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
             child: _specialEventLottiePath != null
                 ? _buildSpecialEventLottie(_specialEventLottiePath!)
                 : TimetableWidget(
-              timetable: currentTimetableData, // Use calculated value
-              // Show loading only if absolutely no data and initial fetch is happening
+              timetable: timetableData,
               isLoading: _isLoading && DashboardScreen.dashboardCache == null,
-              hourWiseAttendance: currentHourWiseAttendanceData, // Use calculated value
-              courseMap: currentCourseMapData, // Use calculated value
+              hourWiseAttendance: hourWiseAttendanceData,
+              courseMap: courseMapData,
             ),
           ),
         ],
@@ -823,9 +818,54 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return isBirthday ? Align( alignment: Alignment.topCenter, child: ConfettiWidget( confettiController: _confettiController, blastDirectionality: BlastDirectionality.explosive), ) : const SizedBox.shrink();
   }
 
+  // Modified _buildFeeDueTile to remove regNo (already available via widget.regNo)
   Widget _buildFeeDueTile(ThemeProvider theme, int feeDue) {
-    final hasDue = feeDue > 0; final isDark = theme.isDarkMode; return GestureDetector( onTap: () { Navigator.push(context, MaterialPageRoute(builder: (context) => FeeDueScreen( url: widget.url, token: widget.token))); }, child: SizedBox( width: 180, height: 150, child: NeonContainer( borderColor: hasDue ? Colors.red.shade400 : (isDark ? AppTheme.neonBlue : AppTheme.primaryBlue), padding: const EdgeInsets.all(12), child: Column( mainAxisAlignment: MainAxisAlignment.center, children: [ Icon(Icons.account_balance_wallet, size: 40, color: hasDue ? Colors.red.shade400 : (isDark ? AppTheme.neonBlue : AppTheme.primaryBlue)), const SizedBox(height: 8), const FittedBox(fit: BoxFit.scaleDown, child: Text('Fee Status', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16))), const SizedBox(height: 4), FittedBox(fit: BoxFit.scaleDown, child: Text( (hasDue ? '₹$feeDue Due' : 'Paid'), style: TextStyle(fontSize: 14, color: isDark ? Colors.white70 : Colors.grey[600]))), ], ), ), ), );
+    final hasDue = feeDue > 0;
+    final isDark = theme.isDarkMode;
+    return GestureDetector(
+      onTap: () {
+        Navigator.push(
+            context,
+            MaterialPageRoute(
+                builder: (context) => FeeDueScreen(
+                    url: widget.url, token: widget.token))); // Removed regNo from here
+      },
+      child: SizedBox(
+        width: 180,
+        height: 150,
+        child: NeonContainer(
+          borderColor: hasDue
+              ? Colors.red.shade400
+              : (isDark ? AppTheme.neonBlue : AppTheme.primaryBlue),
+          padding: const EdgeInsets.all(12),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.account_balance_wallet,
+                  size: 40,
+                  color: hasDue
+                      ? Colors.red.shade400
+                      : (isDark ? AppTheme.neonBlue : AppTheme.primaryBlue)),
+              const SizedBox(height: 8),
+              const FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text('Fee Status',
+                      style: TextStyle(
+                          fontWeight: FontWeight.bold, fontSize: 16))),
+              const SizedBox(height: 4),
+              FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text((hasDue ? '₹$feeDue Due' : 'Paid'),
+                      style: TextStyle(
+                          fontSize: 14,
+                          color: isDark ? Colors.white70 : Colors.grey[600]))),
+            ],
+          ),
+        ),
+      ),
+    );
   }
+
 
   Widget _buildGpaExamTile(ThemeProvider theme, String cgpa) {
     final isDark = theme.isDarkMode; return GestureDetector( onDoubleTap: () => setState(() => showExamSchedule = !showExamSchedule), child: SizedBox( width: 180, height: 150, child: NeonContainer( borderColor: isDark ? AppTheme.neonBlue : AppTheme.primaryBlue, padding: const EdgeInsets.all(12), child: AnimatedSwitcher( duration: const Duration(milliseconds: 300), child: showExamSchedule ? Column( key: const ValueKey('exam'), mainAxisAlignment: MainAxisAlignment.center, children: [ Icon(Icons.event, size: 40, color: isDark ? AppTheme.neonBlue : AppTheme.primaryBlue), const SizedBox(height: 10), const FittedBox(fit: BoxFit.scaleDown, child: Text('Exam Schedule', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16))), const SizedBox(height: 4), FittedBox(fit: BoxFit.scaleDown, child: Text(_getNextExamInfo(), style: TextStyle(fontSize: 14, color: isDark ? Colors.white70 : Colors.grey[600]), textAlign: TextAlign.center,)), ]) : Column( key: const ValueKey('gpa'), mainAxisAlignment: MainAxisAlignment.center, children: [ Icon(Icons.grade, size: 40, color: isDark ? AppTheme.neonBlue : Colors.orange), const SizedBox(height: 10), const FittedBox(fit: BoxFit.scaleDown, child: Text('CGPA', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16))), FittedBox(fit: BoxFit.scaleDown, child: Text('$cgpa / 10', style: TextStyle(fontSize: 14, color: isDark ? Colors.white70 : Colors.grey[600]))), ]), ), ), ), );

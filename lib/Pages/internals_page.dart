@@ -1,12 +1,11 @@
 // internals_page.dart
 import 'dart:convert'; // For jsonDecode
-import 'dart:async'; // For Future and timeout
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:http/http.dart' as http; // For making HTTP requests
-import 'package:cloud_firestore/cloud_firestore.dart'; // Import Firestore
+import 'package:cloud_firestore/cloud_firestore.dart'; // ✅ Import Firestore
 import 'subjectDetailPage.dart'; // Make sure this import is correct
-import 'dart:math'; // For max() and sorting
+import 'dart:math'; // For max()
 import '../models/theme_model.dart'; // Make sure this import is correct
 import '../services/ApiEndpoints.dart'; // Make sure this import is correct
 
@@ -44,17 +43,20 @@ class _InternalsPageState extends State<InternalsPage> {
   Future<void> _loadData() async {
     if (!mounted) return;
     print("InternalsPage: Starting _loadData...");
-    setState(() { _isLoading = true; _error = null; });
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
 
     try {
-      // 1. Check Firestore
+      // 1. Check Firestore first
       print("InternalsPage: Checking Firestore for existing data...");
       final docRef = FirebaseFirestore.instance.collection('studentDetails').doc(widget.regNo);
-      final docSnapshot = await docRef.get().timeout(const Duration(seconds: 5)); // Add timeout
+      final docSnapshot = await docRef.get().timeout(const Duration(seconds: 5));
 
       if (docSnapshot.exists) {
         final data = docSnapshot.data();
-        // Check key exists AND is a non-empty list
+        // Check if the key exists and if the data is a non-empty list
         if (data != null && data.containsKey('ciaWiseInternalMarks') && data['ciaWiseInternalMarks'] is List && (data['ciaWiseInternalMarks'] as List).isNotEmpty) {
           print("InternalsPage: Found non-empty data in Firestore. Using it.");
           if (mounted) {
@@ -63,19 +65,19 @@ class _InternalsPageState extends State<InternalsPage> {
               _isLoading = false;
             });
           }
-          return; // Done
+          return; // Stop here, data loaded from Firestore
         } else {
-          print("InternalsPage: Data in Firestore is empty/missing key 'ciaWiseInternalMarks'. Will fetch from API.");
+          print("InternalsPage: Data in Firestore is empty or missing key. Will fetch from API.");
         }
       } else {
         print("InternalsPage: Firestore document doesn't exist. Will fetch from API.");
       }
 
-      // 2. Fetch from API if Firestore check didn't return
+      // 2. If Firestore check didn't return, fetch from API
       await _fetchFromApi();
 
     } catch (e, stackTrace) {
-      print("InternalsPage: Error during initial data load: $e \n$stackTrace");
+      print("InternalsPage: Error during initial data load: $e\n$stackTrace");
       if (mounted) {
         setState(() {
           _error = "Failed to load initial data.\nError: ${e.toString()}";
@@ -86,65 +88,50 @@ class _InternalsPageState extends State<InternalsPage> {
   }
 
 
-  /// Fetches data specifically from the API. Handles Firestore update via server.
+  /// Fetches data specifically from the API. Used for initial load failure or refresh.
   Future<void> _fetchFromApi() async {
-    // Removed the problematic check: 'if (_isLoading && mounted)'
-
-    if (!mounted) return Future.value(); // Keep this check
+    if (!mounted) return Future.value();
+    // Prevent re-fetch if already loading (e.g., from initState)
+    if (_isLoading && _ciaMarksData == null) {
+      print("InternalsPage: Initial fetch already in progress.");
+      return Future.value();
+    }
 
     print("InternalsPage: Starting _fetchFromApi...");
-    // Ensure loading state is set *if* called directly (e.g., by RefreshIndicator)
-    // If called from _loadData, it's already true, but setting it again is harmless.
-    setState(() { _isLoading = true; _error = null; });
+    setState(() {
+      _isLoading = true; // Show loading indicator for refresh
+      _error = null;
+    });
 
     try {
-      // Small delay might not be necessary, but keep if intended
       await Future.delayed(const Duration(milliseconds: 100));
-      if (!mounted) return Future.value();
+      if (!mounted) return;
 
-      print("InternalsPage: Fetching internals from API with token: ${widget.token.substring(0,min(10, widget.token.length))}...");
+      print("InternalsPage: Fetching internals from API with token: ${widget.token.substring(0, min(10, widget.token.length))}...");
       final response = await http
           .post(
         Uri.parse(api.ciaWiseInternalMarks),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({'token': widget.token}),
       )
-          .timeout(const Duration(seconds: 45)); // Keep timeout
+          .timeout(const Duration(seconds: 45));
 
-      if (!mounted) return Future.value();
+      if (!mounted) return;
 
       print("InternalsPage: API Response Status Code: ${response.statusCode}");
 
       if (response.statusCode == 200) {
-        // Assuming your backend responds with JSON like:
-        // { "success": true, "message": "...", "marksData": [...] }
-        // OR on error: { "success": false, "message": "Error..." }
-        final dynamic data = jsonDecode(response.body); // Use dynamic type first
-
-        // Check if the response is a Map and has the 'success' key
-        if (data is Map<String, dynamic> && data.containsKey('success')) {
-          if (data['success'] == true) {
-            print("InternalsPage: API fetch successful. Processing marksData.");
-            // Safely access 'marksData' which should be a List
-            final List<dynamic>? marksList = data['marksData'] as List<dynamic>?;
-
-            setState(() {
-              _ciaMarksData = marksList; // Update state with new data
-              _isLoading = false;
-              _error = null;
-            });
-            // NOTE: We assume the BACKEND is responsible for writing this
-            // marksList to the 'ciaWiseInternalMarks' field in Firestore.
-          } else {
-            // API reported success=false
-            final String errorMessage = data['message'] as String? ?? 'API failed to load marks (no message)';
-            print("InternalsPage: API reported success=false. Message: $errorMessage");
-            throw Exception(errorMessage);
-          }
+        final data = jsonDecode(response.body);
+        if (data['success'] == true) {
+          print("InternalsPage: API fetch successful. Setting state.");
+          setState(() {
+            _ciaMarksData = data['marksData'] as List<dynamic>?;
+            _isLoading = false;
+            _error = null;
+          });
         } else {
-          // Handle unexpected response format
-          print("InternalsPage: Unexpected API response format: ${response.body}");
-          throw Exception('Invalid response format from server');
+          print("InternalsPage: API reported success=false. Message: ${data['message']}");
+          throw Exception(data['message'] ?? 'API failed to load marks');
         }
       } else {
         print("InternalsPage: HTTP error occurred. Status: ${response.statusCode}");
@@ -154,29 +141,19 @@ class _InternalsPageState extends State<InternalsPage> {
       print("InternalsPage: Error caught in _fetchFromApi: $e\n$stackTrace");
       if (mounted) {
         setState(() {
-          // Show error, differentiating between initial load failure and refresh failure
-          _error = (_ciaMarksData == null || _ciaMarksData!.isEmpty)
+          _error = _ciaMarksData == null || _ciaMarksData!.isEmpty
               ? "Failed to fetch marks.\nPlease pull down to refresh.\nError: ${e.toString()}"
               : "Failed to refresh marks.\nError: ${e.toString()}";
-          _isLoading = false; // Stop loading on error
+          _isLoading = false;
         });
       }
-    } finally {
-      // Ensure isLoading is set to false if the fetch completes or errors out,
-      // but only if it wasn't already handled (e.g., successful fetch)
-      if (mounted && _isLoading) {
-        setState(() { _isLoading = false; });
-      }
     }
-    // Return a completed future for RefreshIndicator compatibility
-    return Future.value();
   }
-
 
   /// Helper to parse mark strings (handles decimals, rounds them). Returns int?.
   int? _parseMark(String? markStr) {
     if (markStr == null) return null;
-    final double? markDouble = double.tryParse(markStr.trim().replaceAll(RegExp(r'[^\d.]'), '')); // Allow only digits and decimal
+    final double? markDouble = double.tryParse(markStr.trim().replaceAll(RegExp(r'[^\d.]'), ''));
     if (markDouble == null) { return null; } // Handle "AB", etc.
     return markDouble.round(); // Round 18.40 -> 18
   }
@@ -189,7 +166,7 @@ class _InternalsPageState extends State<InternalsPage> {
     return markDouble.round(); // Usually whole numbers like 20 or 50
   }
 
-  /// ✅ MODIFIED: Transforms API data, now includes Assignment mark and its max value.
+  /// ✅ MODIFIED: Transforms API data, now includes Assignment mark.
   List<Map<String, dynamic>> _processMarksData(List<dynamic>? rawMarks) {
     if (rawMarks == null || rawMarks.isEmpty) { return []; }
 
@@ -212,54 +189,58 @@ class _InternalsPageState extends State<InternalsPage> {
         "code": subjectCode,
         "maxInternals": 50, // ✅ Max internals is now 50
         "maxEndSem": 100,
-        "cia1": null, "cia1_max": null, // Store max marks if needed for scaling CIAs later
-        "cia2": null, "cia2_max": null,
-        "cia3": null, "cia3_max": null,
+        "cia1": null, "cia1_max": 20, // Default to 20 if not provided
+        "cia2": null, "cia2_max": 20,
+        "cia3": null, "cia3_max": 20,
         "assignment": null, // ✅ Add assignment field
-        "assignment_max": null, // ✅ Add assignment max field
+        "assignment_max": 10, // ✅ Default to 10 if not provided
       },
       );
 
       final String lowerComponent = component.toLowerCase();
 
-      // Store CIA marks and their max values
       if (lowerComponent.contains("cia 3") || lowerComponent.contains("cia iii") || lowerComponent.contains("3rd mid-term")) {
         groupedSubjects[subjectCode]!["cia3"] = mark;
-        groupedSubjects[subjectCode]!["cia3_max"] = maxMark;
+        if (maxMark != null) groupedSubjects[subjectCode]!["cia3_max"] = maxMark;
       } else if (lowerComponent.contains("cia 2") || lowerComponent.contains("cia ii") || lowerComponent.contains("2nd mid-term")) {
         groupedSubjects[subjectCode]!["cia2"] = mark;
-        groupedSubjects[subjectCode]!["cia2_max"] = maxMark;
+        if (maxMark != null) groupedSubjects[subjectCode]!["cia2_max"] = maxMark;
       } else if (lowerComponent.contains("cia 1") || lowerComponent.contains("cia i") || lowerComponent.contains("1st mid-term")) {
         groupedSubjects[subjectCode]!["cia1"] = mark;
-        groupedSubjects[subjectCode]!["cia1_max"] = maxMark;
+        if (maxMark != null) groupedSubjects[subjectCode]!["cia1_max"] = maxMark;
       }
       // ✅ Store Assignment mark and its max value
       else if (lowerComponent.contains("assignment")) {
         groupedSubjects[subjectCode]!["assignment"] = mark;
-        groupedSubjects[subjectCode]!["assignment_max"] = maxMark;
+        if (maxMark != null) groupedSubjects[subjectCode]!["assignment_max"] = maxMark;
       }
     }
     return groupedSubjects.values.toList();
   }
 
 
+  /// ✅ NEW: Scales a mark to a target max value.
+  /// Example: scaleMark(18, 20, 20) -> 18.0
+  /// Example: scaleMark(45, 50, 20) -> 18.0
+  double _scaleMark(int? mark, int? maxMark, double targetMax) {
+    if (mark == null || maxMark == null || maxMark == 0) return 0.0;
+    double scaled = (mark.toDouble() / maxMark.toDouble()) * targetMax;
+    return scaled.clamp(0.0, targetMax); // Ensure it doesn't exceed target
+  }
+
+
   /// ✅ MODIFIED: Calculates total internals out of 50.
-  /// Takes CIAs (assumed out of 20 from API) and Assignment (raw mark + max mark).
   Map<String, double> calculateInternalsOutOf50({
     int? cia1, int? cia1Max,
     int? cia2, int? cia2Max,
     int? cia3, int? cia3Max,
     int? assignment, int? assignmentMax
   }) {
+    // Scale all CIAs to 20
     final List<double> ciaScoresOutOf20 = [];
-    // Scale CIAs to 20 if needed (assuming API provides raw marks like 18/20)
-    // If API provides marks out of 50, scale them: mark * (20.0 / maxMark)
-    // For now, assume API gives marks directly out of 20 as per previous examples
-    // Add null safety checks
-    if (cia1 != null) ciaScoresOutOf20.add(cia1.toDouble());
-    if (cia2 != null) ciaScoresOutOf20.add(cia2.toDouble());
-    if (cia3 != null) ciaScoresOutOf20.add(cia3.toDouble());
-
+    if (cia1 != null) ciaScoresOutOf20.add(_scaleMark(cia1, cia1Max ?? 20, 20.0));
+    if (cia2 != null) ciaScoresOutOf20.add(_scaleMark(cia2, cia2Max ?? 20, 20.0));
+    if (cia3 != null) ciaScoresOutOf20.add(_scaleMark(cia3, cia3Max ?? 20, 20.0));
 
     // Sort CIAs descending to find best two
     ciaScoresOutOf20.sort((a, b) => b.compareTo(a));
@@ -269,18 +250,7 @@ class _InternalsPageState extends State<InternalsPage> {
     if (ciaScoresOutOf20.length > 1) bestTwoCIAsOutOf40 += ciaScoresOutOf20[1]; // Add second best
 
     // Scale assignment mark to be out of 10
-    double assignmentOutOf10 = 0.0;
-    if (assignment != null && assignmentMax != null && assignmentMax > 0) {
-      assignmentOutOf10 = (assignment.toDouble() / assignmentMax.toDouble()) * 10.0;
-      // Clamp between 0 and 10 in case of data errors
-      assignmentOutOf10 = assignmentOutOf10.clamp(0.0, 10.0);
-    } else if (assignment != null) {
-      // Fallback: If max is missing, assume assignment mark is already out of 10
-      // (Adjust this assumption if needed based on typical data)
-      print("Warning: Assignment max mark missing for value $assignment. Assuming it's out of 10.");
-      assignmentOutOf10 = assignment.toDouble().clamp(0.0, 10.0);
-    }
-
+    double assignmentOutOf10 = _scaleMark(assignment, assignmentMax ?? 10, 10.0);
 
     double totalOutOf50 = bestTwoCIAsOutOf40 + assignmentOutOf10;
 
@@ -294,7 +264,6 @@ class _InternalsPageState extends State<InternalsPage> {
 
   @override
   Widget build(BuildContext context) {
-    // Process data using the updated function
     final List<Map<String, dynamic>> subjects = _processMarksData(_ciaMarksData);
 
     return Consumer<ThemeProvider>(
@@ -304,9 +273,9 @@ class _InternalsPageState extends State<InternalsPage> {
 
         Widget bodyContent;
         // --- Loading / Error / Empty States ---
-        if (_isLoading && _ciaMarksData == null) { // Show loading only on initial load
+        if (_isLoading && _ciaMarksData == null) {
           bodyContent = Center( child: CircularProgressIndicator( color: primaryColor, ), );
-        } else if (_error != null && subjects.isEmpty) { // Show error only if no data to display
+        } else if (_error != null && subjects.isEmpty) {
           bodyContent = Center(
             child: Padding(
               padding: const EdgeInsets.all(16.0),
@@ -326,17 +295,16 @@ class _InternalsPageState extends State<InternalsPage> {
               ),
             ),
           );
-        } else if (!_isLoading && subjects.isEmpty) { // Show empty state if not loading and no data
+        } else if (!_isLoading && subjects.isEmpty) {
           bodyContent = Center( child: Text( "No internal marks found.", style: TextStyle(color: isDark ? Colors.white70 : Colors.black54), ), );
         } else {
           // --- Data List ---
           bodyContent = ListView.builder(
-            physics: const AlwaysScrollableScrollPhysics(), // Ensure scrollable even during refresh
+            physics: const AlwaysScrollableScrollPhysics(),
             padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
-            // Adjust count for potential error banner when showing cached data
             itemCount: subjects.length + (_error != null && subjects.isNotEmpty ? 1 : 0),
             itemBuilder: (context, index) {
-              // --- Error Banner Logic (if refresh fails but we have old data) ---
+              // Error Banner
               if (_error != null && subjects.isNotEmpty && index == 0) {
                 return Container(
                   color: Colors.orange.shade700,
@@ -355,15 +323,11 @@ class _InternalsPageState extends State<InternalsPage> {
                   ),
                 );
               }
-              // --- End Error Banner ---
-
-              // Adjust index if error banner is shown
               final subjectIndex = _error != null && subjects.isNotEmpty ? index - 1 : index;
-              // Boundary check after index adjustment
               if (subjectIndex < 0 || subjectIndex >= subjects.length) return const SizedBox.shrink();
 
               final subject = subjects[subjectIndex];
-              // Extract marks needed for calculation
+              // Extract marks
               final cia1 = subject["cia1"] as int?;
               final cia1Max = subject["cia1_max"] as int?;
               final cia2 = subject["cia2"] as int?;
@@ -384,7 +348,6 @@ class _InternalsPageState extends State<InternalsPage> {
               final assignmentScaled = internalMarks['assignment_scaled']!;
               final bestTwoCIAs = internalMarks['best_two_cias']!;
 
-
               // --- Card UI ---
               return Card(
                 margin: const EdgeInsets.only(bottom: 12),
@@ -402,10 +365,12 @@ class _InternalsPageState extends State<InternalsPage> {
                       subjectCode: subject["code"],
                       maxInternals: 50, // ✅ Pass 50 as maxInternals
                       maxEndSem: subject["maxEndSem"],
-                      // Pass original CIA marks (let detail page handle scaling if needed)
                       cia1: cia1?.toDouble(),
                       cia2: cia2?.toDouble(),
                       cia3: cia3?.toDouble(),
+                      // You might want to pass assignment marks too
+                      // assignmentMark: assignment?.toDouble(),
+                      // assignmentMaxMark: assignmentMax?.toDouble(),
                     ), ), );
                   },
                   child: Padding(
@@ -424,7 +389,6 @@ class _InternalsPageState extends State<InternalsPage> {
                         Row( /* CIA Boxes */
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            // Display original marks in boxes (e.g., 18, not 18.0)
                             _buildCiaBox("CIA 1", cia1, theme),
                             _buildCiaBox("CIA 2", cia2, theme),
                             _buildCiaBox("CIA 3", cia3, theme),
@@ -474,16 +438,7 @@ class _InternalsPageState extends State<InternalsPage> {
             onRefresh: _fetchFromApi, // Pull-to-refresh calls API fetch
             color: primaryColor,
             backgroundColor: isDark ? AppTheme.darkSurface : Colors.white,
-            // Wrap bodyContent in a layout builder to ensure RefreshIndicator works even when content is small
-            child: LayoutBuilder(
-              builder: (context, constraints) => SingleChildScrollView(
-                physics: const AlwaysScrollableScrollPhysics(),
-                child: ConstrainedBox(
-                  constraints: BoxConstraints(minHeight: constraints.maxHeight),
-                  child: bodyContent, // Display loading, error, empty, or list
-                ),
-              ),
-            ),
+            child: bodyContent, // Display loading, error, empty, or list
           ),
         );
         // --- End Scaffold ---
@@ -491,55 +446,14 @@ class _InternalsPageState extends State<InternalsPage> {
     ); // End Consumer
   } // End build
 
-  // --- _buildCiaBox helper ---
+  // --- _buildCiaBox helper (unchanged) ---
   Widget _buildCiaBox(String label, dynamic value, ThemeProvider theme) {
     final isDark = theme.isDarkMode;
     final bool hasValue = value != null;
-
-    // Use a more specific check for "AB" or similar non-numeric values if needed
-    final String displayText = value?.toString() ?? label; // Default to label if value is null
-
-    Color getBackgroundColor() {
-      if (isDark) {
-        return hasValue ? AppTheme.darkSurface : AppTheme.darkBackground.withOpacity(0.7);
-      } else {
-        return hasValue ? Colors.white : Colors.blue.shade50;
-      }
-    }
-    Color getBorderColor() {
-      if (isDark) {
-        return hasValue ? AppTheme.neonBlue : AppTheme.neonBlue.withOpacity(0.2);
-      } else {
-        // Use a consistent border color, maybe slightly lighter if no value
-        return hasValue ? Colors.blue.shade200 : Colors.blue.shade100;
-      }
-    }
-    Color getTextColor() {
-      if (isDark) {
-        return hasValue ? Colors.white : Colors.white54;
-      } else {
-        return hasValue ? Colors.black87 : Colors.blueGrey;
-      }
-    }
-    return Container(
-      width: MediaQuery.of(context).size.width * 0.25, // Adjust width based on screen size
-      padding: EdgeInsets.symmetric(vertical: 8), // Padding for text
-      alignment: Alignment.center,
-      decoration: BoxDecoration(
-        color: getBackgroundColor(),
-        border: Border.all(color: getBorderColor()),
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Text(
-        displayText,
-        style: TextStyle(
-          fontSize: 14,
-          fontWeight: FontWeight.w600,
-          color: getTextColor(),
-        ),
-        textAlign: TextAlign.center,
-      ),
-    );
+    Color getBackgroundColor() { if (isDark) { return hasValue ? AppTheme.darkSurface : AppTheme.darkBackground.withOpacity(0.7); } else { return hasValue ? Colors.white : Colors.blue.shade50; } }
+    Color getBorderColor() { if (isDark) { return hasValue ? AppTheme.neonBlue : AppTheme.neonBlue.withOpacity(0.2); } else { return Colors.blue.shade200; } }
+    Color getTextColor() { if (isDark) { return hasValue ? Colors.white : Colors.white54; } else { return hasValue ? Colors.black87 : Colors.blueGrey; } }
+    return Container( width: 96, height: 44, alignment: Alignment.center, decoration: BoxDecoration( color: getBackgroundColor(), border: Border.all(color: getBorderColor()), borderRadius: BorderRadius.circular(10), ), child: Text( value?.toString() ?? label, style: TextStyle( fontSize: 14, fontWeight: FontWeight.w600, color: getTextColor(), ), ), );
   }
 // --- End _buildCiaBox ---
 
