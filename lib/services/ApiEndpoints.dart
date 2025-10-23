@@ -9,6 +9,8 @@ class ApiEndpoints {
   String get logout => '$baseUrl/logout';
   String get reloginCaptcha => '$baseUrl/relogin-captcha';
   String get relogin => '$baseUrl/relogin';
+
+
   String get feeCollections => '$baseUrl/feeCollections';
   String get ciaWiseInternalMarks => '$baseUrl/ciaWiseInternalMarks';
   String get attendance => '$baseUrl/attendance';
@@ -18,15 +20,21 @@ class ApiEndpoints {
   String get sgpa => '$baseUrl/sgpa';
   String get cgpa => '$baseUrl/cgpa';
   String get timetable => '$baseUrl/timetable';
+
+
   String get pyq => '$baseUrl/pyq';
   String get facultyList => '$baseUrl/facultyList';
   String get chatbot => '$baseUrl/chatbot';
   String get semGrades => '$baseUrl/semGrades';
   String get internalMarks => '$baseUrl/ciaWiseInternalMarks';
   String get courseMap => '$baseUrl/courseMap';
+
+
   String get sastraDue => '$baseUrl/sastraDue';
   String get hostelDue => '$baseUrl/hostelDue';
   String get studentStatus => '$baseUrl/studentStatus';
+
+  
   String get bunk => '$baseUrl/bunk';
   String get messMenu => '$baseUrl/messMenu';
   String get pyqBot => '$baseUrl/chatbot';

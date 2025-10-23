@@ -43,15 +43,12 @@ class _FeeDueScreenState extends State<FeeDueScreen> {
       _hostelTotal = '0.00';
     });
     try {
-      final headers = {'Content-Type': 'application/json'};
-      final body = jsonEncode({'token': widget.token});
+      // Compose URLs with token as query parameter
+      final sastraUrl = Uri.parse('${api.sastraDue}?token=${Uri.encodeComponent(widget.token)}');
+      final hostelUrl = Uri.parse('${api.hostelDue}?token=${Uri.encodeComponent(widget.token)}');
 
       // --- University dues ---
-      final uniResp = await http.post(
-        Uri.parse(api.sastraDue),
-        headers: headers,
-        body: body,
-      );
+      final uniResp = await http.get(sastraUrl, headers: {'Content-Type': 'application/json'});
       if (uniResp.statusCode == 200) {
         final data = jsonDecode(uniResp.body);
         _sastraItems = (data['sastraDue'] as List?)?.map<Map<String, dynamic>>(
@@ -68,11 +65,7 @@ class _FeeDueScreenState extends State<FeeDueScreen> {
       }
 
       // --- Hostel dues ---
-      final hostelResp = await http.post(
-        Uri.parse(api.hostelDue),
-        headers: headers,
-        body: body,
-      );
+      final hostelResp = await http.get(hostelUrl, headers: {'Content-Type': 'application/json'});
       if (hostelResp.statusCode == 200) {
         final data = jsonDecode(hostelResp.body);
         _hostelItems = (data['hostelDue'] as List?)?.map<Map<String, dynamic>>(
@@ -122,6 +115,8 @@ class _FeeDueScreenState extends State<FeeDueScreen> {
       );
     }
 
+    bool noDues = _sastraItems.isEmpty && _hostelItems.isEmpty;
+
     return Scaffold(
       appBar: AppBar(
         backgroundColor: const Color(0xFF6d2bef),
@@ -131,17 +126,24 @@ class _FeeDueScreenState extends State<FeeDueScreen> {
         centerTitle: true,
       ),
       backgroundColor: Colors.white,
-      body: ListView(
-        padding: EdgeInsets.zero,
-        children: [
-          _buildTotalDueCard("University Fee Due", _sastraTotal, const LinearGradient(colors: [Color(0xFF9443e3), Color(0xFF6d2bef)], begin: Alignment.topLeft, end: Alignment.bottomRight)),
-          _buildTableHeader(),
-          ..._renderTableRows(_sastraItems, accent: const Color(0xFF6d2bef)),
-          _buildTotalDueCard("Hostel Fee Due", _hostelTotal, const LinearGradient(colors: [Color(0xFFf55951), Color(0xFFff7e67)], begin: Alignment.topLeft, end: Alignment.bottomRight)),
-          _buildTableHeader(),
-          ..._renderTableRows(_hostelItems, accent: Colors.deepOrange),
-        ],
-      ),
+      body: noDues
+          ? const Center(
+              child: Text(
+                'NO DUE is there to pay',
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.green),
+              ),
+            )
+          : ListView(
+              padding: EdgeInsets.zero,
+              children: [
+                _buildTotalDueCard("University Fee Due", _sastraTotal, const LinearGradient(colors: [Color(0xFF9443e3), Color(0xFF6d2bef)], begin: Alignment.topLeft, end: Alignment.bottomRight)),
+                _buildTableHeader(),
+                ..._renderTableRows(_sastraItems, accent: const Color(0xFF6d2bef)),
+                _buildTotalDueCard("Hostel Fee Due", _hostelTotal, const LinearGradient(colors: [Color(0xFFf55951), Color(0xFFff7e67)], begin: Alignment.topLeft, end: Alignment.bottomRight)),
+                _buildTableHeader(),
+                ..._renderTableRows(_hostelItems, accent: Colors.deepOrange),
+              ],
+            ),
     );
   }
 

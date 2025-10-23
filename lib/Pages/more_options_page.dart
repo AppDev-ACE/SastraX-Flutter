@@ -8,7 +8,8 @@ import 'club_hub.dart';
 import 'credits_page.dart';
 import 'material_bot/material_bot.dart';
 import 'material_bot/study_material_bot.dart';
-
+import 'prof_cabin_screen.dart';
+import 'paymenthistory.dart';
 class MoreOptionsScreen extends StatelessWidget {
   final String token;
   final String url;
@@ -59,6 +60,22 @@ class MoreOptionsScreen extends StatelessWidget {
       'color': Colors.brown,
       'route': 'study_material_bot',
     },
+
+    {
+      'title': 'Know your Professor',
+      'subtitle': 'Find Professor Cabin',
+      'icon': Icons.person,
+      'color': Colors.lightBlue,
+      'route': 'know_your_professor',
+    },
+    {
+      'title': 'Payment History',
+      'subtitle': 'View your payment history',
+      'icon': Icons.money,
+      'color': Colors.lightBlue,
+      'route': 'payment_history',
+    },
+
   ];
 
   // --- Data blocks for conditional options ---
@@ -162,6 +179,9 @@ class MoreOptionsScreen extends StatelessWidget {
       case 'clubs':
         Navigator.push(ctx, MaterialPageRoute(builder: (_) => const ClubHubPage()));
         break;
+        case 'know_your_professor':
+        Navigator.push(ctx, MaterialPageRoute(builder: (_) =>  ProfessorCabinScreen()));
+        break;
 
       case 'mess':
         Navigator.push(ctx, MaterialPageRoute(builder: (_) => MessMenuPage(
@@ -171,6 +191,9 @@ class MoreOptionsScreen extends StatelessWidget {
         break;
       case 'leave_application':
         Navigator.push(ctx, MaterialPageRoute(builder: (_) => LeaveApplicationScreen(token: token , regNo: regNo, apiUrl: url,)));
+        break;
+      case 'payment_history':
+        Navigator.push(ctx, MaterialPageRoute(builder: (_) => PaymentHistoryScreen(token: token , url: url,)));
         break;
 
       case 'material_bot':
