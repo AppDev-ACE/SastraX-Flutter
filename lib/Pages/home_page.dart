@@ -221,7 +221,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   final List<String> _essentialKeys = [
     'profile', 'semGrades', 'cgpa', 'studentStatus', 'attendance',
     'timetable', 'hourWiseAttendance', 'subjectAttendance', 'courseMap',
-    'totalDue', 'dob', 'profilePic', 'bunk' // Added 'bunk'
+    'totalDue', 'dob', 'profilePic', 'bunk',
   ];
 
   // Keys that must also be non-empty lists/maps for the data to be considered valid
@@ -534,6 +534,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         http.post( Uri.parse(api.studentStatus), headers: {'Content-Type': 'application/json'}, body: jsonEncode({'token': effectiveToken}), ).timeout(apiTimeout),
         http.post( Uri.parse(api.attendance), headers: {'Content-Type': 'application/json'}, body: jsonEncode({'token': effectiveToken}), ).timeout(apiTimeout),
         http.post( Uri.parse(api.bunk), headers: {'Content-Type': 'application/json'}, body: jsonEncode({'token': effectiveToken}), ).timeout(apiTimeout), // Added bunk call
+        http.post( Uri.parse(api.currentSemCredits), headers: {'Content-Type': 'application/json'}, body: jsonEncode({'token': effectiveToken}), ).timeout(apiTimeout),
       ];
       // ⭐️ End Step 5
 

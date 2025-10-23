@@ -1,10 +1,17 @@
+import 'dart:async';
+import 'dart:convert';
+
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
 import 'dart:math' as math;
 import 'package:fl_chart/fl_chart.dart';
 import 'package:percent_indicator/circular_percent_indicator.dart';
-import '../models/theme_model.dart'; // Ensure correct path
+import '../models/theme_model.dart';
+import '../pages/home_page.dart';
+import '../services/ApiEndpoints.dart'; // Ensure correct path
 // Removed: http, cloud_firestore, shared_preferences, ApiEndpoints
 
 // The SGPA Calculator widget is included at the bottom of this file
@@ -462,7 +469,7 @@ class _CreditsScreenState extends State<CreditsScreen>
       child: _selectedSemester == 0
           ? _buildOverallDetails()
           : _selectedSemester > _currentSemester || _semesterData.length < _selectedSemester
-          ? SgpaCalculatorWidget(key: ValueKey('sgpa_calculator_$_selectedSemester'))
+          ? SgpaCalculatorWidget(key: ValueKey('sgpa_calculator_$_selectedSemester'), token: widget.token, url: widget.url, regNo: widget.regNo,)
           : _buildSemesterDetails(_selectedSemester),
     );
   }
@@ -828,28 +835,192 @@ class _CreditsScreenState extends State<CreditsScreen>
   }
 }
 
-// --- SgpaCalculatorWidget (Unchanged from your version) ---
+// -------------------------------------------------------------------
+// ⭐️ REPLACE YOUR OLD SGPA WIDGET WITH THIS ENTIRE "SMART" VERSION ⭐️
+// -------------------------------------------------------------------
+
 class SgpaCalculatorWidget extends StatefulWidget {
-  const SgpaCalculatorWidget({super.key});
+  final String token;
+  final String url;
+  final String regNo;
+
+  const SgpaCalculatorWidget({
+    super.key,
+    required this.token,
+    required this.url,
+    required this.regNo,
+  });
 
   @override
   State<SgpaCalculatorWidget> createState() => _SgpaCalculatorWidgetState();
 }
 
 class _SgpaCalculatorWidgetState extends State<SgpaCalculatorWidget> {
+  // ⭐️ MODIFIED: Using your new grade point values
   final Map<String, double> _gradePoints = {
-    'S': 10.0, 'A+': 9.0, 'A': 8.0, 'B+': 7.0, // Assuming B+ exists
-    'B': 7.0, 'C': 6.0, 'D': 5.0, 'F': 0.0, 'N': 0.0, // Corrected B, C, D
+    'S': 10.0,
+    'A+': 9.0,
+    'A': 8.0,
+    'B': 7.0,
+    'C': 6.0,
+    'D': 5.0,
+    'F': 2.0,
   };
 
   List<Map<String, dynamic>> _subjects = [];
   double _sgpa = 0.0;
 
+  // ⭐️ State variables for loading
+  bool _isLoading = true;
+  String? _error;
+  StreamSubscription? _firestoreSubscription;
+  bool _fetchTriggered = false;
+  late final ApiEndpoints api;
+
   @override
   void initState() {
     super.initState();
-    // Default to 5 subjects with common values
-    _subjects = List.generate(5, (_) => {'credits': 3.0, 'grade': 'A'});
+    api = ApiEndpoints(widget.url);
+    // ⭐️ Start listening to Firestore for credits data
+    _listenToCredits();
+  }
+
+  @override
+  void dispose() {
+    // ⭐️ Clean up the listener
+    _firestoreSubscription?.cancel();
+    super.dispose();
+  }
+
+  /// Listens to the Firestore document for changes to 'credits'.
+  void _listenToCredits() {
+    // Ensure widget is still mounted
+    if (!mounted) return;
+
+    try {
+      _firestoreSubscription = FirebaseFirestore.instance
+          .collection('studentDetails')
+          .doc(widget.regNo)
+          .snapshots()
+          .listen((snapshot) {
+        if (!mounted) return; // Check again inside the listener
+
+        if (snapshot.exists && snapshot.data() != null) {
+          final data = snapshot.data()!;
+          // ⭐️ Check if the 'credits' field exists
+          if (data.containsKey('credits') && data['credits'] is List) {
+            final List<dynamic> creditsList = data['credits'];
+            if (creditsList.isNotEmpty) {
+              _processCredits(creditsList);
+              setState(() {
+                _isLoading = false;
+                _error = null;
+              });
+            } else {
+              // Field exists but is empty, treat as needing fetch
+              _triggerCreditsFetch();
+            }
+          } else {
+            // ⭐️ 'credits' field doesn't exist, trigger API call
+            _triggerCreditsFetch();
+          }
+        } else {
+          // ⭐️ Document doesn't exist, trigger API call
+          _triggerCreditsFetch();
+        }
+      }, onError: (error) {
+        if (mounted) {
+          setState(() {
+            _isLoading = false;
+            _error = "Failed to listen to data: $error";
+          });
+        }
+      });
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _error = "Error setting up listener: $e";
+        });
+      }
+    }
+  }
+
+  /// Processes the raw credits list from Firestore.
+  void _processCredits(List<dynamic> creditsList) {
+    List<Map<String, dynamic>> tempSubjects = [];
+    for (var item in creditsList) {
+      if (item is Map) {
+        final String courseName =
+            item['courseName']?.toString() ?? 'Unknown Course';
+        final double credits =
+            double.tryParse(item['credit']?.toString() ?? '0.0') ?? 0.0;
+
+        // ⭐️ Check if this subject is already in our list
+        final existingSubjectIndex = _subjects.indexWhere(
+                (s) => s['courseName'] == courseName && s['credits'] == credits);
+
+        if (existingSubjectIndex != -1) {
+          // Preserve existing grade if user already changed it
+          tempSubjects.add(_subjects[existingSubjectIndex]);
+        } else {
+          // Add new subject with default grade
+          tempSubjects.add(
+              {'courseName': courseName, 'credits': credits, 'grade': 'S'});
+        }
+      }
+    }
+
+    if (tempSubjects.isEmpty) {
+      _loadDefaultSubjects(); // Fallback
+    } else {
+      if (mounted) {
+        setState(() {
+          _subjects = tempSubjects;
+        });
+      }
+      _calculateSgpa();
+    }
+  }
+
+  /// Triggers the backend API call ONCE to fetch credits.
+  /// The Firestore listener will pick up the change.
+  Future<void> _triggerCreditsFetch() async {
+    // ⭐️ Only run this function once
+    if (_fetchTriggered) return;
+    _fetchTriggered = true;
+
+    print("SgpaCalculatorWidget: Triggering /currentSemCredits fetch...");
+    try {
+      // We don't need to wait for the response.
+      // We just need to trigger the backend to scrape and write to Firestore.
+      http.post(
+        Uri.parse(api.currentSemCredits),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'token': widget.token}),
+      ).timeout(const Duration(seconds: 45));
+      // No await, no response handling. Let the listener do the work.
+    } catch (e) {
+      // If the trigger fails, show an error
+      if (mounted) {
+        setState(() {
+          _error = "Failed to trigger data refresh. Please try again later.";
+          _isLoading = false; // Stop loading
+        });
+      }
+    }
+  }
+
+  /// Fallback if cache/Firestore is empty.
+  void _loadDefaultSubjects() {
+    if (mounted) {
+      setState(() {
+        _subjects = List.generate(
+            5,
+                (_) =>
+            {'courseName': 'Subject (Default)', 'credits': 3.0, 'grade': 'A'});
+      });
+    }
     _calculateSgpa();
   }
 
@@ -860,59 +1031,101 @@ class _SgpaCalculatorWidgetState extends State<SgpaCalculatorWidget> {
     for (var subject in _subjects) {
       final credit = subject['credits'] as double;
       final grade = subject['grade'] as String;
+      // ⭐️ Use the new _gradePoints map for calculation
       final gradePoint = _gradePoints[grade] ?? 0.0;
       totalGradePoints += credit * gradePoint;
-      if (grade != 'N') { // Don't count 'N' grade credits in total
-        totalCredits += credit;
-      }
+      totalCredits += credit;
     }
 
-    setState(() {
-      _sgpa = totalCredits > 0 ? totalGradePoints / totalCredits : 0.0;
-    });
+    if (mounted) {
+      setState(() {
+        _sgpa = totalCredits > 0 ? totalGradePoints / totalCredits : 0.0;
+      });
+    }
   }
 
-  void _addSubject() {
-    setState(() {
-      _subjects.add({'credits': 3.0, 'grade': 'A'});
-    });
-    _calculateSgpa(); // Recalculate when subject is added
-  }
 
   void _removeSubject(int index) {
-    if (_subjects.length > 1) { // Prevent removing the last subject
-      setState(() {
-        _subjects.removeAt(index);
-      });
-      _calculateSgpa(); // Recalculate when subject is removed
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Cannot remove the last subject.'), backgroundColor: AppTheme.warningOrange)
-      );
+    if (_subjects.length > 1) {
+      if (mounted) {
+        setState(() {
+          _subjects.removeAt(index);
+        });
+      }
+      _calculateSgpa();
     }
   }
 
+  // ⭐️ This method is still needed for the "Retry" button on the error screen
   void _resetAll() {
-    setState(() {
-      // Reset to default 5 subjects
-      _subjects = List.generate(5, (_) => {'credits': 3.0, 'grade': 'A'});
-    });
-    _calculateSgpa(); // Recalculate
+    if (mounted) {
+      setState(() {
+        _isLoading = true;
+        _subjects = [];
+        _fetchTriggered = false; // Allow re-triggering
+      });
+    }
+    _firestoreSubscription?.cancel();
+    _listenToCredits();
   }
 
   void _updateSubject(int index, {double? newCredit, String? newGrade}) {
-    setState(() {
-      if (newCredit != null) _subjects[index]['credits'] = newCredit;
-      if (newGrade != null) _subjects[index]['grade'] = newGrade;
-    });
-    _calculateSgpa(); // Recalculate on any update
+    if (mounted) {
+      setState(() {
+        // We no longer update credits, so this line is removed:
+        // if (newCredit != null) _subjects[index]['credits'] = newCredit;
+        if (newGrade != null) _subjects[index]['grade'] = newGrade;
+      });
+    }
+    _calculateSgpa();
   }
 
   @override
   Widget build(BuildContext context) {
     final themeProvider = Provider.of<ThemeProvider>(context);
-    final theme = themeProvider.currentTheme; // Use currentTheme from provider
+    final theme = Theme.of(context);
 
+    // ⭐️ Handle Loading and Error states
+    if (_isLoading) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            CircularProgressIndicator(
+              color: theme.colorScheme.primary,
+            ),
+            const SizedBox(height: 16),
+            const Text("Loading Credits..."),
+          ],
+        ),
+      );
+    }
+
+    if (_error != null) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.error_outline, color: theme.colorScheme.error, size: 40),
+              const SizedBox(height: 16),
+              Text(
+                _error!,
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 16),
+              ElevatedButton(
+                onPressed: _resetAll,
+                child: const Text("Retry"),
+              )
+            ],
+          ),
+        ),
+      );
+    }
+
+    // ⭐️ Main Calculator UI
     return Container(
       decoration: BoxDecoration(
         color: themeProvider.cardBackgroundColor,
@@ -920,15 +1133,15 @@ class _SgpaCalculatorWidgetState extends State<SgpaCalculatorWidget> {
         border: themeProvider.isDarkMode
             ? Border.all(color: AppTheme.primaryPurple.withOpacity(0.3))
             : null,
-        boxShadow: themeProvider.isDarkMode ? null : AppTheme.cardShadow, // Use defined shadow
       ),
       child: Column(
         children: [
+          // ⭐️ SGPA Display is at the top
           Padding(
             padding: const EdgeInsets.all(20.0),
             child: _buildSgpaDisplay(theme),
           ),
-          Divider(height: 1, color: themeProvider.isDarkMode ? Colors.grey[800] : Colors.grey[200]),
+          const Divider(height: 1), // ⭐️ Divider
           Expanded(
             child: ListView(
               padding: const EdgeInsets.all(16),
@@ -937,27 +1150,6 @@ class _SgpaCalculatorWidgetState extends State<SgpaCalculatorWidget> {
                   return _buildSubjectCard(entry.key, theme);
                 }).toList(),
                 const SizedBox(height: 20),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    TextButton.icon(
-                      onPressed: _resetAll,
-                      icon: const Icon(Icons.refresh, size: 20),
-                      label: const Text('Reset'),
-                      style: TextButton.styleFrom(foregroundColor: themeProvider.textSecondaryColor),
-                    ),
-                    const SizedBox(width: 8),
-                    ElevatedButton.icon(
-                      onPressed: _addSubject,
-                      icon: const Icon(Icons.add, size: 20),
-                      label: const Text('Add Subject'),
-                      style: ElevatedButton.styleFrom( // Use theme styles
-                          backgroundColor: themeProvider.primaryColor,
-                          foregroundColor: themeProvider.isDarkMode ? AppTheme.darkBackground : AppTheme.lightBackground
-                      ),
-                    ),
-                  ],
-                )
               ],
             ),
           ),
@@ -966,90 +1158,71 @@ class _SgpaCalculatorWidgetState extends State<SgpaCalculatorWidget> {
     );
   }
 
+  // ⭐️ This method returns the text display for SGPA
   Widget _buildSgpaDisplay(ThemeData theme) {
-    final themeProvider = Provider.of<ThemeProvider>(context, listen: false);
-    return CircularPercentIndicator(
-      radius: 65.0, // Slightly smaller radius
-      lineWidth: 12.0, // Slightly thicker line
-      percent: _sgpa.isNaN ? 0 : (_sgpa / 10.0).clamp(0.0, 1.0), // Clamp value
-      center: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Text(
-            _sgpa.toStringAsFixed(2),
-            style: theme.textTheme.headlineSmall?.copyWith( // Use headlineSmall
-              fontWeight: FontWeight.bold,
-              color: themeProvider.primaryColor, // Use provider color
-            ),
+    // A Row for a compact "Label: Value" display
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(
+          'Expected SGPA:',
+          style: theme.textTheme.titleLarge, // Make it prominent
+        ),
+        Text(
+          _sgpa.toStringAsFixed(2),
+          style: theme.textTheme.headlineMedium?.copyWith(
+            fontWeight: FontWeight.bold,
+            color: theme.colorScheme.primary,
           ),
-          Text(
-            'Expected SGPA',
-            style: theme.textTheme.bodyMedium?.copyWith(
-                color: themeProvider.textSecondaryColor // Use provider color
-            ),
-          ),
-        ],
-      ),
-      progressColor: themeProvider.primaryColor, // Use provider color
-      backgroundColor: themeProvider.primaryColor.withOpacity(0.1),
-      circularStrokeCap: CircularStrokeCap.round,
-      animation: true,
+        ),
+      ],
     );
   }
 
+  // ⭐️ This method no longer has a Slider
   Widget _buildSubjectCard(int index, ThemeData theme) {
-    final themeProvider = Provider.of<ThemeProvider>(context, listen: false);
     final subject = _subjects[index];
     return Card(
       elevation: 0,
-      // Use theme's scaffold background or a slightly different surface color
-      color: themeProvider.backgroundColor,
+      color: Theme.of(context).scaffoldBackgroundColor,
       margin: const EdgeInsets.symmetric(vertical: 8.0),
       shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(12),
-          // Use a theme-aware border color
-          side: BorderSide(color: themeProvider.isDarkMode ? Colors.grey[800]! : Colors.grey[300]!)
-      ),
+          side: BorderSide(color: Colors.grey.withOpacity(0.2))),
       child: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
           children: [
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              // ⭐️ MODIFICATION 1: Align button to the top
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  'Subject ${index + 1}',
-                  style: theme.textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.bold,
-                      color: themeProvider.textColor // Use provider color
+                Expanded(
+                  child: Text(
+                    subject['courseName'] ?? 'Subject ${index + 1}',
+                    style: theme.textTheme.titleMedium
+                        ?.copyWith(fontWeight: FontWeight.bold),
+                    // ⭐️ MODIFICATION 2: Remove the overflow property
+                    // overflow: TextOverflow.ellipsis, // <-- REMOVED
                   ),
                 ),
                 IconButton(
-                  icon: Icon(Icons.delete_outline, color: AppTheme.errorRed, size: 22), // Use theme error color
+                  padding: EdgeInsets.zero, // Add this to help alignment
+                  constraints: const BoxConstraints(), // Add this to help alignment
+                  icon: Icon(Icons.delete_outline,
+                      color: theme.colorScheme.error, size: 20),
                   onPressed: () => _removeSubject(index),
-                  padding: EdgeInsets.zero, // Reduce padding
-                  constraints: const BoxConstraints(), // Reduce constraints
                 ),
               ],
             ),
             const SizedBox(height: 12),
             Row(
               children: [
-                Icon(Icons.school_outlined, size: 20, color: themeProvider.textSecondaryColor),
+                const Icon(Icons.school_outlined, size: 20),
                 const SizedBox(width: 8),
-                Text('Credits: ${subject['credits'].toInt()}', style: TextStyle(color: themeProvider.textSecondaryColor)),
-                Expanded(
-                  child: Slider(
-                    value: subject['credits'],
-                    min: 1.0,
-                    max: 6.0,
-                    divisions: 5,
-                    label: subject['credits'].round().toString(),
-                    activeColor: themeProvider.primaryColor, // Use provider color
-                    inactiveColor: themeProvider.primaryColor.withOpacity(0.2),
-                    onChanged: (newCredit) => _updateSubject(index, newCredit: newCredit),
-                  ),
-                ),
+                Text('Credits: ${subject['credits'].toInt()}'),
+                // ⭐️ The Expanded and Slider widgets have been removed
               ],
             ),
             const SizedBox(height: 8),
@@ -1057,18 +1230,10 @@ class _SgpaCalculatorWidgetState extends State<SgpaCalculatorWidget> {
               value: subject['grade'],
               decoration: InputDecoration(
                 labelText: 'Grade',
-                labelStyle: TextStyle(color: themeProvider.textSecondaryColor),
-                prefixIcon: Icon(Icons.star_border_rounded, color: themeProvider.primaryColor),
-                // Use theme's input decoration theme (defined in AppTheme)
-                border: theme.inputDecorationTheme.border,
-                enabledBorder: theme.inputDecorationTheme.enabledBorder ?? theme.inputDecorationTheme.border,
-                focusedBorder: theme.inputDecorationTheme.focusedBorder,
-                filled: true,
-                fillColor: theme.inputDecorationTheme.fillColor,
-                contentPadding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12), // Match text field
+                prefixIcon: const Icon(Icons.star_border_rounded),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
               ),
-              dropdownColor: themeProvider.cardBackgroundColor, // Set dropdown background
-              style: TextStyle(color: themeProvider.textColor), // Set text style
+              // ⭐️ MODIFIED: Use the new _gradePoints map keys for the dropdown
               items: _gradePoints.keys.map((String grade) {
                 return DropdownMenuItem<String>(value: grade, child: Text(grade));
               }).toList(),

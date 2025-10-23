@@ -34,8 +34,6 @@ class MyApp extends StatelessWidget {
     );
   }
 }
-
-/// This widget checks for a saved session and navigates accordingly.
 class AuthHandler extends StatefulWidget {
   final String url;
   const AuthHandler({super.key, required this.url});
@@ -53,13 +51,10 @@ class _AuthHandlerState extends State<AuthHandler> {
     _restoreSession();
   }
 
-  /// ✅ Checks if a valid session exists (in SharedPreferences + Firestore)
   Future<void> _restoreSession() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      // --- THIS IS THE FIX ---
-      final token = prefs.getString('authToken'); // Use 'authToken' key
-      // -----------------------
+      final token = prefs.getString('authToken');
       final regNo = prefs.getString('regNo');
 
       // Debug logs
@@ -67,13 +62,10 @@ class _AuthHandlerState extends State<AuthHandler> {
       debugPrint("Stored token: $token");
       debugPrint("Stored regNo: $regNo");
 
-      // 🔹 If token or regNo missing → go to login
       if (token == null || regNo == null || token.isEmpty) {
         _goToLogin();
         return;
       }
-
-      // 🔹 Check Firestore if session still exists
       final doc =
       await FirebaseFirestore.instance.collection("activeSessions").doc(token).get();
 
@@ -100,8 +92,6 @@ class _AuthHandlerState extends State<AuthHandler> {
       debugPrint("⚠️ Session check failed: $e");
       _goToLogin();
     } finally {
-      // In a real app, you might not need to set isLoading to false here
-      // since you're navigating away. But it's fine for now.
       if (mounted) setState(() => _isLoading = false);
     }
   }
@@ -116,7 +106,6 @@ class _AuthHandlerState extends State<AuthHandler> {
 
   @override
   Widget build(BuildContext context) {
-    // This loading screen is only shown for a moment while checking the session.
     return const Scaffold(
       body: Center(
         child: CircularProgressIndicator(),
