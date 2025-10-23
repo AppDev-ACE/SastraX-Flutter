@@ -27,7 +27,10 @@ class DayAttendanceDetail extends StatefulWidget {
 }
 
 class _DayAttendanceDetailState extends State<DayAttendanceDetail> {
+  // Map<String, bool> to store checkbox state (key: subject + time)
   final Map<String, bool> _checkboxStates = {};
+  // Map<String, String> to store reason text (key: subject + time)
+  final Map<String, String> _reasonTexts = {};
   static const Color primaryBlue = Color(0xFF1e3a8a);
 
   // ✅ **THIS MAP IS NOW CORRECT**
@@ -55,21 +58,24 @@ class _DayAttendanceDetailState extends State<DayAttendanceDetail> {
       // Build course code → name map
       _codeToNameMap = {
         for (var course in widget.courseMap)
-          if (course is Map && course['courseCode'] != null && course['courseName'] != null)
+          if (course is Map &&
+              course['courseCode'] != null &&
+              course['courseName'] != null)
             course['courseCode'].toString().trim().toUpperCase():
-            course['courseName'].toString().trim(),
+                course['courseName'].toString().trim(),
       };
 
       _scheduledClasses = _getScheduledClassesForDay();
 
-      // Pre-fill checkbox states
+      // Pre-fill checkbox states and reason text map
       for (var classData in _scheduledClasses) {
+        final checkboxKey = classData['subject']! + classData['time']!;
         if (classData['status'] == 'absent') {
-          // Use a unique key for the checkbox map (subject + time)
-          _checkboxStates[classData['subject']! + classData['time']!] = false;
+          _checkboxStates[checkboxKey] =
+              false; // Initialize to false (unchecked)
+          _reasonTexts[checkboxKey] = ''; // Initialize reason text
         }
       }
-
     } catch (e) {
       print("Error in DayAttendanceDetail initState: $e");
       _scheduledClasses = [];
@@ -80,11 +86,12 @@ class _DayAttendanceDetailState extends State<DayAttendanceDetail> {
   // ✅ This logic now loops over the corrected map keys
   List<Map<String, String>> _getScheduledClassesForDay() {
     final List<Map<String, String>> classes = [];
-    final dayOfWeek = DateFormat('EEEE').format(widget.selectedDate).toLowerCase();
+    final dayOfWeek =
+        DateFormat('EEEE').format(widget.selectedDate).toLowerCase();
 
     // Find the timetable entry for this day
     final dayTimetable = widget.timetable.firstWhere(
-          (d) => d is Map && d['day']?.toString().toLowerCase() == dayOfWeek,
+      (d) => d is Map && d['day']?.toString().toLowerCase() == dayOfWeek,
       orElse: () => <String, dynamic>{},
     );
 
@@ -92,7 +99,6 @@ class _DayAttendanceDetailState extends State<DayAttendanceDetail> {
 
     // Loop over the _hourKeyToTime map's keys
     for (final hourKey in _hourKeyToTime.keys) {
-
       // Get the scheduled course codes for this hour (e.g., "ICT302")
       final rawSlotData = dayTimetable[hourKey]?.toString().trim();
 
@@ -101,12 +107,10 @@ class _DayAttendanceDetailState extends State<DayAttendanceDetail> {
 
       // Only show if there's a scheduled class
       if (rawSlotData != null && rawSlotData.isNotEmpty) {
-
         final timeString = _hourKeyToTime[hourKey] ?? 'All Day';
 
         final individualRawCodes = rawSlotData.split(',');
         for (final rawCode in individualRawCodes) {
-
           final cleanedCode = rawCode.trim().toUpperCase();
           if (cleanedCode.isEmpty) continue;
 
@@ -136,13 +140,16 @@ class _DayAttendanceDetailState extends State<DayAttendanceDetail> {
     return classes;
   }
 
-
   Color _getStatusColor(String status) {
     switch (status.toLowerCase()) {
-      case 'present': return Colors.green;
-      case 'absent': return Colors.red;
-      case 'od': return Colors.orange;
-      default: return Colors.grey;
+      case 'present':
+        return Colors.green;
+      case 'absent':
+        return Colors.red;
+      case 'od':
+        return Colors.orange;
+      default:
+        return Colors.grey;
     }
   }
 
@@ -159,13 +166,17 @@ class _DayAttendanceDetailState extends State<DayAttendanceDetail> {
       return 'No classes scheduled for $dateString!';
     }
 
-    int absentCount = _scheduledClasses.where((c) => c['status'] == 'absent').length;
+    int absentCount =
+        _scheduledClasses.where((c) => c['status'] == 'absent').length;
     int odCount = _scheduledClasses.where((c) => c['status'] == 'od').length;
     bool pending = _scheduledClasses.any((c) => c['status'] == 'not updated');
 
-    if (absentCount > 0) return 'You missed $absentCount class(es) on $dateString.';
-    if (odCount > 0) return 'You were on OD for $odCount class(es) on $dateString.';
-    if (pending) return 'Some classes are still pending update.'; // This one is fine as is.
+    if (absentCount > 0)
+      return 'You missed $absentCount class(es) on $dateString.';
+    if (odCount > 0)
+      return 'You were on OD for $odCount class(es) on $dateString.';
+    if (pending)
+      return 'Some classes are still pending update.'; // This one is fine as is.
 
     return 'You attended all your classes on $dateString!';
   }
@@ -177,6 +188,9 @@ class _DayAttendanceDetailState extends State<DayAttendanceDetail> {
   Widget build(BuildContext context) {
     final isDark = _isDarkMode(context);
     final scale = MediaQuery.of(context).textScaler.scale(1.0);
+    final primaryTextColor = isDark ? Colors.white : Colors.black;
+    final secondaryTextColor = isDark ? Colors.white70 : Colors.grey[600];
+    final cardColor = isDark ? const Color(0xFF1E1E1E) : Colors.white;
 
     return Scaffold(
       backgroundColor: isDark ? const Color(0xFF121212) : Colors.white,
@@ -196,7 +210,8 @@ class _DayAttendanceDetailState extends State<DayAttendanceDetail> {
             padding: const EdgeInsets.only(right: 16),
             child: ThemeToggleButton(
               isDarkMode: isDark,
-              onToggle: Provider.of<ThemeProvider>(context, listen: false).toggleTheme,
+              onToggle: Provider.of<ThemeProvider>(context, listen: false)
+                  .toggleTheme,
             ),
           ),
         ],
@@ -213,90 +228,145 @@ class _DayAttendanceDetailState extends State<DayAttendanceDetail> {
                 final subject = classData['subject']!;
                 final status = classData['status']!;
                 final time = classData['time']!;
-                // final code = classData['code']!; // We have this if needed
-
                 final checkboxKey = subject + time;
                 final isChecked = _checkboxStates[checkboxKey] ?? false;
 
-                return Card(
-                  margin: const EdgeInsets.only(bottom: 8),
-                  elevation: 2,
-                  color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
-                  child: ListTile(
-                    isThreeLine: true, // Keep this to allow vertical space
-                    leading: CircleAvatar(
-                      backgroundColor: _getSubjectColor(subject),
-                      child: Text(
-                        subject.substring(0, 1),
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 16 * scale,
-                        ),
-                      ),
-                    ),
-                    title: Text(
-                      subject,
-                      style: TextStyle(
-                        color: isDark ? Colors.white : Colors.black,
-                        fontWeight: FontWeight.w600,
-                        fontSize: 16 * scale, // Responsive font size
-                      ),
-                    ),
-                    subtitle: Text(
-                        time, // Only show the time
-                        style: TextStyle(
-                          color: isDark ? Colors.white70 : Colors.grey[600],
-                          fontSize: 14 * scale, // Responsive font size
-                        )),
-                    // ============== MODIFIED TRAILING WIDGET ==============
-                    trailing: Column(
-                      mainAxisAlignment: MainAxisAlignment.center, // Center vertically
-                      crossAxisAlignment: CrossAxisAlignment.center, // Center horizontally
-                      mainAxisSize: MainAxisSize.min, // Take minimal space
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Card(
+                    elevation: 2,
+                    color: cardColor,
+                    child: Column(
                       children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 8, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: _getStatusColor(status).withOpacity(0.2),
-                            borderRadius: BorderRadius.circular(20),
+                        ListTile(
+                          // isThreeLine: true, // REMOVED: Since we are adding the content below.
+                          leading: CircleAvatar(
+                            backgroundColor: _getSubjectColor(subject),
+                            child: Text(
+                              subject.substring(0, 1),
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 16 * scale,
+                              ),
+                            ),
                           ),
-                          child: Text(
-                            status.toUpperCase(),
+                          title: Text(
+                            subject,
                             style: TextStyle(
-                              color: _getStatusColor(status),
-                              fontWeight: FontWeight.bold,
-                              fontSize: 12 * scale,
+                              color: primaryTextColor,
+                              fontWeight: FontWeight.w600,
+                              fontSize: 16 * scale, // Responsive font size
                             ),
                           ),
+                          subtitle: Text(time, // Only show the time
+                              style: TextStyle(
+                                color: secondaryTextColor,
+                                fontSize: 14 * scale, // Responsive font size
+                              )),
+                          // ============== MODIFIED TRAILING WIDGET ==============
+                          trailing: Column(
+                            mainAxisAlignment:
+                                MainAxisAlignment.center, // Center vertically
+                            crossAxisAlignment: CrossAxisAlignment
+                                .center, // Center horizontally
+                            mainAxisSize:
+                                MainAxisSize.min, // Take minimal space
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 8, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color:
+                                      _getStatusColor(status).withOpacity(0.2),
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
+                                child: Text(
+                                  status.toUpperCase(),
+                                  style: TextStyle(
+                                    color: _getStatusColor(status),
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 12 * scale,
+                                  ),
+                                ),
+                              ),
+                              // Only show Checkbox if status is 'absent'
+                              if (status == 'absent') ...[
+                                const SizedBox(
+                                    height: 4.0), // <-- Added vertical space
+                                SizedBox(
+                                  height: 24, // Sized for the checkbox
+                                  width: 24, // Sized for the checkbox
+                                  child: Checkbox(
+                                    value: isChecked,
+                                    onChanged: (bool? newValue) {
+                                      setState(() {
+                                        _checkboxStates[checkboxKey] =
+                                            newValue ?? false;
+                                      });
+                                    },
+                                    activeColor: isDark
+                                        ? Colors.cyanAccent
+                                        : primaryBlue,
+                                  ),
+                                ),
+                              ]
+                              // If not absent, show an empty box to keep alignment
+                              else if (_scheduledClasses
+                                  .any((c) => c['status'] == 'absent')) ...[
+                                const SizedBox(
+                                    height: 4.0), // <-- Added matching space
+                                const SizedBox(
+                                    height: 24, width: 24), // Placeholder
+                              ]
+                            ],
+                          ),
+                          // ===============================================
                         ),
-                        // Only show Checkbox if status is 'absent'
-                        if (status == 'absent') ...[
-                          const SizedBox(height: 4.0), // <-- Added vertical space
-                          SizedBox(
-                            height: 24, // Sized for the checkbox
-                            width: 24, // Sized for the checkbox
-                            child: Checkbox(
-                              value: isChecked,
-                              onChanged: (bool? newValue) {
-                                setState(() {
-                                  _checkboxStates[checkboxKey] = newValue ?? false;
-                                });
+                        if (status == 'absent' && isChecked)
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(
+                                16.0, 0.0, 16.0, 16.0),
+                            child: TextFormField(
+                              initialValue: _reasonTexts[checkboxKey],
+                              onChanged: (newValue) {
+                                _reasonTexts[checkboxKey] = newValue;
                               },
-                              activeColor:
-                              isDark ? Colors.cyanAccent : primaryBlue,
+                              style: TextStyle(
+                                  color: primaryTextColor,
+                                  fontSize: 14 * scale),
+                              decoration: InputDecoration(
+                                  labelText: 'Reason for OD',
+                                  labelStyle: TextStyle(
+                                      color: secondaryTextColor,
+                                      fontSize: 14 * scale),
+                                  border: const OutlineInputBorder(),
+                                  focusedBorder: OutlineInputBorder(
+                                    borderSide: BorderSide(
+                                        color: isDark
+                                            ? Colors.cyanAccent
+                                            : primaryBlue,
+                                        width: 2.0),
+                                  ),
+                                  enabledBorder: OutlineInputBorder(
+                                    borderSide: BorderSide(
+                                        color: secondaryTextColor!
+                                            .withOpacity(0.5)),
+                                  ),
+                                  contentPadding: const EdgeInsets.symmetric(
+                                      vertical: 10.0, horizontal: 10.0),
+                                  suffix: Padding(
+                                    padding: const EdgeInsetsGeometry.symmetric(
+                                        horizontal: 0),
+                                    child: IconButton(
+                                        onPressed: () {},
+                                        icon: const Icon(Icons.send_rounded)),
+                                  )),
+                              maxLines: 1,
                             ),
                           ),
-                        ]
-                        // If not absent, show an empty box to keep alignment
-                        else if (_scheduledClasses.any((c) => c['status'] == 'absent')) ...[
-                          const SizedBox(height: 4.0), // <-- Added matching space
-                          const SizedBox(height: 24, width: 24), // Placeholder
-                        ]
                       ],
                     ),
-                    // ===============================================
                   ),
                 );
               },
@@ -316,7 +386,7 @@ class _DayAttendanceDetailState extends State<DayAttendanceDetail> {
               _getInsightMessage(),
               style: TextStyle(
                 fontSize: 14 * scale,
-                color: isDark ? Colors.white : Colors.black,
+                color: primaryTextColor,
               ),
             ),
           ),
