@@ -33,10 +33,7 @@ class HomePage extends StatefulWidget {
   final String url;
   final String regNo;
   const HomePage(
-      {super.key,
-        required this.token,
-        required this.url,
-        required this.regNo});
+      {super.key, required this.token, required this.url, required this.regNo});
   @override
   State<HomePage> createState() => _HomePageState();
 }
@@ -79,7 +76,8 @@ class _HomePageState extends State<HomePage> {
     if (_currentToken.isEmpty && widget.regNo.isNotEmpty) {
       return Scaffold(
           appBar: AppBar(title: const Text("Error")),
-          body: const Center(child: Text("Invalid session state. Please log in again.")));
+          body: const Center(
+              child: Text("Invalid session state. Please log in again.")));
     }
 
     final List<Widget> pages = [
@@ -109,7 +107,7 @@ class _HomePageState extends State<HomePage> {
     return Consumer<ThemeProvider>(
         builder: (_, theme, __) => Scaffold(
             backgroundColor:
-            theme.isDarkMode ? AppTheme.darkBackground : Colors.grey[100],
+                theme.isDarkMode ? AppTheme.darkBackground : Colors.grey[100],
             appBar: AppBar(
                 leadingWidth: appBarHeight * 1.2,
                 toolbarHeight: appBarHeight,
@@ -141,10 +139,9 @@ class _HomePageState extends State<HomePage> {
                 onTap: (i) => setState(() => _currentIndex = i),
                 type: BottomNavigationBarType.fixed,
                 backgroundColor:
-                theme.isDarkMode ? AppTheme.darkSurface : Colors.white,
-                selectedItemColor: theme.isDarkMode
-                    ? AppTheme.neonBlue
-                    : AppTheme.primaryBlue,
+                    theme.isDarkMode ? AppTheme.darkSurface : Colors.white,
+                selectedItemColor:
+                    theme.isDarkMode ? AppTheme.neonBlue : AppTheme.primaryBlue,
                 unselectedItemColor: Colors.grey,
                 items: const [
                   BottomNavigationBarItem(
@@ -157,13 +154,11 @@ class _HomePageState extends State<HomePage> {
                       icon: Icon(Icons.assessment), label: 'Internals'),
                   BottomNavigationBarItem(
                       icon: Icon(Icons.more_horiz_outlined), label: 'More')
-                ]))
-    );
+                ])));
     // --- End of HomePage UI ---
   }
 }
 // --- End HomePage ---
-
 
 /// ==========================================================================
 /// DashboardScreen (Handles Fetching, Caching, and UI for the Home Tab)
@@ -215,13 +210,24 @@ class _DashboardScreenState extends State<DashboardScreen> {
   late final ApiEndpoints api;
   late ConfettiController _confettiController;
   String? _specialEventLottiePath;
+  bool _isAttendanceToggled = false;
   // --- End State Variables ---
 
   // ⭐️ Step 1: Add 'bunk' to essential keys
   final List<String> _essentialKeys = [
-    'profile', 'semGrades', 'cgpa', 'studentStatus', 'attendance',
-    'timetable', 'hourWiseAttendance', 'subjectAttendance', 'courseMap',
-    'totalDue', 'dob', 'profilePic', 'bunk',
+    'profile',
+    'semGrades',
+    'cgpa',
+    'studentStatus',
+    'attendance',
+    'timetable',
+    'hourWiseAttendance',
+    'subjectAttendance',
+    'courseMap',
+    'totalDue',
+    'dob',
+    'profilePic',
+    'bunk',
   ];
 
   // Keys that must also be non-empty lists/maps for the data to be considered valid
@@ -231,13 +237,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
     'bunk' // Added 'bunk' here as well, assuming it's a map
   ];
 
-
   @override
   void initState() {
     super.initState();
     api = ApiEndpoints(widget.url);
-    _confettiController = ConfettiController(duration: const Duration(seconds: 4));
-    print("[${DateTime.now()}] DashboardScreen initState: Received token = '${widget.token.substring(0, min(10, widget.token.length))}...'");
+    _confettiController =
+        ConfettiController(duration: const Duration(seconds: 4));
+    print(
+        "[${DateTime.now()}] DashboardScreen initState: Received token = '${widget.token.substring(0, min(10, widget.token.length))}...'");
     _loadInitialData();
   }
 
@@ -251,26 +258,37 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Future<void> _loadInitialData() async {
     if (!mounted) return;
     print("[${DateTime.now()}] DashboardScreen: Starting _loadInitialData...");
-    setState(() { _isLoading = true; _error = null; });
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
 
     if (widget.token.isEmpty || widget.regNo.isEmpty) {
-      if(mounted) setState(() { _error = "Invalid session."; _isLoading = false; });
+      if (mounted)
+        setState(() {
+          _error = "Invalid session.";
+          _isLoading = false;
+        });
       return;
     }
 
     // 1. Check Static Cache
     if (DashboardScreen.dashboardCache != null) {
-      bool cacheComplete = _checkDataCompleteness(DashboardScreen.dashboardCache!);
-      bool triggerKeysPopulated = _checkTriggerKeysPopulated(DashboardScreen.dashboardCache!);
+      bool cacheComplete =
+          _checkDataCompleteness(DashboardScreen.dashboardCache!);
+      bool triggerKeysPopulated =
+          _checkTriggerKeysPopulated(DashboardScreen.dashboardCache!);
 
       if (cacheComplete && triggerKeysPopulated) {
-        print("[${DateTime.now()}] DashboardScreen: Loading from complete static cache.");
+        print(
+            "[${DateTime.now()}] DashboardScreen: Loading from complete static cache.");
         _processAndCacheData(DashboardScreen.dashboardCache!);
         _loadSecondaryData();
-        if(mounted) setState(() => _isLoading = false);
+        if (mounted) setState(() => _isLoading = false);
         return;
       } else {
-        print("[${DateTime.now()}] DashboardScreen: Static cache incomplete or trigger key empty. Invalidating.");
+        print(
+            "[${DateTime.now()}] DashboardScreen: Static cache incomplete or trigger key empty. Invalidating.");
         DashboardScreen.dashboardCache = null;
       }
     }
@@ -280,26 +298,32 @@ class _DashboardScreenState extends State<DashboardScreen> {
     Map<String, dynamic>? firestoreData;
     try {
       print("[${DateTime.now()}] DashboardScreen: Checking Firestore...");
-      final initialDoc = await FirebaseFirestore.instance.collection('studentDetails').doc(widget.regNo).get()
+      final initialDoc = await FirebaseFirestore.instance
+          .collection('studentDetails')
+          .doc(widget.regNo)
+          .get()
           .timeout(const Duration(seconds: 10));
 
       if (!initialDoc.exists) {
-        print("[${DateTime.now()}] DashboardScreen: Firestore document doesn't exist. Need API fetch.");
+        print(
+            "[${DateTime.now()}] DashboardScreen: Firestore document doesn't exist. Need API fetch.");
         shouldFetchFromApi = true;
       } else {
-        print("[${DateTime.now()}] DashboardScreen: Firestore document found. Loading from Firestore.");
+        print(
+            "[${DateTime.now()}] DashboardScreen: Firestore document found. Loading from Firestore.");
         firestoreData = initialDoc.data();
         _processAndCacheData(firestoreData!); // Process whatever data is there
         _loadSecondaryData();
-        if(mounted) setState(() => _isLoading = false);
+        if (mounted) setState(() => _isLoading = false);
         return; // Stop here, don't fetch from API
       }
-
     } catch (e) {
       print("[${DateTime.now()}] DashboardScreen: Firestore check error: $e");
       shouldFetchFromApi = true; // Error checking, so fallback to API
       if (mounted) {
-        _error = DashboardScreen.dashboardCache == null ? "Couldn't connect to database. Trying live fetch..." : "Couldn't check database updates. Showing cached data.";
+        _error = DashboardScreen.dashboardCache == null
+            ? "Couldn't connect to database. Trying live fetch..."
+            : "Couldn't check database updates. Showing cached data.";
       }
     }
 
@@ -308,7 +332,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
       print("[${DateTime.now()}] DashboardScreen: Fetching data from API...");
       if (DashboardScreen.dashboardCache != null && mounted) {
         _processAndCacheData(DashboardScreen.dashboardCache!);
-        setState(() { _isLoading = false; _isRefreshing = true; });
+        setState(() {
+          _isLoading = false;
+          _isRefreshing = true;
+        });
       }
       await _fetchAndPollData(isInitialFetch: true);
     } else if (mounted) {
@@ -326,7 +353,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
     bool allKeysPresent = _essentialKeys.every((key) {
       bool hasKey = data.containsKey(key);
       if (!hasKey) {
-        print("[DEBUG] _checkDataCompleteness: Failed (missing essential key: '$key')");
+        print(
+            "[DEBUG] _checkDataCompleteness: Failed (missing essential key: '$key')");
       }
       return hasKey;
     });
@@ -348,49 +376,61 @@ class _DashboardScreenState extends State<DashboardScreen> {
               (value is List && value.isNotEmpty) ||
               (value is Map && value.isNotEmpty));
       if (!isPopulated) {
-        print("[DEBUG] _checkTriggerKeysPopulated: Failed (key '$key' is missing, null, or an empty List/Map)");
+        print(
+            "[DEBUG] _checkTriggerKeysPopulated: Failed (key '$key' is missing, null, or an empty List/Map)");
       }
       return isPopulated;
     });
     return allTriggersPopulated;
   }
 
-
   /// Loads secondary data like calendar events.
   void _loadSecondaryData() {
     if (CalendarPage.firebaseEventsCache == null) {
-      CalendarPage.loadFirebaseEvents(context).then((_) { if(mounted) _checkHolidayStatus(); });
-    } else { _checkHolidayStatus(); }
+      CalendarPage.loadFirebaseEvents(context).then((_) {
+        if (mounted) _checkHolidayStatus();
+      });
+    } else {
+      _checkHolidayStatus();
+    }
   }
-
 
   /// Processes data, updates static cache, and updates local UI state.
   void _processAndCacheData(Map<String, dynamic> data) {
     if (!mounted) return;
-    print("[${DateTime.now()}] DashboardScreen: Processing and caching data...");
+    print(
+        "[${DateTime.now()}] DashboardScreen: Processing and caching data...");
 
     // --- Parsing Logic (with added safety) ---
-    Map<String, String> parsedStudentInfo = {'status': 'Unknown', 'gender': 'Unknown'};
+    Map<String, String> parsedStudentInfo = {
+      'status': 'Unknown',
+      'gender': 'Unknown'
+    };
     dynamic statusRaw = data.putIfAbsent('studentStatus', () => []);
     if (statusRaw is List && statusRaw.length >= 2) {
       if (statusRaw[0] is Map && statusRaw[0].containsKey('status')) {
-        parsedStudentInfo['status'] = statusRaw[0]['status']?.toString() ?? 'Unknown';
+        parsedStudentInfo['status'] =
+            statusRaw[0]['status']?.toString() ?? 'Unknown';
       }
       if (statusRaw[1] is Map && statusRaw[1].containsKey('gender')) {
-        parsedStudentInfo['gender'] = statusRaw[1]['gender']?.toString() ?? 'Unknown';
+        parsedStudentInfo['gender'] =
+            statusRaw[1]['gender']?.toString() ?? 'Unknown';
       }
     } else {
-      print("[WARN] studentStatus data missing or malformed during processing.");
+      print(
+          "[WARN] studentStatus data missing or malformed during processing.");
     }
 
     // Update static cache *before* setState
     final updatedCacheData = Map<String, dynamic>.from(data);
-    updatedCacheData['studentInfo'] = parsedStudentInfo; // Add derived info to cache
+    updatedCacheData['studentInfo'] =
+        parsedStudentInfo; // Add derived info to cache
     DashboardScreen.dashboardCache = updatedCacheData;
 
     // --- Update Local State (with added safety) ---
     setState(() {
-      studentName = (data.putIfAbsent('profile', () => {}) is Map && data['profile']['name'] != null)
+      studentName = (data.putIfAbsent('profile', () => {}) is Map &&
+              data['profile']['name'] != null)
           ? data['profile']['name'].toString()
           : 'Student';
 
@@ -403,27 +443,36 @@ class _DashboardScreenState extends State<DashboardScreen> {
       studentInfo = parsedStudentInfo; // Use the derived info
 
       final cgpaList = _getAsList(data['cgpa']);
-      cgpa = (cgpaList.isNotEmpty && cgpaList[0] is Map) ? (cgpaList[0]['cgpa']?.toString() ?? "N/A") : "N/A";
+      cgpa = (cgpaList.isNotEmpty && cgpaList[0] is Map)
+          ? (cgpaList[0]['cgpa']?.toString() ?? "N/A")
+          : "N/A";
 
       feeDue = (_parseFee(data.putIfAbsent('sastraDue', () => 0)) ?? 0) +
           (_parseFee(data.putIfAbsent('totalDue', () => 0)) ?? 0);
 
       // --- Attendance Calculation ---
-      attendancePercent = 0.0; attendedClasses = 0; totalClasses = 0;
-      int tempTotalHrs = 0; int tempAttendedHrs = 0;
+      attendancePercent = 0.0;
+      attendedClasses = 0;
+      totalClasses = 0;
+      int tempTotalHrs = 0;
+      int tempAttendedHrs = 0;
       int totalMissedClasses = 0; // A = T - Pr
       for (final subject in subjectAttendanceData) {
         if (subject is Map) {
-          int subjectTotal = int.tryParse(subject['totalHrs']?.toString() ?? '0') ?? 0;
-          int subjectAttended = int.tryParse(subject['presentHrs']?.toString() ?? '0') ?? 0;
+          int subjectTotal =
+              int.tryParse(subject['totalHrs']?.toString() ?? '0') ?? 0;
+          int subjectAttended =
+              int.tryParse(subject['presentHrs']?.toString() ?? '0') ?? 0;
           tempTotalHrs += subjectTotal;
           tempAttendedHrs += subjectAttended;
-          totalMissedClasses += (subjectTotal - subjectAttended); // Accumulate missed classes
+          totalMissedClasses +=
+              (subjectTotal - subjectAttended); // Accumulate missed classes
         }
       }
       totalClasses = tempTotalHrs;
       attendedClasses = tempAttendedHrs;
-      attendancePercent = totalClasses > 0 ? (attendedClasses / totalClasses) * 100 : 0.0;
+      attendancePercent =
+          totalClasses > 0 ? (attendedClasses / totalClasses) * 100 : 0.0;
 
       // ⭐️ Step 2: Calculate 'Can Skip' Classes
       int totalAllowedSkips = 0; // P20
@@ -457,7 +506,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
       // --- Birthday Check ---
       isBirthday = false;
       final dobList = _getAsList(data['dob']);
-      final dobData = (dobList.isNotEmpty && dobList[0] is Map) ? dobList[0]['dob'] : null;
+      final dobData =
+          (dobList.isNotEmpty && dobList[0] is Map) ? dobList[0]['dob'] : null;
       if (dobData is String && dobData.isNotEmpty) {
         try {
           final parsed = DateFormat('dd-MM-yyyy').parseStrict(dobData);
@@ -465,10 +515,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
           if (parsed.day == today.day && parsed.month == today.month) {
             isBirthday = true;
             if (_confettiController.state != ConfettiControllerState.playing) {
-              WidgetsBinding.instance.addPostFrameCallback((_) { if (mounted) _confettiController.play(); });
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (mounted) _confettiController.play();
+              });
             }
           }
-        } catch (e) { print("Error parsing DOB '$dobData': $e"); }
+        } catch (e) {
+          print("Error parsing DOB '$dobData': $e");
+        }
       }
       // --- End Birthday Check ---
 
@@ -483,7 +537,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         widget.onDataLoaded();
-        print("[${DateTime.now()}] DashboardScreen: onDataLoaded callback invoked.");
+        print(
+            "[${DateTime.now()}] DashboardScreen: onDataLoaded callback invoked.");
       }
     });
   }
@@ -503,59 +558,151 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return int.tryParse(feeString) ?? 0; // Default to 0 if parsing fails
   }
 
-
   /// Fetches data from API endpoints and polls Firestore for completion.
-  Future<void> _fetchAndPollData({bool isInitialFetch = false, String? updatedToken}) async {
+  Future<void> _fetchAndPollData(
+      {bool isInitialFetch = false, String? updatedToken}) async {
     final effectiveToken = updatedToken ?? widget.token;
 
-    if (mounted) setState(() {
-      _isRefreshing = true;
-      _isLoading = DashboardScreen.dashboardCache == null;
-      _error = null;
-    });
+    if (mounted)
+      setState(() {
+        _isRefreshing = true;
+        _isLoading = DashboardScreen.dashboardCache == null;
+        _error = null;
+      });
 
     const apiTimeout = Duration(seconds: 80);
 
     try {
-      print("[${DateTime.now()}] DashboardScreen: Starting API calls (timeout: ${apiTimeout.inSeconds}s)...");
+      print(
+          "[${DateTime.now()}] DashboardScreen: Starting API calls (timeout: ${apiTimeout.inSeconds}s)...");
 
       // ⭐️ Step 5: Add api.bunk to the parallel calls
       final List<Future<http.Response>> parallelFutures = [
-        http.post( Uri.parse(api.profile), headers: {'Content-Type': 'application/json'}, body: jsonEncode({'token': effectiveToken}), ).timeout(apiTimeout),
-        http.post( Uri.parse(api.profilePic), headers: {'Content-Type': 'application/json'}, body: jsonEncode({'token': effectiveToken}), ).timeout(apiTimeout),
-        http.post( Uri.parse(api.cgpa), headers: {'Content-Type': 'application/json'}, body: jsonEncode({'token': effectiveToken}), ).timeout(apiTimeout),
-        http.post( Uri.parse(api.subjectWiseAttendance), headers: {'Content-Type': 'application/json'}, body: jsonEncode({'token': effectiveToken}), ).timeout(apiTimeout),
-        http.post( Uri.parse(api.timetable), headers: {'Content-Type': 'application/json'}, body: jsonEncode({'token': effectiveToken}), ).timeout(apiTimeout),
-        http.post( Uri.parse(api.hourWiseAttendance), headers: {'Content-Type': 'application/json'}, body: jsonEncode({'token': effectiveToken}), ).timeout(apiTimeout),
-        http.post( Uri.parse(api.hostelDue), headers: {'Content-Type': 'application/json'}, body: jsonEncode({'token': effectiveToken}), ).timeout(apiTimeout),
-        http.post( Uri.parse(api.courseMap), headers: {'Content-Type': 'application/json'}, body: jsonEncode({'token': effectiveToken}), ).timeout(apiTimeout),
-        http.post( Uri.parse(api.dob), headers: {'Content-Type': 'application/json'}, body: jsonEncode({'token': effectiveToken}), ).timeout(apiTimeout),
-        http.post( Uri.parse(api.semGrades), headers: {'Content-Type': 'application/json'}, body: jsonEncode({'token': effectiveToken}), ).timeout(apiTimeout),
-        http.post( Uri.parse(api.studentStatus), headers: {'Content-Type': 'application/json'}, body: jsonEncode({'token': effectiveToken}), ).timeout(apiTimeout),
-        http.post( Uri.parse(api.attendance), headers: {'Content-Type': 'application/json'}, body: jsonEncode({'token': effectiveToken}), ).timeout(apiTimeout),
-        http.post( Uri.parse(api.bunk), headers: {'Content-Type': 'application/json'}, body: jsonEncode({'token': effectiveToken}), ).timeout(apiTimeout), // Added bunk call
-        http.post( Uri.parse(api.currentSemCredits), headers: {'Content-Type': 'application/json'}, body: jsonEncode({'token': effectiveToken}), ).timeout(apiTimeout),
+        http
+            .post(
+              Uri.parse(api.profile),
+              headers: {'Content-Type': 'application/json'},
+              body: jsonEncode({'token': effectiveToken}),
+            )
+            .timeout(apiTimeout),
+        http
+            .post(
+              Uri.parse(api.profilePic),
+              headers: {'Content-Type': 'application/json'},
+              body: jsonEncode({'token': effectiveToken}),
+            )
+            .timeout(apiTimeout),
+        http
+            .post(
+              Uri.parse(api.cgpa),
+              headers: {'Content-Type': 'application/json'},
+              body: jsonEncode({'token': effectiveToken}),
+            )
+            .timeout(apiTimeout),
+        http
+            .post(
+              Uri.parse(api.subjectWiseAttendance),
+              headers: {'Content-Type': 'application/json'},
+              body: jsonEncode({'token': effectiveToken}),
+            )
+            .timeout(apiTimeout),
+        http
+            .post(
+              Uri.parse(api.timetable),
+              headers: {'Content-Type': 'application/json'},
+              body: jsonEncode({'token': effectiveToken}),
+            )
+            .timeout(apiTimeout),
+        http
+            .post(
+              Uri.parse(api.hourWiseAttendance),
+              headers: {'Content-Type': 'application/json'},
+              body: jsonEncode({'token': effectiveToken}),
+            )
+            .timeout(apiTimeout),
+        http
+            .post(
+              Uri.parse(api.hostelDue),
+              headers: {'Content-Type': 'application/json'},
+              body: jsonEncode({'token': effectiveToken}),
+            )
+            .timeout(apiTimeout),
+        http
+            .post(
+              Uri.parse(api.courseMap),
+              headers: {'Content-Type': 'application/json'},
+              body: jsonEncode({'token': effectiveToken}),
+            )
+            .timeout(apiTimeout),
+        http
+            .post(
+              Uri.parse(api.dob),
+              headers: {'Content-Type': 'application/json'},
+              body: jsonEncode({'token': effectiveToken}),
+            )
+            .timeout(apiTimeout),
+        http
+            .post(
+              Uri.parse(api.semGrades),
+              headers: {'Content-Type': 'application/json'},
+              body: jsonEncode({'token': effectiveToken}),
+            )
+            .timeout(apiTimeout),
+        http
+            .post(
+              Uri.parse(api.studentStatus),
+              headers: {'Content-Type': 'application/json'},
+              body: jsonEncode({'token': effectiveToken}),
+            )
+            .timeout(apiTimeout),
+        http
+            .post(
+              Uri.parse(api.attendance),
+              headers: {'Content-Type': 'application/json'},
+              body: jsonEncode({'token': effectiveToken}),
+            )
+            .timeout(apiTimeout),
+        http
+            .post(
+              Uri.parse(api.bunk),
+              headers: {'Content-Type': 'application/json'},
+              body: jsonEncode({'token': effectiveToken}),
+            )
+            .timeout(apiTimeout), // Added bunk call
+        http
+            .post(
+              Uri.parse(api.currentSemCredits),
+              headers: {'Content-Type': 'application/json'},
+              body: jsonEncode({'token': effectiveToken}),
+            )
+            .timeout(apiTimeout),
       ];
       // ⭐️ End Step 5
 
       // Handle API call errors gracefully
-      final results = await Future.wait(parallelFutures.map((f) => f.catchError((e) {
-        print("API Call Error: $e");
-        return http.Response('{"error": "Timeout or connection error"}', 500);
-      })));
+      final results =
+          await Future.wait(parallelFutures.map((f) => f.catchError((e) {
+                print("API Call Error: $e");
+                return http.Response(
+                    '{"error": "Timeout or connection error"}', 500);
+              })));
 
       bool allFailed = results.every((res) => res.statusCode != 200);
       if (allFailed) {
-        print("[${DateTime.now()}] DashboardScreen: All API calls failed or timed out.");
+        print(
+            "[${DateTime.now()}] DashboardScreen: All API calls failed or timed out.");
       } else {
-        print("[${DateTime.now()}] DashboardScreen: API calls finished (some may have failed).");
+        print(
+            "[${DateTime.now()}] DashboardScreen: API calls finished (some may have failed).");
       }
 
-      await Future.delayed(const Duration(milliseconds: 2500)); // Wait for backend write
+      await Future.delayed(
+          const Duration(milliseconds: 2500)); // Wait for backend write
 
       Map<String, dynamic>? polledData;
       const maxRetries = 70; // Increased retries
-      print("[${DateTime.now()}] DashboardScreen: Starting Firestore polling (max $maxRetries tries)...");
+      print(
+          "[${DateTime.now()}] DashboardScreen: Starting Firestore polling (max $maxRetries tries)...");
       for (int i = 0; i < maxRetries; i++) {
         if (!mounted) return;
         DocumentSnapshot? doc;
@@ -564,7 +711,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
         bool triggerKeysPopulated = false;
 
         try {
-          doc = await FirebaseFirestore.instance.collection('studentDetails').doc(widget.regNo).get()
+          doc = await FirebaseFirestore.instance
+              .collection('studentDetails')
+              .doc(widget.regNo)
+              .get()
               .timeout(const Duration(seconds: 5));
           data = doc.data() as Map<String, dynamic>?;
 
@@ -572,38 +722,48 @@ class _DashboardScreenState extends State<DashboardScreen> {
             dataComplete = _checkDataCompleteness(data);
             triggerKeysPopulated = _checkTriggerKeysPopulated(data);
           } else {
-            print("[DEBUG] Poll try ${i + 1}: Document doesn't exist or data is null.");
+            print(
+                "[DEBUG] Poll try ${i + 1}: Document doesn't exist or data is null.");
           }
-
         } catch (pollError) {
-          print("[${DateTime.now()}] DashboardScreen: Error during Firestore poll try ${i + 1}: $pollError");
+          print(
+              "[${DateTime.now()}] DashboardScreen: Error during Firestore poll try ${i + 1}: $pollError");
         }
 
         if (dataComplete && triggerKeysPopulated) {
-          print("[${DateTime.now()}] DashboardScreen: Polling successful on try ${i + 1}.");
+          print(
+              "[${DateTime.now()}] DashboardScreen: Polling successful on try ${i + 1}.");
           polledData = data;
           break;
         } else {
-          print("[${DateTime.now()}] DashboardScreen: Poll try ${i + 1}: Data check failed (complete: $dataComplete, triggers: $triggerKeysPopulated).");
+          print(
+              "[${DateTime.now()}] DashboardScreen: Poll try ${i + 1}: Data check failed (complete: $dataComplete, triggers: $triggerKeysPopulated).");
         }
 
-        if (i < maxRetries - 1) await Future.delayed(const Duration(milliseconds: 1200));
+        if (i < maxRetries - 1)
+          await Future.delayed(const Duration(milliseconds: 1200));
       }
-
 
       if (!mounted) return;
 
       if (polledData != null) {
         _processAndCacheData(polledData);
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(isInitialFetch ? 'Data loaded!' : 'Data refreshed!'), backgroundColor: Colors.green, duration: Duration(seconds: 2)));
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+              content:
+                  Text(isInitialFetch ? 'Data loaded!' : 'Data refreshed!'),
+              backgroundColor: Colors.green,
+              duration: Duration(seconds: 2)));
         }
       } else {
-        print("[${DateTime.now()}] DashboardScreen: Polling timed out after $maxRetries tries.");
-        if(DashboardScreen.dashboardCache != null){
-          print("[${DateTime.now()}] DashboardScreen: Polling failed, using existing cache.");
+        print(
+            "[${DateTime.now()}] DashboardScreen: Polling timed out after $maxRetries tries.");
+        if (DashboardScreen.dashboardCache != null) {
+          print(
+              "[${DateTime.now()}] DashboardScreen: Polling failed, using existing cache.");
           _processAndCacheData(DashboardScreen.dashboardCache!);
-          throw Exception("Failed to refresh all data (polling timeout). Showing last known data.");
+          throw Exception(
+              "Failed to refresh all data (polling timeout). Showing last known data.");
         } else {
           throw Exception("Failed to load initial data (polling timeout).");
         }
@@ -611,69 +771,251 @@ class _DashboardScreenState extends State<DashboardScreen> {
     } catch (e) {
       print("[${DateTime.now()}] DashboardScreen: Error during fetch/poll: $e");
       if (mounted) {
-        setState(() { _error = e.toString(); _isLoading = false; });
+        setState(() {
+          _error = e.toString();
+          _isLoading = false;
+        });
         if (!e.toString().contains("Showing last known data")) {
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(_error!), backgroundColor: Colors.red));
+          ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text(_error!), backgroundColor: Colors.red));
         }
       }
     } finally {
-      if (mounted) { setState(() { _isRefreshing = false; _isLoading = false; }); }
-      print("[${DateTime.now()}] DashboardScreen: Fetch/poll process finished.");
+      if (mounted) {
+        setState(() {
+          _isRefreshing = false;
+          _isLoading = false;
+        });
+      }
+      print(
+          "[${DateTime.now()}] DashboardScreen: Fetch/poll process finished.");
     }
   }
-
 
   /// Handles manual refresh action.
   Future<void> _refreshFromApi() async {
     if (_isRefreshing || widget.regNo.isEmpty || widget.token.isEmpty) return;
 
-    print("[${DateTime.now()}] DashboardScreen: DEBUG: _refreshFromApi CALLED.");
+    print(
+        "[${DateTime.now()}] DashboardScreen: DEBUG: _refreshFromApi CALLED.");
     print("[${DateTime.now()}] DashboardScreen: Starting manual refresh...");
-    setState(() { _isLoading = DashboardScreen.dashboardCache == null; _isRefreshing = true; _error = null; });
+    setState(() {
+      _isLoading = DashboardScreen.dashboardCache == null;
+      _isRefreshing = true;
+      _error = null;
+    });
 
     try {
       if (!mounted) throw Exception("Widget unmounted during refresh");
       print("[${DateTime.now()}] DashboardScreen: Showing CaptchaDialog...");
-      final String? newToken = await showDialog<String>( context: context, barrierDismissible: false, builder: (context) => CaptchaDialog(token: widget.token, apiUrl: widget.url), );
+      final String? newToken = await showDialog<String>(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) =>
+            CaptchaDialog(token: widget.token, apiUrl: widget.url),
+      );
 
       if (newToken != null && newToken.isNotEmpty) {
-        print("[${DateTime.now()}] DashboardScreen: DEBUG: New token received: '$newToken'");
-        print("[${DateTime.now()}] DashboardScreen: Got new token. Fetching data with new token...");
-        CalendarPage.firebaseEventsCache = null; // Clear calendar cache on refresh
+        print(
+            "[${DateTime.now()}] DashboardScreen: DEBUG: New token received: '$newToken'");
+        print(
+            "[${DateTime.now()}] DashboardScreen: Got new token. Fetching data with new token...");
+        CalendarPage.firebaseEventsCache =
+            null; // Clear calendar cache on refresh
 
         // 1. FETCH DATA FIRST
         await _fetchAndPollData(isInitialFetch: false, updatedToken: newToken);
 
         // 2. UPDATE PARENT TOKEN SECOND
-        print("[${DateTime.now()}] DashboardScreen: Data fetch complete. Updating parent token.");
+        print(
+            "[${DateTime.now()}] DashboardScreen: Data fetch complete. Updating parent token.");
         await widget.onTokenUpdated(newToken);
-
       } else {
-        print("[${DateTime.now()}] DashboardScreen: Captcha cancelled or failed.");
-        if (mounted) { setState(() { _isRefreshing = false; _isLoading = false; }); }
+        print(
+            "[${DateTime.now()}] DashboardScreen: Captcha cancelled or failed.");
+        if (mounted) {
+          setState(() {
+            _isRefreshing = false;
+            _isLoading = false;
+          });
+        }
       }
     } catch (e) {
       print("[${DateTime.now()}] DashboardScreen: Error during refresh: $e");
       if (mounted) {
-        if (_error == null) { setState(() { _error = e.toString(); }); }
-        setState(() { _isRefreshing = false; _isLoading = false; });
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(_error!), backgroundColor: Colors.red));
+        if (_error == null) {
+          setState(() {
+            _error = e.toString();
+          });
+        }
+        setState(() {
+          _isRefreshing = false;
+          _isLoading = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(_error!), backgroundColor: Colors.red));
       }
     } finally {
       if (mounted && (_isRefreshing || _isLoading)) {
-        setState(() { _isRefreshing = false; _isLoading = false; });
+        setState(() {
+          _isRefreshing = false;
+          _isLoading = false;
+        });
       }
-      print("[${DateTime.now()}] DashboardScreen: Manual refresh process finished.");
+      print(
+          "[${DateTime.now()}] DashboardScreen: Manual refresh process finished.");
     }
   }
 
-
   // --- Helper methods (_getNextExamInfo, _getSpecialEventToday, _checkHolidayStatus, _buildSpecialEventLottie) ---
   // (Keep these unchanged)
-  String _getNextExamInfo() { final eventsCache = CalendarPage.firebaseEventsCache; if (eventsCache == null || eventsCache.isEmpty) return "Loading Schedule..."; final today = DateTime.now(); final todayDateOnly = DateTime(today.year, today.month, today.day); DateTime? findFirstEventDate(RegExp regex) { final sortedDates = eventsCache.keys.toList()..sort(); for (final dateKey in sortedDates) { final eventDate = DateTime.tryParse(dateKey); if (eventDate == null || eventDate.isBefore(todayDateOnly)) continue; final events = eventsCache[dateKey]!; if (events.any((event) => regex.hasMatch(event))) return eventDate; } return null; } final examTypes = [ MapEntry("CIA I", RegExp(r'cia\s+i\b', caseSensitive: false)), MapEntry("CIA II", RegExp(r'cia\s+ii\b', caseSensitive: false)), MapEntry("CIA III", RegExp(r'cia\s+iii\b', caseSensitive: false)), MapEntry("Lab Exam", RegExp(r'lab exam', caseSensitive: false)), MapEntry("End Semester Exam", RegExp(r'(even|odd|end)?\s*semester\s+exam\s+starts', caseSensitive: false)), ]; final upcomingExams = <MapEntry<String, DateTime>>[]; for (final exam in examTypes) { final examDate = findFirstEventDate(exam.value); if (examDate != null) upcomingExams.add(MapEntry(exam.key, examDate)); } if (upcomingExams.isEmpty) return "No upcoming exams"; upcomingExams.sort((a, b) => a.value.compareTo(b.value)); final nextExam = upcomingExams.first; final daysRemaining = nextExam.value.difference(todayDateOnly).inDays; if (daysRemaining == 0) return "${nextExam.key} is Today!"; if (daysRemaining == 1) return "${nextExam.key} is Tomorrow!"; return "${nextExam.key} in $daysRemaining days"; }
-  String? _getSpecialEventToday() { final eventsCache = CalendarPage.firebaseEventsCache; if (eventsCache == null || eventsCache.isEmpty) { return null; } final todayKey = DateFormat('yyyy-MM-dd').format(DateTime.now()); final events = eventsCache[todayKey]; if (events != null && events.isNotEmpty) { const eventMap = { 'tamil new year': 'assets/lottieJson/tamilNewYear.json', 'deepavali': 'assets/lottieJson/diwaliOne.json', 'independence day': 'assets/lottieJson/independence.json', 'christmas': 'assets/lottieJson/christmas.json', 'new year': 'assets/lottieJson/newYear.json', 'republic day': 'assets/lottieJson/republic.json', 'boghi': 'assets/lottieJson/boghi.json', 'pongal': 'assets/lottieJson/pongal.json', }; for (final event in events) { final lowerEvent = event.toLowerCase(); for (final entry in eventMap.entries) { if (lowerEvent.contains(entry.key)) { return entry.value; } } } const String examLottiePath = 'assets/lottieJson/cia.json'; const ciaRegex = r'cia\s+(i|ii|iii)\b'; for (final event in events) { final lowerEvent = event.toLowerCase(); if (RegExp(ciaRegex, caseSensitive: false).hasMatch(lowerEvent)) { return examLottiePath; } } } return null; }
-  void _checkHolidayStatus() { if (_specialEventLottiePath != null) return; final lottiePath = _getSpecialEventToday(); if (mounted && lottiePath != null) { setState(() { _specialEventLottiePath = lottiePath; }); } }
-  Widget _buildSpecialEventLottie(String lottiePath) { String title = "Happy Holidays!"; if (lottiePath.contains('diwali')) { title = "🪔 Happy Diwali! 🪔"; } else if (lottiePath.contains('independence')) { title = "🇮🇳 Happy Independence Day! 🇮🇳"; } else if (lottiePath.contains('christmas')) { title = "🎄 Merry Christmas! 🎄"; } else if (lottiePath.contains('newYear')) { title = "🎉 Happy New Year! 🎉"; } else if (lottiePath.contains('republic')) { title = "🇮🇳 Happy Republic Day! 🇮🇳"; } else if (lottiePath.contains('tamilNewYear')) { title = "🎉 Happy Tamil New Year! 🎉"; } else if (lottiePath.contains('boghi')) { title = "🔥 Happy Boghi! 🔥"; } else if (lottiePath.contains('pongal')) { title = "🌾 Happy Pongal! 🌾"; } else if (lottiePath.contains('exam')) { title = "CIA Exam Today! 📚"; } return Lottie.asset( lottiePath, frameBuilder: (context, child, composition) { if (composition != null) { return ClipRRect( borderRadius: BorderRadius.circular(12.0), child: child, ); } else { return Container( decoration: BoxDecoration( color: Colors.black, borderRadius: BorderRadius.circular(12.0), ), child: Center( child: Column( mainAxisAlignment: MainAxisAlignment.center, children: [ const CircularProgressIndicator(color: Colors.amber), const SizedBox(height: 20), Text( title, style: const TextStyle( color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold, ), textAlign: TextAlign.center, ), ], ), ), ); } }, ); }
+  String _getNextExamInfo() {
+    final eventsCache = CalendarPage.firebaseEventsCache;
+    if (eventsCache == null || eventsCache.isEmpty)
+      return "Loading Schedule...";
+    final today = DateTime.now();
+    final todayDateOnly = DateTime(today.year, today.month, today.day);
+    DateTime? findFirstEventDate(RegExp regex) {
+      final sortedDates = eventsCache.keys.toList()..sort();
+      for (final dateKey in sortedDates) {
+        final eventDate = DateTime.tryParse(dateKey);
+        if (eventDate == null || eventDate.isBefore(todayDateOnly)) continue;
+        final events = eventsCache[dateKey]!;
+        if (events.any((event) => regex.hasMatch(event))) return eventDate;
+      }
+      return null;
+    }
+
+    final examTypes = [
+      MapEntry("CIA I", RegExp(r'cia\s+i\b', caseSensitive: false)),
+      MapEntry("CIA II", RegExp(r'cia\s+ii\b', caseSensitive: false)),
+      MapEntry("CIA III", RegExp(r'cia\s+iii\b', caseSensitive: false)),
+      MapEntry("Lab Exam", RegExp(r'lab exam', caseSensitive: false)),
+      MapEntry(
+          "End Semester Exam",
+          RegExp(r'(even|odd|end)?\s*semester\s+exam\s+starts',
+              caseSensitive: false)),
+    ];
+    final upcomingExams = <MapEntry<String, DateTime>>[];
+    for (final exam in examTypes) {
+      final examDate = findFirstEventDate(exam.value);
+      if (examDate != null) upcomingExams.add(MapEntry(exam.key, examDate));
+    }
+    if (upcomingExams.isEmpty) return "No upcoming exams";
+    upcomingExams.sort((a, b) => a.value.compareTo(b.value));
+    final nextExam = upcomingExams.first;
+    final daysRemaining = nextExam.value.difference(todayDateOnly).inDays;
+    if (daysRemaining == 0) return "${nextExam.key} is Today!";
+    if (daysRemaining == 1) return "${nextExam.key} is Tomorrow!";
+    return "${nextExam.key} in $daysRemaining days";
+  }
+
+  String? _getSpecialEventToday() {
+    final eventsCache = CalendarPage.firebaseEventsCache;
+    if (eventsCache == null || eventsCache.isEmpty) {
+      return null;
+    }
+    final todayKey = DateFormat('yyyy-MM-dd').format(DateTime.now());
+    final events = eventsCache[todayKey];
+    if (events != null && events.isNotEmpty) {
+      const eventMap = {
+        'tamil new year': 'assets/lottieJson/tamilNewYear.json',
+        'deepavali': 'assets/lottieJson/diwaliOne.json',
+        'independence day': 'assets/lottieJson/independence.json',
+        'christmas': 'assets/lottieJson/christmas.json',
+        'new year': 'assets/lottieJson/newYear.json',
+        'republic day': 'assets/lottieJson/republic.json',
+        'boghi': 'assets/lottieJson/boghi.json',
+        'pongal': 'assets/lottieJson/pongal.json',
+      };
+      for (final event in events) {
+        final lowerEvent = event.toLowerCase();
+        for (final entry in eventMap.entries) {
+          if (lowerEvent.contains(entry.key)) {
+            return entry.value;
+          }
+        }
+      }
+      const String examLottiePath = 'assets/lottieJson/cia.json';
+      const ciaRegex = r'cia\s+(i|ii|iii)\b';
+      for (final event in events) {
+        final lowerEvent = event.toLowerCase();
+        if (RegExp(ciaRegex, caseSensitive: false).hasMatch(lowerEvent)) {
+          return examLottiePath;
+        }
+      }
+    }
+    return null;
+  }
+
+  void _checkHolidayStatus() {
+    if (_specialEventLottiePath != null) return;
+    final lottiePath = _getSpecialEventToday();
+    if (mounted && lottiePath != null) {
+      setState(() {
+        _specialEventLottiePath = lottiePath;
+      });
+    }
+  }
+
+  Widget _buildSpecialEventLottie(String lottiePath) {
+    String title = "Happy Holidays!";
+    if (lottiePath.contains('diwali')) {
+      title = "🪔 Happy Diwali! 🪔";
+    } else if (lottiePath.contains('independence')) {
+      title = "🇮🇳 Happy Independence Day! 🇮🇳";
+    } else if (lottiePath.contains('christmas')) {
+      title = "🎄 Merry Christmas! 🎄";
+    } else if (lottiePath.contains('newYear')) {
+      title = "🎉 Happy New Year! 🎉";
+    } else if (lottiePath.contains('republic')) {
+      title = "🇮🇳 Happy Republic Day! 🇮🇳";
+    } else if (lottiePath.contains('tamilNewYear')) {
+      title = "🎉 Happy Tamil New Year! 🎉";
+    } else if (lottiePath.contains('boghi')) {
+      title = "🔥 Happy Boghi! 🔥";
+    } else if (lottiePath.contains('pongal')) {
+      title = "🌾 Happy Pongal! 🌾";
+    } else if (lottiePath.contains('exam')) {
+      title = "CIA Exam Today! 📚";
+    }
+    return Lottie.asset(
+      lottiePath,
+      frameBuilder: (context, child, composition) {
+        if (composition != null) {
+          return ClipRRect(
+            borderRadius: BorderRadius.circular(12.0),
+            child: child,
+          );
+        } else {
+          return Container(
+            decoration: BoxDecoration(
+              color: Colors.black,
+              borderRadius: BorderRadius.circular(12.0),
+            ),
+            child: Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const CircularProgressIndicator(color: Colors.amber),
+                  const SizedBox(height: 20),
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 22,
+                      fontWeight: FontWeight.bold,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
+      },
+    );
+  }
   // --- End Helper methods ---
 
   // --- Build methods ---
@@ -684,26 +1026,29 @@ class _DashboardScreenState extends State<DashboardScreen> {
       onRefresh: _refreshFromApi,
       color: theme.isDarkMode ? AppTheme.neonBlue : AppTheme.primaryBlue,
       backgroundColor: theme.isDarkMode ? AppTheme.darkSurface : Colors.white,
-      child: LayoutBuilder(
-          builder: (context, constraints) {
-            return SingleChildScrollView(
-              physics: const AlwaysScrollableScrollPhysics(),
-              child: ConstrainedBox(
-                constraints: BoxConstraints(minHeight: constraints.maxHeight),
-                child: Center(
-                  child: _buildConditionalContent(context, theme),
-                ),
-              ),
-            );
-          }
-      ),
+      child: LayoutBuilder(builder: (context, constraints) {
+        return SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(minHeight: constraints.maxHeight),
+            child: Center(
+              child: _buildConditionalContent(context, theme),
+            ),
+          ),
+        );
+      }),
     );
   }
 
   Widget _buildConditionalContent(BuildContext context, ThemeProvider theme) {
     // Show loading indicator only if cache is null AND we are actively loading/refreshing
-    if ((_isLoading || _isRefreshing) && DashboardScreen.dashboardCache == null) {
-      return Padding( padding: const EdgeInsets.all(32.0), child: CircularProgressIndicator(color: theme.isDarkMode ? AppTheme.neonBlue : AppTheme.primaryBlue), );
+    if ((_isLoading || _isRefreshing) &&
+        DashboardScreen.dashboardCache == null) {
+      return Padding(
+        padding: const EdgeInsets.all(32.0),
+        child: CircularProgressIndicator(
+            color: theme.isDarkMode ? AppTheme.neonBlue : AppTheme.primaryBlue),
+      );
     }
     // Show error only if cache is null AND there's an error
     if (_error != null && DashboardScreen.dashboardCache == null) {
@@ -714,9 +1059,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
           children: [
             Icon(Icons.error_outline, color: Colors.red[700], size: 50),
             const SizedBox(height: 15),
-            Text(_error!, textAlign: TextAlign.center, style: const TextStyle(color: Colors.red)),
+            Text(_error!,
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: Colors.red)),
             const SizedBox(height: 20),
-            ElevatedButton(onPressed: _loadInitialData, child: const Text("Retry Load"))
+            ElevatedButton(
+                onPressed: _loadInitialData, child: const Text("Retry Load"))
           ],
         ),
       );
@@ -735,22 +1083,24 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                 decoration: BoxDecoration(
                     color: Colors.black.withOpacity(0.6),
-                    borderRadius: BorderRadius.circular(15)
-                ),
+                    borderRadius: BorderRadius.circular(15)),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    SizedBox(width: 15, height: 15, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)),
+                    SizedBox(
+                        width: 15,
+                        height: 15,
+                        child: CircularProgressIndicator(
+                            strokeWidth: 2, color: Colors.white)),
                     SizedBox(width: 8),
-                    Text("Refreshing...", style: TextStyle(color: Colors.white, fontSize: 12)),
+                    Text("Refreshing...",
+                        style: TextStyle(color: Colors.white, fontSize: 12)),
                   ],
-                )
-            ),
+                )),
           )
       ],
     );
   }
-
 
   Widget _buildDashboardUI(BuildContext context) {
     final theme = Provider.of<ThemeProvider>(context);
@@ -768,55 +1118,196 @@ class _DashboardScreenState extends State<DashboardScreen> {
               padding: const EdgeInsets.only(bottom: 10.0),
               child: MaterialBanner(
                 padding: const EdgeInsets.all(10),
-                content: Text(_error!, style: const TextStyle(color: Colors.white, fontSize: 13)),
+                content: Text(_error!,
+                    style: const TextStyle(color: Colors.white, fontSize: 13)),
                 backgroundColor: Colors.orange.shade800,
                 forceActionsBelow: true,
-                actions: [ TextButton( onPressed: () => setState(() => _error = null), child: const Text('DISMISS', style: TextStyle(color: Colors.white))) ],
+                actions: [
+                  TextButton(
+                      onPressed: () => setState(() => _error = null),
+                      child: const Text('DISMISS',
+                          style: TextStyle(color: Colors.white)))
+                ],
               ),
             ),
-          GestureDetector( /* ... Profile Container ... */
-            onTap: () { Navigator.push( context, MaterialPageRoute(builder: (_) => ProfilePage(token: widget.token, url: widget.url, regNo: widget.regNo))); }, child: NeonContainer( borderColor: theme.isDarkMode ? AppTheme.neonBlue : AppTheme.primaryBlue, child: Row( children: [ CircleAvatar( radius: 28, backgroundColor: theme.isDarkMode ? AppTheme.neonBlue : AppTheme.primaryBlue, child: Icon(Icons.person, color: theme.isDarkMode ? Colors.black : Colors.white) ), const SizedBox(width: 16), Expanded( child: Column( crossAxisAlignment: CrossAxisAlignment.start, children: [ if (isBirthday) const FittedBox(fit: BoxFit.scaleDown, child: Text('🎉 Happy Birthday! 🎉', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.amber))) else FittedBox( fit: BoxFit.scaleDown, child: Text( (studentName != null && studentName!.isNotEmpty ? 'Welcome, $studentName!' : 'Welcome Back!'), style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: theme.isDarkMode ? AppTheme.neonBlue : AppTheme.primaryBlue) ), ), FittedBox(fit: BoxFit.scaleDown, child: Text('Student Dashboard', style: TextStyle(color: theme.isDarkMode ? Colors.white70 : Colors.grey[600]))), ], ), ), ], ), ),
-          ),
-          const SizedBox(height: 16),
-          GestureDetector( /* ... Attendance Pie Chart ... */
-            onTap: () { Navigator.push( context, MaterialPageRoute( builder: (_) => SubjectWiseAttendancePage( regNo: widget.regNo, token: widget.token, url: widget.url, initialSubjectAttendance: subjectAttendanceData, initialHourWiseAttendance: hourWiseAttendanceData, timetable: timetableData, courseMap: courseMapData, ), ), ); },
-            // ⭐️ Step 4b: Pass canSkipClasses to the Pie Chart
-            child: AttendancePieChart(
-              attendancePercentage: attendancePercent,
-              attendedClasses: attendedClasses,
-              totalClasses: totalClasses,
-              bunkingDaysLeft: canSkipClasses,
+          GestureDetector(
+            /* ... Profile Container ... */
+            onTap: () {
+              Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                      builder: (_) => ProfilePage(
+                          token: widget.token,
+                          url: widget.url,
+                          regNo: widget.regNo)));
+            },
+            child: NeonContainer(
+              borderColor:
+                  theme.isDarkMode ? AppTheme.neonBlue : AppTheme.primaryBlue,
+              child: Row(
+                children: [
+                  CircleAvatar(
+                      radius: 28,
+                      backgroundColor: theme.isDarkMode
+                          ? AppTheme.neonBlue
+                          : AppTheme.primaryBlue,
+                      child: Icon(Icons.person,
+                          color:
+                              theme.isDarkMode ? Colors.black : Colors.white)),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (isBirthday)
+                          const FittedBox(
+                              fit: BoxFit.scaleDown,
+                              child: Text('🎉 Happy Birthday! 🎉',
+                                  style: TextStyle(
+                                      fontSize: 20,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.amber)))
+                        else
+                          FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: Text(
+                                (studentName != null && studentName!.isNotEmpty
+                                    ? 'Welcome, $studentName!'
+                                    : 'Welcome Back!'),
+                                style: TextStyle(
+                                    fontSize: 20,
+                                    fontWeight: FontWeight.bold,
+                                    color: theme.isDarkMode
+                                        ? AppTheme.neonBlue
+                                        : AppTheme.primaryBlue)),
+                          ),
+                        FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: Text('Student Dashboard',
+                                style: TextStyle(
+                                    color: theme.isDarkMode
+                                        ? Colors.white70
+                                        : Colors.grey[600]))),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
             ),
-            // ⭐️ End Step 4b
           ),
           const SizedBox(height: 16),
-          Row( /* ... Fee and GPA Tiles ... */
-            crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Expanded(child: _buildFeeDueTile(theme, feeDue)),
-            const SizedBox(width: 12),
-            Expanded(child: _buildGpaExamTile(theme, cgpa ?? 'N/A')),
-          ],
+          Container(
+            // Card style container
+            decoration: BoxDecoration(
+              color: theme.isDarkMode ? AppTheme.darkSurface : Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              boxShadow: [
+                BoxShadow(
+                  color:
+                      Colors.black.withOpacity(theme.isDarkMode ? 0.2 : 0.05),
+                  blurRadius: 10,
+                  offset: const Offset(0, 5),
+                ),
+              ],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // Custom Header with Attendance Text and Switch Button
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16.0, 0.0, 8.0, 0.0),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      Text("Include OD's\t\t"),
+                      Switch.adaptive(
+                        // Using adaptive for platform look
+                        value: _isAttendanceToggled,
+                        onChanged: (bool value) {
+                          // Update the state on toggle
+                          setState(() {
+                            _isAttendanceToggled = value;
+                          });
+                        },
+                        // Custom colors to match the theme
+                        activeTrackColor: theme.isDarkMode
+                            ? AppTheme.neonBlue.withOpacity(0.5)
+                            : AppTheme.primaryBlue.withOpacity(0.5),
+                        activeColor: theme.isDarkMode
+                            ? AppTheme.neonBlue
+                            : AppTheme.primaryBlue,
+                      ),
+                    ],
+                  ),
+                ),
+                GestureDetector(
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => SubjectWiseAttendancePage(
+                          regNo: widget.regNo,
+                          token: widget.token,
+                          url: widget.url,
+                          initialSubjectAttendance: subjectAttendanceData,
+                          initialHourWiseAttendance: hourWiseAttendanceData,
+                          timetable: timetableData,
+                          courseMap: courseMapData,
+                        ),
+                      ),
+                    );
+                  },
+                  // ⭐️ Step 4b: Pass canSkipClasses to the Pie Chart
+                  child: AttendancePieChart(
+                    attendancePercentage: attendancePercent,
+                    attendedClasses: attendedClasses,
+                    totalClasses: totalClasses,
+                    bunkingDaysLeft: canSkipClasses,
+                  ),
+                  // ⭐️ End Step 4b
+                ),
+              ],
+            ),
+          ),
+          // END MODIFIED ATTENDANCE CARD
+          const SizedBox(height: 16),
+          Row(
+            /* ... Fee and GPA Tiles ... */
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(child: _buildFeeDueTile(theme, feeDue)),
+              const SizedBox(width: 12),
+              Expanded(child: _buildGpaExamTile(theme, cgpa ?? 'N/A')),
+            ],
           ),
           const SizedBox(height: 16),
-          SizedBox( // Timetable or Lottie Container
+          SizedBox(
+            // Timetable or Lottie Container
             height: 300,
             child: _specialEventLottiePath != null
                 ? _buildSpecialEventLottie(_specialEventLottiePath!)
                 : TimetableWidget(
-              timetable: timetableData,
-              isLoading: _isLoading && DashboardScreen.dashboardCache == null,
-              hourWiseAttendance: hourWiseAttendanceData,
-              courseMap: courseMapData,
-            ),
+                    timetable: timetableData,
+                    isLoading:
+                        _isLoading && DashboardScreen.dashboardCache == null,
+                    hourWiseAttendance: hourWiseAttendanceData,
+                    courseMap: courseMapData,
+                  ),
           ),
         ],
       ),
     );
   }
 
-
   Widget _buildConfettiIfNeeded() {
-    return isBirthday ? Align( alignment: Alignment.topCenter, child: ConfettiWidget( confettiController: _confettiController, blastDirectionality: BlastDirectionality.explosive), ) : const SizedBox.shrink();
+    return isBirthday
+        ? Align(
+            alignment: Alignment.topCenter,
+            child: ConfettiWidget(
+                confettiController: _confettiController,
+                blastDirectionality: BlastDirectionality.explosive),
+          )
+        : const SizedBox.shrink();
   }
 
   // Modified _buildFeeDueTile to remove regNo (already available via widget.regNo)
@@ -829,7 +1320,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
             context,
             MaterialPageRoute(
                 builder: (context) => FeeDueScreen(
-                    url: widget.url, token: widget.token))); // Removed regNo from here
+                    url: widget.url,
+                    token: widget.token))); // Removed regNo from here
       },
       child: SizedBox(
         width: 180,
@@ -867,10 +1359,75 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-
   Widget _buildGpaExamTile(ThemeProvider theme, String cgpa) {
-    final isDark = theme.isDarkMode; return GestureDetector( onDoubleTap: () => setState(() => showExamSchedule = !showExamSchedule), child: SizedBox( width: 180, height: 150, child: NeonContainer( borderColor: isDark ? AppTheme.neonBlue : AppTheme.primaryBlue, padding: const EdgeInsets.all(12), child: AnimatedSwitcher( duration: const Duration(milliseconds: 300), child: showExamSchedule ? Column( key: const ValueKey('exam'), mainAxisAlignment: MainAxisAlignment.center, children: [ Icon(Icons.event, size: 40, color: isDark ? AppTheme.neonBlue : AppTheme.primaryBlue), const SizedBox(height: 10), const FittedBox(fit: BoxFit.scaleDown, child: Text('Exam Schedule', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16))), const SizedBox(height: 4), FittedBox(fit: BoxFit.scaleDown, child: Text(_getNextExamInfo(), style: TextStyle(fontSize: 14, color: isDark ? Colors.white70 : Colors.grey[600]), textAlign: TextAlign.center,)), ]) : Column( key: const ValueKey('gpa'), mainAxisAlignment: MainAxisAlignment.center, children: [ Icon(Icons.grade, size: 40, color: isDark ? AppTheme.neonBlue : Colors.orange), const SizedBox(height: 10), const FittedBox(fit: BoxFit.scaleDown, child: Text('CGPA', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16))), FittedBox(fit: BoxFit.scaleDown, child: Text('$cgpa / 10', style: TextStyle(fontSize: 14, color: isDark ? Colors.white70 : Colors.grey[600]))), ]), ), ), ), );
+    final isDark = theme.isDarkMode;
+    return GestureDetector(
+      onDoubleTap: () => setState(() => showExamSchedule = !showExamSchedule),
+      child: SizedBox(
+        width: 180,
+        height: 150,
+        child: NeonContainer(
+          borderColor: isDark ? AppTheme.neonBlue : AppTheme.primaryBlue,
+          padding: const EdgeInsets.all(12),
+          child: AnimatedSwitcher(
+            duration: const Duration(milliseconds: 300),
+            child: showExamSchedule
+                ? Column(
+                    key: const ValueKey('exam'),
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                        Icon(Icons.event,
+                            size: 40,
+                            color: isDark
+                                ? AppTheme.neonBlue
+                                : AppTheme.primaryBlue),
+                        const SizedBox(height: 10),
+                        const FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: Text('Exam Schedule',
+                                style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 16))),
+                        const SizedBox(height: 4),
+                        FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: Text(
+                              _getNextExamInfo(),
+                              style: TextStyle(
+                                  fontSize: 14,
+                                  color: isDark
+                                      ? Colors.white70
+                                      : Colors.grey[600]),
+                              textAlign: TextAlign.center,
+                            )),
+                      ])
+                : Column(
+                    key: const ValueKey('gpa'),
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                        Icon(Icons.grade,
+                            size: 40,
+                            color: isDark ? AppTheme.neonBlue : Colors.orange),
+                        const SizedBox(height: 10),
+                        const FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: Text('CGPA',
+                                style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 16))),
+                        FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: Text('$cgpa / 10',
+                                style: TextStyle(
+                                    fontSize: 14,
+                                    color: isDark
+                                        ? Colors.white70
+                                        : Colors.grey[600]))),
+                      ]),
+          ),
+        ),
+      ),
+    );
   }
 // --- End Build methods ---
-
 } // End _DashboardScreenState
