@@ -1,9 +1,34 @@
+import 'dart:async'; // Required for TimeoutException
 import 'dart:convert';
+import 'dart:io';   // Required for SocketException
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'package:provider/provider.dart'; // ⭐️ --- ADD THIS IMPORT ---
 import 'package:url_launcher/url_launcher.dart';
 
+// Assuming ApiEndpoints class is in this file or imported correctly.
+// If it's in another file, make sure the import path is correct:
 import '../../services/ApiEndpoints.dart';
+
+// ⭐️ --- ADD THIS IMPORT (path must be correct for your project) ---
+import '../../models/theme_model.dart';
+
+
+/*
+// Your ApiEndpoints class (for reference)
+class ApiEndpoints {
+  final String baseUrl;
+  ApiEndpoints(this.baseUrl);
+
+  // ... (all your other endpoints) ...
+
+  // This is the endpoint we will now use
+  String get materials => '$baseUrl/materials';
+
+  // This endpoint is no longer used by this file
+  String get pyqBot => '$baseUrl/chatbot';
+}
+*/
 
 class MaterialBot extends StatefulWidget {
   final String url;
@@ -18,7 +43,6 @@ class MaterialBot extends StatefulWidget {
   });
 
   @override
-  // --- RENAMED State Class ---
   State<MaterialBot> createState() => _MaterialBotState();
 }
 
@@ -37,26 +61,30 @@ class ChatMessage {
       : time = time ?? DateTime.now();
 }
 
-// --- RENAMED State Class ---
 class _MaterialBotState extends State<MaterialBot> {
   final TextEditingController _controller = TextEditingController();
   final ScrollController _scroll = ScrollController();
   final List<ChatMessage> _messages = [];
-  bool _loading = false;
+  bool _loading = false; // This is now for the *initial list download*
 
   late final ApiEndpoints _api;
-  String? _lastQuery;
-  Uri? _lastUri;
   String? _lastError;
+
+  // --- NEW: This will store all materials from the server ---
+  List<Map<String, dynamic>> _allMaterials = [];
 
   @override
   void initState() {
     super.initState();
     _api = ApiEndpoints(widget.url);
-    // --- Updated Welcome Message ---
+
+    // Add welcome message immediately
     _messages.add(ChatMessage(
-        text: 'Welcome to the Material Bot. Ask for course materials (e.g. "os" or "java")',
+        text: 'Welcome! Loading materials list... (e.g. "cse3" , "ict3")',
         fromUser: false));
+
+    // --- NEW: Fetch the entire list on startup ---
+    _fetchMaterialList();
   }
 
   @override
@@ -66,105 +94,110 @@ class _MaterialBotState extends State<MaterialBot> {
     super.dispose();
   }
 
-  Future<void> _sendQuery({String? forcedQuery}) async {
-    final query = (forcedQuery ?? _controller.text).trim();
-    if (query.isEmpty || _loading) return;
-
-    final userMsg = ChatMessage(text: query, fromUser: true);
+  // --- NEW: Fetches the entire material list once ---
+  Future<void> _fetchMaterialList() async {
     setState(() {
-      _messages.insert(0, userMsg);
-      if (forcedQuery == null) _controller.clear();
-      _loading = true;
+      _loading = true; // Show loading bar
       _lastError = null;
     });
-    _scrollToTop();
 
     try {
-      // --- MODIFIED: Always use chatbot endpoint ---
-      // The backend /chatbot route now handles subject matching
-      final base = _api.chatbot.replaceAll(RegExp(r'/$'), '');
-      final endpoint = base;
-      final uri = Uri.parse(endpoint);
-      // --- END OF MODIFICATION ---
-
-      // save for retry
-      _lastQuery = query;
-      _lastUri = uri;
-
+      // Use the new endpoint and a GET request
+      final uri = Uri.parse(_api.materials);
       final headers = {
         'Content-Type': 'application/json',
         if (widget.token.isNotEmpty) 'Authorization': 'Bearer ${widget.token}',
       };
 
-      // --- MODIFIED: Send 'message' key instead of 'query' ---
-      final body = jsonEncode({
-        'message': query, // Match the backend's req.body.message
-        if (widget.regNo != null) 'regNo': widget.regNo,
-        'token': widget.token,
-      });
-      // --- END OF MODIFICATION ---
+      final res = await http.get(uri, headers: headers).timeout(const Duration(seconds: 20));
 
-      final res = await http.post(uri, headers: headers, body: body).timeout(const Duration(seconds: 20));
-
-      if (res.statusCode != 200) {
-        final err = 'Server error: ${res.statusCode}';
-        setState(() {
-          _lastError = err;
-          _messages.insert(0, ChatMessage(text: err, fromUser: false));
-        });
-        return;
-      }
-
-      // --- REPLACED: Simplified response parsing logic ---
-      // This logic is now designed to parse the exact response from your backend snippet
-      final decoded = jsonDecode(res.body);
-      String replyText;
-      List<MaterialItem> materials = [];
-
-      if (decoded is Map && decoded['reply'] != null) {
-        replyText = decoded['reply'].toString();
-        // Extract all URLs from the reply text
-        final urls = _extractAllUrls(replyText);
-
-        for (final link in urls) {
-          materials.add(MaterialItem(title: 'Open Material for "$query"', link: link));
-        }
+      if (res.statusCode == 200) {
+        // The server sends a direct JSON list
+        final List<dynamic> data = jsonDecode(res.body);
+        _allMaterials = data.map((item) => Map<String, dynamic>.from(item)).toList();
+        // --- END ---
       } else {
-        // Fallback for an unexpected response or error message
-        replyText = decoded['reply']?.toString() ?? decoded['message']?.toString() ?? decoded.toString();
+        throw Exception('Server error: ${res.statusCode}');
+      }
+    } catch (e) {
+      String err;
+      if (e is TimeoutException) {
+        err = 'Failed to load materials: Connection timed out.';
+      } else if (e is SocketException) {
+        err = 'Network Error. Please check your internet connection.';
+      } else {
+        err = 'Failed to load materials list: $e';
       }
 
-      // Add one chat message that contains BOTH the text and the materials
-      setState(() {
-        _messages.insert(0, ChatMessage(
-          text: replyText,
-          fromUser: false,
-          materials: materials.isNotEmpty ? materials : null,
-        ));
-      });
-      // --- END OF REPLACEMENT ---
-
-    } catch (e) {
-      final err = 'Network / timeout error: ${e.toString()}';
       setState(() {
         _lastError = err;
         _messages.insert(0, ChatMessage(text: err, fromUser: false));
       });
     } finally {
-      setState(() => _loading = false);
+      setState(() => _loading = false); // Hide loading bar
       _scrollToTop();
     }
   }
 
-  // --- ADDED: Helper to extract all URLs ---
+  // --- MODIFIED: This now searches the LOCAL LIST ---
+  Future<void> _sendQuery({String? forcedQuery}) async {
+    final query = (forcedQuery ?? _controller.text).trim();
+    if (query.isEmpty) return;
+
+    final userMsg = ChatMessage(text: query, fromUser: true);
+    setState(() {
+      _messages.insert(0, userMsg);
+      if (forcedQuery == null) _controller.clear();
+      _lastError = null; // Clear any previous *load* error
+    });
+    _scrollToTop();
+
+    String replyText;
+    List<MaterialItem> materials = [];
+
+    // Check if the list has been loaded
+    if (_allMaterials.isEmpty && _lastError == null) {
+      replyText = 'Materials list is still loading. Please try again in a moment.';
+    } else if (_lastError != null) {
+      replyText = 'Materials list failed to load. Please pull to refresh or check connection.';
+    } else {
+      // Search the local list for an *exact* match, ignoring case
+      final userQuery = query.toLowerCase();
+
+      final match = _allMaterials.firstWhere(
+            (item) => item['dept']?.toString().toLowerCase() == userQuery,
+        orElse: () => {}, // Return empty map if not found
+      );
+
+      if (match.isNotEmpty && match['url'] != null) {
+        // --- Found a match ---
+        replyText = 'Here is your study material for "$query".';
+        materials.add(MaterialItem(
+          title: 'Open Material for "$query"',
+          link: match['url'],
+        ));
+      } else {
+        // --- No match found ---
+        replyText = 'Subject not found. Please check the spelling (e.g., "cse3", "ict3").';
+      }
+    }
+
+    // Add the bot's reply to the chat
+    setState(() {
+      _messages.insert(0, ChatMessage(
+        text: replyText,
+        fromUser: false,
+        materials: materials.isNotEmpty ? materials : null,
+      ));
+    });
+    _scrollToTop();
+  }
+
   List<String> _extractAllUrls(String text) {
-    // This regex finds URLs and stops at spaces, commas, or other delimiters
+    // This regex finds URLs and stops at spaces or common punctuation
     final matches = RegExp(r'(https?:\/\/[^\s<>,;"]+)').allMatches(text);
     return matches.map((m) => m.group(0)!).toList();
   }
-  // --- END OF ADDITION ---
-
-  // --- REMOVED: _extractFirstUrl (replaced by _extractAllUrls) ---
 
   void _scrollToTop() {
     if (_scroll.hasClients) {
@@ -173,30 +206,60 @@ class _MaterialBotState extends State<MaterialBot> {
   }
 
   Future<void> _openLink(String link) async {
-    final uri = Uri.tryParse(link);
+    final Uri? uri = Uri.tryParse(link);
     if (uri == null) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Invalid link')));
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Invalid link')),
+      );
       return;
     }
-    if (!await canLaunchUrl(uri)) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Cannot open link')));
-      return;
+
+    try {
+      final bool launched = await launchUrl(
+        uri,
+        mode: LaunchMode.externalApplication, // Opens in browser
+      );
+      if (!launched) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not open $link')),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to open link: $e')),
+      );
     }
-    await launchUrl(uri, mode: LaunchMode.externalApplication);
   }
 
+  // --- MODIFIED TO USE AppTheme ---
   Widget _buildMessageTile(ChatMessage m) {
+    // Access the theme provider
+    final theme = Provider.of<ThemeProvider>(context, listen: false);
+    final isDark = theme.isDarkMode;
     final isUser = m.fromUser;
-    final align = isUser ? MainAxisAlignment.end : MainAxisAlignment.start;
+
+    // Define colors based on HomeScreen's theme
+    // User message: primaryBlue / neonBlue
+    // Bot message: darkSurface / white (like a card)
     final bg = isUser
-        ? Theme.of(context).colorScheme.primary
-        : Theme.of(context).colorScheme.surfaceVariant;
+        ? (isDark ? AppTheme.neonBlue : AppTheme.primaryBlue)
+        : (isDark ? AppTheme.darkSurface : Colors.white);
+
+    // Text on accent color is white, text on surface is black/white
     final color = isUser
-        ? Theme.of(context).colorScheme.onPrimary
-        : Theme.of(context).colorScheme.onSurfaceVariant;
+        ? Colors.white
+        : (isDark ? Colors.white : Colors.black87);
+
+    // Link color on user message is white, on bot message is the accent color
     final linkColor = isUser
         ? Colors.white
-        : Theme.of(context).colorScheme.primary;
+        : (isDark ? AppTheme.neonBlue : AppTheme.primaryBlue);
+
+    // This is the variable you asked about:
+    final align = isUser ? MainAxisAlignment.end : MainAxisAlignment.start;
 
 
     return Container(
@@ -207,9 +270,20 @@ class _MaterialBotState extends State<MaterialBot> {
           Flexible(
             child: Container(
               padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
-              decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(12)),
+              // Apply card shadow to bot messages
+              decoration: BoxDecoration(
+                color: bg,
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: isUser ? null : [ // Only add shadow to bot messages
+                  BoxShadow(
+                    color: Colors.black.withOpacity(isDark ? 0.2 : 0.05),
+                    blurRadius: 10,
+                    offset: const Offset(0, 5),
+                  ),
+                ],
+              ),
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start, // Always start-align text
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(m.text, style: TextStyle(color: color, fontSize: 15)),
                   if (m.materials != null && m.materials!.isNotEmpty) const SizedBox(height: 8),
@@ -251,41 +325,66 @@ class _MaterialBotState extends State<MaterialBot> {
       ),
     );
   }
+  // --- END OF MODIFICATION ---
 
+
+  // --- MODIFIED: _retryLast now retries the LIST FETCH ---
   Future<void> _retryLast() async {
-    if (_lastUri == null || _lastQuery == null) return;
-    await _sendQuery(forcedQuery: _lastQuery);
+    // The only action that can fail with a network error is fetching the list.
+    // So, we retry that.
+    await _fetchMaterialList();
   }
 
+  // --- MODIFIED TO USE AppTheme ---
   @override
-  Widget build(BuildContextCtxt) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final bg = isDark ? const Color(0xFF071226) : const Color(0xFFF7FAFF);
-    final inputFill = isDark ? Colors.grey[850] : Colors.white;
+  Widget build(BuildContext context) {
+    // Access the theme provider
+    final theme = Provider.of<ThemeProvider>(context);
+    final isDark = theme.isDarkMode;
+
+    // Define colors based on HomeScreen's theme
+    final bg = isDark ? AppTheme.darkBackground : Colors.grey[100];
+    final inputFill = isDark ? AppTheme.darkSurface : Colors.white;
+    final appBarBg = isDark ? AppTheme.darkSurface : AppTheme.primaryBlue;
+    final appBarFg = Colors.white;
+    final fabBg = isDark ? AppTheme.neonBlue : AppTheme.primaryBlue;
+    final errorBg = isDark ? Colors.red.shade900.withOpacity(0.8) : Colors.red.shade100;
+    final errorFg = isDark ? Colors.red.shade100 : Colors.red.shade900;
 
     return Scaffold(
       appBar: AppBar(
-        // --- Updated AppBar Title ---
         title: const Text('Material Bot'),
         centerTitle: true,
         elevation: 0,
-        backgroundColor: bg,
-        foregroundColor: Theme.of(context).colorScheme.onSurface,
+        backgroundColor: appBarBg,     // MODIFIED
+        foregroundColor: appBarFg,   // MODIFIED
       ),
-      backgroundColor: bg,
+      backgroundColor: bg, // MODIFIED
       body: SafeArea(
         child: Column(
           children: [
             // error bar with retry
             if (_lastError != null)
               Material(
-                color: Colors.red.shade50,
+                color: errorBg, // MODIFIED
                 child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                   child: Row(
                     children: [
-                      Expanded(child: Text(_lastError!, style: const TextStyle(color: Colors.red))),
-                      TextButton.icon(onPressed: _retryLast, icon: const Icon(Icons.refresh), label: const Text('Retry')),
+                      Expanded(
+                        child: Text(
+                            _lastError!,
+                            style: TextStyle(color: errorFg) // MODIFIED
+                        ),
+                      ),
+                      TextButton.icon(
+                          onPressed: _retryLast,
+                          icon: Icon(Icons.refresh, color: errorFg), // MODIFIED
+                          label: Text(
+                              'Retry',
+                              style: TextStyle(color: errorFg) // MODIFIED
+                          )
+                      ),
                     ],
                   ),
                 ),
@@ -301,6 +400,7 @@ class _MaterialBotState extends State<MaterialBot> {
                 ),
               ),
             ),
+            // This now only shows on the initial load
             if (_loading) const LinearProgressIndicator(minHeight: 3),
             Padding(
               padding: const EdgeInsets.fromLTRB(12, 8, 12, 14),
@@ -309,11 +409,11 @@ class _MaterialBotState extends State<MaterialBot> {
                   Expanded(
                     child: TextField(
                       controller: _controller,
-                      textCapitalization: TextCapitalization.words,
+                      textCapitalization: TextCapitalization.none,
                       decoration: InputDecoration(
-                        hintText: 'Enter subject (e.g. OS)',
+                        hintText: 'Enter subject (e.g. cse3)',
                         filled: true,
-                        fillColor: inputFill,
+                        fillColor: inputFill, // MODIFIED
                         border: const OutlineInputBorder(
                             borderRadius: BorderRadius.all(Radius.circular(24)),
                             borderSide: BorderSide.none
@@ -327,6 +427,8 @@ class _MaterialBotState extends State<MaterialBot> {
                   FloatingActionButton(
                     mini: true,
                     onPressed: _sendQuery,
+                    backgroundColor: fabBg, // MODIFIED
+                    foregroundColor: Colors.white, // ADDED
                     child: const Icon(Icons.search),
                   )
                 ],
