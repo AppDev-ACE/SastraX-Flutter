@@ -118,67 +118,67 @@ class _PaymentHistoryScreenState extends State<PaymentHistoryScreen> {
       backgroundColor: Colors.grey[100],
       body: SafeArea(
         child: LayoutBuilder(
-          builder: (context, constraints) {
-            return Padding(
-              padding: const EdgeInsets.only(top: 10, bottom: 15),
-              child: Column(
-                children: [
-                  Container(
-                    margin: const EdgeInsets.symmetric(horizontal: 18),
-                    padding: const EdgeInsets.all(18),
-                    decoration: BoxDecoration(
-                      color: accent,
-                      borderRadius: BorderRadius.circular(18),
-                      boxShadow: [BoxShadow(color: accent.withOpacity(0.06), blurRadius: 10, offset: Offset(0, 4))]
-                    ),
-                    child: Center(
-                      child: FittedBox(
-                        child: Text(
-                          "Total Collected : Rs. ${_totalCollected.toStringAsFixed(2)}",
-                          style: const TextStyle(fontSize: 21, fontWeight: FontWeight.bold, color: Colors.white),
+            builder: (context, constraints) {
+              return Padding(
+                padding: const EdgeInsets.only(top: 10, bottom: 15),
+                child: Column(
+                  children: [
+                    Container(
+                      margin: const EdgeInsets.symmetric(horizontal: 18),
+                      padding: const EdgeInsets.all(18),
+                      decoration: BoxDecoration(
+                          color: accent,
+                          borderRadius: BorderRadius.circular(18),
+                          boxShadow: [BoxShadow(color: accent.withOpacity(0.06), blurRadius: 10, offset: Offset(0, 4))]
+                      ),
+                      child: Center(
+                        child: FittedBox(
+                          child: Text(
+                            "Total Collected : Rs. ${_totalCollected.toStringAsFixed(2)}",
+                            style: const TextStyle(fontSize: 21, fontWeight: FontWeight.bold, color: Colors.white),
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 16),
-                  Expanded(
-  child: _paymentItems.isEmpty
-      ? Center(child: Text('No payment history found.', style: TextStyle(color: accent, fontSize: 16, fontWeight: FontWeight.w600)))
-      : SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: ConstrainedBox(
-            constraints: BoxConstraints(minWidth: constraints.maxWidth),
-            child: SingleChildScrollView(  // Add vertical scrolling here
-              scrollDirection: Axis.vertical,
-              child: DataTable(
-                columnSpacing: 20,
-                headingRowColor: MaterialStateColor.resolveWith((states) => accent.withOpacity(0.16)),
-                columns: const [
-                  DataColumn(label: Text('Semester', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16))),
-                  DataColumn(label: Text('Institution', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16))),
-                  DataColumn(label: Text('Particulars', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16))),
-                  DataColumn(label: Text('Collected Date', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16))),
-                  DataColumn(label: Text('Amount', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16))),
-                ],
-                rows: _paymentItems.map((item) {
-                  return DataRow(cells: [
-                    DataCell(Text(item["semester"] ?? "", style: TextStyle(fontSize: 16, color: accent, fontWeight: FontWeight.bold))),
-                    DataCell(Text(item["institution"] ?? "", style: TextStyle(fontSize: 15))),
-                    DataCell(Text(item["particulars"] ?? "", style: TextStyle(fontSize: 15))),
-                    DataCell(Text(item["collectedDate"] ?? "", style: TextStyle(fontSize: 15))),
-                    DataCell(Text("Rs. ${item["amountCollected"] ?? ""}", style: TextStyle(fontWeight: FontWeight.w600, color: Colors.green.shade800, fontSize: 16))),
-                  ]);
-                }).toList(),
-              ),
-            ),
-          ),
-        ),
-),
+                    const SizedBox(height: 16),
+                    Expanded(
+                      child: _paymentItems.isEmpty
+                          ? Center(child: Text('No payment history found.', style: TextStyle(color: accent, fontSize: 16, fontWeight: FontWeight.w600)))
+                          : SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: ConstrainedBox(
+                          constraints: BoxConstraints(minWidth: constraints.maxWidth),
+                          child: SingleChildScrollView(  // Add vertical scrolling here
+                            scrollDirection: Axis.vertical,
+                            child: DataTable(
+                              columnSpacing: 20,
+                              headingRowColor: MaterialStateColor.resolveWith((states) => accent.withOpacity(0.16)),
+                              columns: const [
+                                DataColumn(label: Text('Semester', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16))),
+                                DataColumn(label: Text('Institution', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16))),
+                                DataColumn(label: Text('Particulars', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16))),
+                                DataColumn(label: Text('Collected Date', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16))),
+                                DataColumn(label: Text('Amount', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16))),
+                              ],
+                              rows: _paymentItems.map((item) {
+                                return DataRow(cells: [
+                                  DataCell(Text(item["semester"] ?? "", style: TextStyle(fontSize: 16, color: accent, fontWeight: FontWeight.bold))),
+                                  DataCell(Text(item["institution"] ?? "", style: TextStyle(fontSize: 15))),
+                                  DataCell(Text(item["particulars"] ?? "", style: TextStyle(fontSize: 15))),
+                                  DataCell(Text(item["collectedDate"] ?? "", style: TextStyle(fontSize: 15))),
+                                  DataCell(Text("Rs. ${item["amountCollected"] ?? ""}", style: TextStyle(fontWeight: FontWeight.w600, color: Colors.green.shade800, fontSize: 16))),
+                                ]);
+                              }).toList(),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
 
-                ],
-              ),
-            );
-          }
+                  ],
+                ),
+              );
+            }
         ),
       ),
     );

@@ -1072,8 +1072,6 @@ class _SgpaCalculatorWidgetState extends State<SgpaCalculatorWidget> {
   void _updateSubject(int index, {double? newCredit, String? newGrade}) {
     if (mounted) {
       setState(() {
-        // We no longer update credits, so this line is removed:
-        // if (newCredit != null) _subjects[index]['credits'] = newCredit;
         if (newGrade != null) _subjects[index]['grade'] = newGrade;
       });
     }
@@ -1124,8 +1122,7 @@ class _SgpaCalculatorWidgetState extends State<SgpaCalculatorWidget> {
         ),
       );
     }
-
-    // ⭐️ Main Calculator UI
+    
     return Container(
       decoration: BoxDecoration(
         color: themeProvider.cardBackgroundColor,

@@ -91,11 +91,8 @@ class _InternalsPageState extends State<InternalsPage> {
   /// Fetches data specifically from the API. Used for initial load failure or refresh.
   Future<void> _fetchFromApi() async {
     if (!mounted) return Future.value();
-    // Prevent re-fetch if already loading (e.g., from initState)
-    if (_isLoading && _ciaMarksData == null) {
-      print("InternalsPage: Initial fetch already in progress.");
-      return Future.value();
-    }
+
+    // This was the fix from before: removing the block that prevented initial fetch.
 
     print("InternalsPage: Starting _fetchFromApi...");
     setState(() {
@@ -166,7 +163,7 @@ class _InternalsPageState extends State<InternalsPage> {
     return markDouble.round(); // Usually whole numbers like 20 or 50
   }
 
-  /// ✅ MODIFIED: Transforms API data, now includes Assignment mark.
+  /// Transforms API data, now includes Assignment mark.
   List<Map<String, dynamic>> _processMarksData(List<dynamic>? rawMarks) {
     if (rawMarks == null || rawMarks.isEmpty) { return []; }
 
@@ -187,13 +184,13 @@ class _InternalsPageState extends State<InternalsPage> {
       groupedSubjects.putIfAbsent( subjectCode, () => {
         "name": subjectName,
         "code": subjectCode,
-        "maxInternals": 50, // ✅ Max internals is now 50
+        "maxInternals": 50,
         "maxEndSem": 100,
         "cia1": null, "cia1_max": 20, // Default to 20 if not provided
         "cia2": null, "cia2_max": 20,
         "cia3": null, "cia3_max": 20,
-        "assignment": null, // ✅ Add assignment field
-        "assignment_max": 10, // ✅ Default to 10 if not provided
+        "assignment": null,
+        "assignment_max": 10, // Default to 10 if not provided
       },
       );
 
@@ -209,7 +206,6 @@ class _InternalsPageState extends State<InternalsPage> {
         groupedSubjects[subjectCode]!["cia1"] = mark;
         if (maxMark != null) groupedSubjects[subjectCode]!["cia1_max"] = maxMark;
       }
-      // ✅ Store Assignment mark and its max value
       else if (lowerComponent.contains("assignment")) {
         groupedSubjects[subjectCode]!["assignment"] = mark;
         if (maxMark != null) groupedSubjects[subjectCode]!["assignment_max"] = maxMark;
@@ -219,9 +215,7 @@ class _InternalsPageState extends State<InternalsPage> {
   }
 
 
-  /// ✅ NEW: Scales a mark to a target max value.
-  /// Example: scaleMark(18, 20, 20) -> 18.0
-  /// Example: scaleMark(45, 50, 20) -> 18.0
+  /// Scales a mark to a target max value.
   double _scaleMark(int? mark, int? maxMark, double targetMax) {
     if (mark == null || maxMark == null || maxMark == 0) return 0.0;
     double scaled = (mark.toDouble() / maxMark.toDouble()) * targetMax;
@@ -229,7 +223,7 @@ class _InternalsPageState extends State<InternalsPage> {
   }
 
 
-  /// ✅ MODIFIED: Calculates total internals out of 50.
+  /// Calculates total internals out of 50.
   Map<String, double> calculateInternalsOutOf50({
     int? cia1, int? cia1Max,
     int? cia2, int? cia2Max,
@@ -337,7 +331,7 @@ class _InternalsPageState extends State<InternalsPage> {
               final assignment = subject["assignment"] as int?;
               final assignmentMax = subject["assignment_max"] as int?;
 
-              // ✅ Call the new calculation function
+              // Call the new calculation function
               final internalMarks = calculateInternalsOutOf50(
                   cia1: cia1, cia1Max: cia1Max,
                   cia2: cia2, cia2Max: cia2Max,
@@ -359,20 +353,27 @@ class _InternalsPageState extends State<InternalsPage> {
                 ),
                 child: InkWell(
                   borderRadius: BorderRadius.circular(14),
+                  // ✅ --- THIS IS THE FIX from the previous step ---
                   onTap: () {
                     Navigator.push( context, MaterialPageRoute( builder: (_) => SubjectDetailPage(
                       subjectName: subject["name"],
                       subjectCode: subject["code"],
-                      maxInternals: 50, // ✅ Pass 50 as maxInternals
+                      maxInternals: 50, // This is 50
                       maxEndSem: subject["maxEndSem"],
-                      cia1: cia1?.toDouble(),
-                      cia2: cia2?.toDouble(),
-                      cia3: cia3?.toDouble(),
-                      // You might want to pass assignment marks too
-                      // assignmentMark: assignment?.toDouble(),
-                      // assignmentMaxMark: assignmentMax?.toDouble(),
+
+                      // Pass all the raw data
+                      cia1: cia1,
+                      cia1Max: cia1Max,
+                      cia2: cia2,
+                      cia2Max: cia2Max,
+                      cia3: cia3,
+                      cia3Max: cia3Max,
+                      assignment: assignment,
+                      assignmentMax: assignmentMax,
+
                     ), ), );
                   },
+                  // ✅ --- END FIX ---
                   child: Padding(
                     padding: const EdgeInsets.symmetric( vertical: 16, horizontal: 16),
                     child: Column(
@@ -399,7 +400,7 @@ class _InternalsPageState extends State<InternalsPage> {
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
                             Text( "Current Internals", style: TextStyle( fontWeight: FontWeight.w600, color: isDark ? Colors.white : Colors.black87, ), ),
-                            Text( // ✅ Show total out of 50
+                            Text(
                               "${totalOutOf50.toStringAsFixed(1)}/50",
                               style: TextStyle( fontWeight: FontWeight.w600, color: isDark ? Colors.white : Colors.black87, ), ),
                           ],
@@ -409,14 +410,12 @@ class _InternalsPageState extends State<InternalsPage> {
                           borderRadius: BorderRadius.circular(8),
                           child: LinearProgressIndicator(
                             minHeight: 10,
-                            // ✅ Value based on total out of 50
                             value: (totalOutOf50 / 50.0).clamp(0.0, 1.0),
                             backgroundColor: isDark ? AppTheme.darkBackground.withOpacity(0.7) : AppTheme.primaryBlue.withOpacity(0.1),
                             valueColor: AlwaysStoppedAnimation<Color>(primaryColor),
                           ),
                         ),
                         const SizedBox(height: 8),
-                        // ✅ Updated Text: Show breakdown
                         Text(
                           "CIAs: ${bestTwoCIAs.toStringAsFixed(1)}/40  •  Assignment: ${assignmentScaled.toStringAsFixed(1)}/10",
                           style: TextStyle( color: isDark ? Colors.white70 : Colors.grey[700], fontSize: 13),

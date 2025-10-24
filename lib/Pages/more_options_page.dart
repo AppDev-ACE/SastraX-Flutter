@@ -7,7 +7,7 @@ import 'about_team_screen.dart';
 import 'club_hub.dart';
 import 'credits_page.dart';
 import 'material_bot/material_bot.dart';
-import 'material_bot/study_material_bot.dart';
+import 'material_bot/pyq_bot.dart';
 import 'prof_cabin_screen.dart';
 import 'paymenthistory.dart';
 class MoreOptionsScreen extends StatelessWidget {

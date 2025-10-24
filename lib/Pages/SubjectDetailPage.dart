@@ -9,11 +9,18 @@ import '../models/theme_model.dart'; // <--- UPDATE THIS PATH AS NEEDED
 class SubjectDetailPage extends StatefulWidget {
   final String subjectName;
   final String subjectCode;
-  final int maxInternals;
+  final int maxInternals; // This will be 50
   final int maxEndSem;
-  final double? cia1;
-  final double? cia2;
-  final double? cia3;
+
+  // ✅ Updated properties to accept all data
+  final int? cia1;
+  final int? cia1Max;
+  final int? cia2;
+  final int? cia2Max;
+  final int? cia3;
+  final int? cia3Max;
+  final int? assignment;
+  final int? assignmentMax;
 
   const SubjectDetailPage({
     Key? key,
@@ -22,8 +29,13 @@ class SubjectDetailPage extends StatefulWidget {
     required this.maxInternals,
     required this.maxEndSem,
     this.cia1,
+    this.cia1Max,
     this.cia2,
+    this.cia2Max,
     this.cia3,
+    this.cia3Max,
+    this.assignment,
+    this.assignmentMax,
   }) : super(key: key);
 
   @override
@@ -31,16 +43,17 @@ class SubjectDetailPage extends StatefulWidget {
 }
 
 class _SubjectDetailPageState extends State<SubjectDetailPage> {
-  // Controllers for internals predictor
-  final TextEditingController targetController = TextEditingController();
-
   // Controllers for end-sem predictor
   final TextEditingController expectedInternalsController =
   TextEditingController();
   String selectedGrade = "A";
   String endSemResult = "";
 
-  String internalsPredictorResult = "";
+  // This will hold the calculated marks
+  late final Map<String, double> internalMarks;
+  double totalOutOf50 = 0.0;
+  double bestTwoCIAs = 0.0;
+  double assignmentScaled = 0.0;
 
   // ... (gradeLookupTable remains the same) ...
   static const Map<int, Map<String, int?>> gradeLookupTable = {
@@ -99,45 +112,79 @@ class _SubjectDetailPageState extends State<SubjectDetailPage> {
 
   final List<String> gradeKeys = ["S", "A+", "A", "B", "C", "D"];
 
-  // <-- FIX 1: This function must accept a double, not an int
-  double _to20(double markOutOf50) => markOutOf50 * 0.4;
-
-  // <-- FIX 2: This function must accept double? to match the widget's properties
-  double computeBestTwoOutOf40(double? cia1, double? cia2, double? cia3) {
-    final List<double> list = [];
-    if (cia1 != null) list.add(_to20(cia1));
-    if (cia2 != null) list.add(_to20(cia2));
-    if (cia3 != null) list.add(_to20(cia3));
-    if (list.isEmpty) return 0.0;
-    list.sort();
-    if (list.length == 1) return list[0];
-    return list.sublist(max(0, list.length - 2)).reduce((a, b) => a + b);
+  // ✅ --- COPIED FROM INTERNALS_PAGE ---
+  /// Scales a mark to a target max value.
+  double _scaleMark(int? mark, int? maxMark, double targetMax) {
+    if (mark == null || maxMark == null || maxMark == 0) return 0.0;
+    double scaled = (mark.toDouble() / maxMark.toDouble()) * targetMax;
+    return scaled.clamp(0.0, targetMax); // Ensure it doesn't exceed target
   }
 
-  double currentInternalsOutOf50() {
-    // This call is now correct because computeBestTwoOutOf40 accepts double?
-    final bestTwo =
-    computeBestTwoOutOf40(widget.cia1, widget.cia2, widget.cia3);
-    return bestTwo + 10.0;
+  /// Calculates total internals out of 50.
+  Map<String, double> calculateInternalsOutOf50({
+    int? cia1, int? cia1Max,
+    int? cia2, int? cia2Max,
+    int? cia3, int? cia3Max,
+    int? assignment, int? assignmentMax
+  }) {
+    // Scale all CIAs to 20
+    final List<double> ciaScoresOutOf20 = [];
+    if (cia1 != null) ciaScoresOutOf20.add(_scaleMark(cia1, cia1Max ?? 20, 20.0));
+    if (cia2 != null) ciaScoresOutOf20.add(_scaleMark(cia2, cia2Max ?? 20, 20.0));
+    if (cia3 != null) ciaScoresOutOf20.add(_scaleMark(cia3, cia3Max ?? 20, 20.0));
+
+    // Sort CIAs descending to find best two
+    ciaScoresOutOf20.sort((a, b) => b.compareTo(a));
+
+    double bestTwoCIAsOutOf40 = 0.0;
+    if (ciaScoresOutOf20.isNotEmpty) bestTwoCIAsOutOf40 += ciaScoresOutOf20[0]; // Add best
+    if (ciaScoresOutOf20.length > 1) bestTwoCIAsOutOf40 += ciaScoresOutOf20[1]; // Add second best
+
+    // Scale assignment mark to be out of 10
+    double assignmentOutOf10 = _scaleMark(assignment, assignmentMax ?? 10, 10.0);
+
+    double totalOutOf50 = bestTwoCIAsOutOf40 + assignmentOutOf10;
+
+    return {
+      'total': totalOutOf50.clamp(0.0, 50.0), // Ensure total doesn't exceed 50
+      'assignment_scaled': assignmentOutOf10,
+      'best_two_cias': bestTwoCIAsOutOf40,
+    };
   }
+  // ✅ --- END COPIED LOGIC ---
 
   @override
   void initState() {
     super.initState();
-    targetController.text = "40";
-    expectedInternalsController.text =
-        currentInternalsOutOf50().toStringAsFixed(1);
+    // Calculate marks as soon as page loads
+    internalMarks = calculateInternalsOutOf50(
+      cia1: widget.cia1,
+      cia1Max: widget.cia1Max,
+      cia2: widget.cia2,
+      cia2Max: widget.cia2Max,
+      cia3: widget.cia3,
+      cia3Max: widget.cia3Max,
+      assignment: widget.assignment,
+      assignmentMax: widget.assignmentMax,
+    );
+
+    // Store calculated values
+    totalOutOf50 = internalMarks['total']!;
+    bestTwoCIAs = internalMarks['best_two_cias']!;
+    assignmentScaled = internalMarks['assignment_scaled']!;
+
+    // Set default text for the predictor
+    expectedInternalsController.text = totalOutOf50.toStringAsFixed(1);
   }
 
   @override
   void dispose() {
-    targetController.dispose();
     expectedInternalsController.dispose();
     super.dispose();
   }
 
-  // <-- FIX 3: This function must accept double? to match the widget's properties
-  Widget _ciaBox(String label, double? value, ThemeProvider theme) {
+  // ✅ Updated to accept int?
+  Widget _ciaBox(String label, int? value, ThemeProvider theme) {
     final isDark = theme.isDarkMode;
     final bool hasValue = value != null;
 
@@ -179,7 +226,6 @@ class _SubjectDetailPageState extends State<SubjectDetailPage> {
         borderRadius: BorderRadius.circular(10),
       ),
       child: Text(
-        // This logic works fine for double?
         value?.toString() ?? label,
         style: TextStyle(
           fontWeight: FontWeight.w700,
@@ -189,31 +235,6 @@ class _SubjectDetailPageState extends State<SubjectDetailPage> {
     );
   }
 
-  void calculateInternalsPrediction() {
-    final targetText = targetController.text.trim();
-    final int? targetInternal = int.tryParse(targetText);
-    if (targetInternal == null) {
-      setState(() {
-        internalsPredictorResult = "Enter a valid number";
-      });
-      return;
-    }
-
-    final current = currentInternalsOutOf50();
-    final diff = targetInternal - current;
-
-    setState(() {
-      if (diff <= 0) {
-        internalsPredictorResult =
-        "You already have ${current.toStringAsFixed(1)} /40. No extra marks needed!";
-      } else {
-        final diffOutOf50 = (diff / 0.4).round();
-        internalsPredictorResult =
-        "You need $diffOutOf50 more marks (out of 40) to reach $targetInternal /50.";
-      }
-    });
-  }
-
   // This function uses the gradeLookupTable
   void calculateEndSemNeeded() {
     final enteredInternalsText = expectedInternalsController.text.trim();
@@ -221,11 +242,12 @@ class _SubjectDetailPageState extends State<SubjectDetailPage> {
 
     if (enteredInternals == null) {
       setState(() {
-        endSemResult = "Enter valid internals (out of 40).";
+        endSemResult = "Enter valid internals (out of 50).";
       });
       return;
     }
 
+    // The key is already out of 50, so this is correct
     final int internalKey = enteredInternals.round().clamp(0, 50);
 
     // Check if the internal mark exists in our table
@@ -337,10 +359,7 @@ class _SubjectDetailPageState extends State<SubjectDetailPage> {
 
   @override
   Widget build(BuildContext context) {
-    // This call is now correct
-    final bestTwoOutOf40 =
-    computeBestTwoOutOf40(widget.cia1, widget.cia2, widget.cia3);
-    final internalOutOf50 = bestTwoOutOf40 + 10;
+    // Values are now calculated in initState
 
     return Consumer<ThemeProvider>(
       builder: (_, theme, __) {
@@ -408,8 +427,9 @@ class _SubjectDetailPageState extends State<SubjectDetailPage> {
                         Column(
                           crossAxisAlignment: CrossAxisAlignment.end,
                           children: [
+                            // ✅ FIXED: Show total out of 50
                             Text(
-                              "${internalOutOf50.toStringAsFixed(1)}/40",
+                              "${totalOutOf50.toStringAsFixed(1)}/50",
                               style: TextStyle(
                                 fontWeight: FontWeight.bold,
                                 fontSize: 16,
@@ -420,7 +440,8 @@ class _SubjectDetailPageState extends State<SubjectDetailPage> {
                             SizedBox(
                               width: 140,
                               child: LinearProgressIndicator(
-                                value: (bestTwoOutOf40 / 40).clamp(0.0, 1.0),
+                                // ✅ FIXED: Show progress out of 50
+                                value: (totalOutOf50 / 50.0).clamp(0.0, 1.0),
                                 minHeight: 8,
                                 backgroundColor: isDark
                                     ? AppTheme.darkBackground.withOpacity(0.7)
@@ -431,7 +452,13 @@ class _SubjectDetailPageState extends State<SubjectDetailPage> {
                                       : AppTheme.primaryBlue,
                                 ),
                               ),
-                            )
+                            ),
+                            const SizedBox(height: 6),
+                            // ✅ FIXED: Show correct breakdown
+                            Text(
+                              "CIAs: ${bestTwoCIAs.toStringAsFixed(1)}/40  •  Asg: ${assignmentScaled.toStringAsFixed(1)}/10",
+                              style: TextStyle( color: isDark ? Colors.white70 : Colors.grey[700], fontSize: 11),
+                            ),
                           ],
                         ),
                       ],
@@ -444,7 +471,7 @@ class _SubjectDetailPageState extends State<SubjectDetailPage> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    // These calls are now correct as _ciaBox accepts double?
+                    // ✅ FIXED: These now correctly pass the int? values
                     _ciaBox("CIA 1", widget.cia1, theme),
                     _ciaBox("CIA 2", widget.cia2, theme),
                     _ciaBox("CIA 3", widget.cia3, theme),
@@ -452,55 +479,8 @@ class _SubjectDetailPageState extends State<SubjectDetailPage> {
                 ),
                 const SizedBox(height: 20),
 
-                // Internals Predictor Card
-                Card(
-                  color: isDark ? AppTheme.darkSurface : Colors.white,
-                  elevation: isDark ? 0 : 2,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    side: isDark
-                        ? BorderSide(
-                      color: AppTheme.neonBlue.withOpacity(0.5),
-                      width: 1,
-                    )
-                        : BorderSide.none,
-                  ),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                        vertical: 14, horizontal: 14),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          "CIA Internals Predictor",
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            color:
-                            isDark ? AppTheme.neonBlue : Colors.black87,
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        _buildThemedTextField(
-                          theme: theme,
-                          controller: targetController,
-                          labelText: "Target internal (out of 40)",
-                        ),
-                        const SizedBox(height: 12),
-                        _buildThemedButton(
-                          theme: theme,
-                          onPressed: calculateInternalsPrediction,
-                          text: "Calculate",
-                        ),
-                        if (internalsPredictorResult.isNotEmpty) ...[
-                          const SizedBox(height: 12),
-                          _buildResultBox(internalsPredictorResult, theme),
-                        ],
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 20),
+                // ⛔️ REMOVED the old "CIA Internals Predictor" card
+                // It was confusing and based on old logic.
 
                 // End Sem Marks Predictor Card
                 Card(
@@ -534,9 +514,10 @@ class _SubjectDetailPageState extends State<SubjectDetailPage> {
                         _buildThemedTextField(
                           theme: theme,
                           controller: expectedInternalsController,
-                          labelText: "Expected Internals (out of 40)",
+                          // ✅ FIXED: Label is now "out of 50"
+                          labelText: "Expected Internals (out of 50)",
                           hintText:
-                          "Current: ${currentInternalsOutOf50().toStringAsFixed(1)}",
+                          "Current: ${totalOutOf50.toStringAsFixed(1)}",
                           keyboardType: const TextInputType.numberWithOptions(
                               decimal: true),
                         ),

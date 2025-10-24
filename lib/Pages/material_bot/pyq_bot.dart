@@ -1,9 +1,12 @@
+import 'dart:async'; // Required for TimeoutException
 import 'dart:convert';
+import 'dart:io';   // Required for SocketException
+
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:url_launcher/url_launcher.dart';
-import 'package:cloud_firestore/cloud_firestore.dart'; // REQUIRED FIRESTORE
-
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:sastra_x/Models/theme_model.dart';
 import '../../services/ApiEndpoints.dart';
 
 class StudyMaterialBot extends StatefulWidget {
@@ -82,7 +85,7 @@ class _StudyMaterialBotState extends State<StudyMaterialBot> {
   // ⬇️ ADDED: Helper for welcome message
   void _addWelcomeMessage() {
     _messages.add(ChatMessage(
-      text: "Hi! Ask me for PYQs or notes (e.g. 'os pyq')",
+      text: "Hi! Ask me for PYQs (e.g. 'os' , 'dbms')",
       fromUser: false,
     ));
   }
@@ -198,7 +201,7 @@ class _StudyMaterialBotState extends State<StudyMaterialBot> {
     _scrollToTop();
 
     try {
-      final uri = Uri.parse(_api.chatbot);
+      final uri = Uri.parse(_api.pyqBot);
 
       _lastQuery = query;
       _lastUri = uri;
@@ -216,7 +219,7 @@ class _StudyMaterialBotState extends State<StudyMaterialBot> {
 
       final res = await http
           .post(uri, headers: headers, body: body)
-          .timeout(const Duration(seconds: 20));
+          .timeout(const Duration(seconds: 20)); // Keep the 20-second timeout
 
       String? replyText;
       List<MaterialItem> materials = [];
@@ -254,12 +257,33 @@ class _StudyMaterialBotState extends State<StudyMaterialBot> {
       });
 
     } catch (e) {
-      final err = 'Wrong Subject Name ! Please enter a valid subject name';
+      // --- START: UPDATED CATCH BLOCK ---
+      String err;
+
+      if (e is TimeoutException) {
+        // This is the expected error when the server hangs (no subject match)
+        err = 'Wrong Subject Name! Please enter a valid subject name or check spelling.';
+      }
+      else if (e is SocketException || e is http.ClientException) {
+        // This handles network errors (no internet, server down)
+        err = 'Network Error. Please check your internet connection and try again.';
+      }
+      else {
+        // Handle any other unexpected errors
+        err = 'An unknown error occurred. Please try again.';
+        print('Unexpected Chat Error: $e'); // Log for debugging
+      }
+
       final errMessage = ChatMessage(text: err, fromUser: false);
+
+      // Save the error message to Firestore as well
+      await _saveChat(errMessage);
+
       setState(() {
-        _lastError = err;
+        _lastError = err; // Store the specific error
         _messages.insert(0, errMessage);
       });
+      // --- END: UPDATED CATCH BLOCK ---
 
     } finally {
       setState(() => _loading = false);
@@ -441,10 +465,10 @@ class _StudyMaterialBotState extends State<StudyMaterialBot> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Study Material Bot'),
+        title: const Text('PYQ Bot' , style: TextStyle(color: Colors.white),),
         centerTitle: true,
         elevation: 0,
-        backgroundColor: bg,
+        backgroundColor: AppTheme.primaryBlue,
         foregroundColor: Theme.of(context).colorScheme.onSurface,
       ),
       backgroundColor: bg,

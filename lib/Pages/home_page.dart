@@ -234,7 +234,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
   final List<String> _apiTriggerKeys = [
     'timetable',
     'subjectAttendance',
-    'bunk' // Added 'bunk' here as well, assuming it's a map
   ];
 
   @override

@@ -22,9 +22,8 @@ class ApiEndpoints {
   String get timetable => '$baseUrl/timetable';
 
 
-  String get pyq => '$baseUrl/pyq';
   String get facultyList => '$baseUrl/facultyList';
-  String get chatbot => '$baseUrl/chatbot';
+  String get chatbot => '$baseUrl/materials';
   String get semGrades => '$baseUrl/semGrades';
   String get internalMarks => '$baseUrl/ciaWiseInternalMarks';
   String get courseMap => '$baseUrl/courseMap';
@@ -40,4 +39,5 @@ class ApiEndpoints {
   String get pyqBot => '$baseUrl/chatbot';
   String get messMenuGirls => '$baseUrl/messMenuGirls';
   String get leaveHistory => '$baseUrl/leaveHistory';
+  String get materials => '$baseUrl/materials';
 }
