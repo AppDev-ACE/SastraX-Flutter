@@ -7,7 +7,7 @@ import 'day_attendance_detail.dart';
 
 class MonthlyView extends StatefulWidget {
   final Map<DateTime, Map<String, String>> attendanceData; // Expects {'hour1': 'present'}
-  final int currentStreak;
+  final int currentStreak; // <-- WE ARE KEEPING THIS so you don't get an error
   final String regNo;
   final List<dynamic> timetable; // Normalized timetable
   final List<dynamic> courseMap;
@@ -16,7 +16,7 @@ class MonthlyView extends StatefulWidget {
     Key? key,
     required this.regNo,
     required this.attendanceData,
-    required this.currentStreak,
+    required this.currentStreak, // <-- KEPT THIS
     required this.timetable,
     required this.courseMap,
   }) : super(key: key);
@@ -31,6 +31,41 @@ class _MonthlyViewState extends State<MonthlyView> {
   static const Color primaryBlue = Color(0xFF1e3a8a);
   static const Color lightBlue = Color(0xFF4A90E2);
   static const Color cyanColor = Color(0xFF00BCD4);
+
+  // --- ADDED: New Streak Calculation Logic ---
+  int _calculateCurrentStreak() {
+    int streak = 0;
+    if (widget.attendanceData.isEmpty) {
+      return 0;
+    }
+
+    // 1. Get all dates from the attendance data and sort them chronologically
+    final sortedDates = widget.attendanceData.keys.toList()..sort();
+
+    // 2. Iterate through each day
+    for (final date in sortedDates) {
+      final hourMap = widget.attendanceData[date]!;
+
+      // 3. Get all hour keys (e.g., 'hour1', 'hour2') and sort them
+      // This ensures we process classes in the correct order within the day
+      final sortedHours = hourMap.keys.toList()..sort();
+
+      // 4. Iterate through each hour (class) and apply streak logic
+      for (final hourKey in sortedHours) {
+        final status = hourMap[hourKey]?.toLowerCase();
+
+        if (status == 'present' || status == 'od') {
+          streak++; // Attended or OD, increment streak
+        } else if (status == 'absent') {
+          streak = 0; // Missed (bunked), reset streak
+        }
+        // Other statuses (like null or empty strings) are ignored
+      }
+    }
+
+    return streak;
+  }
+  // --- END ADDED SECTION ---
 
   Map<String, int> _calculateMonthStats() {
     int presentCount = 0;
@@ -94,6 +129,10 @@ class _MonthlyViewState extends State<MonthlyView> {
         : 0;
 
     final Color percentageColor = isDark ? lightBlue : primaryBlue;
+
+    // --- ADDED: Calculate the streak here using our new function ---
+    // We will use this variable and IGNORE 'widget.currentStreak'
+    final int calculatedStreak = _calculateCurrentStreak();
 
     return Column(
       children: [
@@ -257,8 +296,9 @@ class _MonthlyViewState extends State<MonthlyView> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceAround,
                 children: [
+                  // --- MODIFIED: Use our new 'calculatedStreak' variable ---
                   _buildAchievement('Current Streak',
-                      '${widget.currentStreak}', Icons.local_fire_department, Colors.orange, scale),
+                      '$calculatedStreak', Icons.local_fire_department, Colors.orange, scale),
                   _buildAchievement(
                       'Best Month', 'Sept', Icons.emoji_events, Colors.amber, scale),
                   _buildAchievement(

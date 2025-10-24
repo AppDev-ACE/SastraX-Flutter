@@ -189,28 +189,149 @@ class _SubjectDetailPageState extends State<SubjectDetailPage> {
     );
   }
 
+  /// ---------------------------
+  /// NEW: Corrected internals predictor logic
+  /// ---------------------------
   void calculateInternalsPrediction() {
+    // Target expected total internal (out of 50)
     final targetText = targetController.text.trim();
-    final int? targetInternal = int.tryParse(targetText);
-    if (targetInternal == null) {
+    final double? target = double.tryParse(targetText);
+    if (target == null) {
       setState(() {
-        internalsPredictorResult = "Enter a valid number";
+        internalsPredictorResult = "Enter a valid target number (out of 50).";
       });
       return;
     }
 
-    final current = currentInternalsOutOf50();
-    final diff = targetInternal - current;
+    // Clamp sensible target bounds
+    if (target < 0 || target > widget.maxInternals) {
+      setState(() {
+        internalsPredictorResult =
+        "Target must be between 0 and ${widget.maxInternals}.";
+      });
+      return;
+    }
+
+    // Existing CIA marks (may be null)
+    final double? cia1 = widget.cia1;
+    final double? cia2 = widget.cia2;
+    final double? cia3 = widget.cia3;
+
+    // For prediction we assume assignment = 10 (fixed)
+    const double assignmentMarks = 10.0;
+
+    // Helper to scale a CIA mark (out of 50) to out of 20 (×0.4)
+    double scaleTo20(double val) => val * 0.4;
+
+    // Count how many CIAs are available (non-null)
+    final List<double> existingCias = [];
+    if (cia1 != null) existingCias.add(cia1);
+    if (cia2 != null) existingCias.add(cia2);
+    if (cia3 != null) existingCias.add(cia3);
+
+    // Current best-two contribution (using available CIAs only)
+    final double currentBestTwoScaled = computeBestTwoOutOf40(cia1, cia2, cia3);
+
+    // Current total including assignment
+    final double currentTotal = currentBestTwoScaled + assignmentMarks;
+
+    // If all three CIAs are present -> you can't improve via CIAs (no future CIAs)
+    final int filledCount = existingCias.length;
+
+    if (filledCount == 3) {
+      // All CIAs done: check if target already met or impossible
+      if (currentTotal >= target) {
+        setState(() {
+          internalsPredictorResult =
+          "You already have ${currentTotal.toStringAsFixed(1)}/50 — target achieved.";
+        });
+      } else {
+        setState(() {
+          internalsPredictorResult =
+          "All CIAs are done. Can't increase internals further. Current: ${currentTotal.toStringAsFixed(1)}/50 — target ${target.toStringAsFixed(1)} is not achievable.";
+        });
+      }
+      return;
+    }
+
+    // If there are <3 CIAs present, we assume "next CIA" is one remaining exam we can score in.
+    // We'll compute the minimum required mark x (out of 50) in that next CIA so that
+    // best-two (after including x) scaled + assignment >= target.
+    //
+    // Approach:
+    // Let known marks be list known[], and x is unknown next CIA mark.
+    // Consider the three values [known..., x, 0] where missing ones are 0.
+    // The best two of the three after x will be chosen. We compute minimal x satisfying:
+    //   scaled(best1) + scaled(best2) + assignment >= target
+    //
+    // Implementation does a small algebraic solve by comparing x to existing knowns.
+
+    // Build a list of current values treating missing as 0 for comparison
+    final double a = cia1 ?? 0.0;
+    final double b = cia2 ?? 0.0;
+    final double c = cia3 ?? 0.0;
+
+    // Put known values in a List (including zeros for missing), but we will reason with counts
+    final List<double> all = [a, b, c];
+
+    // Sort existing known non-null marks descending for easier logic
+    final List<double> knownDesc = List.from(existingCias)..sort((x, y) => y.compareTo(x));
+
+    // Determine the two highest AFTER x is introduced.
+    // We'll reason by taking existing top values and seeing how x would fit.
+
+    // For algebra, let current top two (from existing knowns + zeros) be top1, top2 (descending).
+    final List<double> tempAll = List.from(all)..sort((x, y) => y.compareTo(x));
+    final double top1 = tempAll.length > 0 ? tempAll[0] : 0.0;
+    final double top2 = tempAll.length > 1 ? tempAll[1] : 0.0;
+
+    // Function to compute total (scaled) given a candidate x (CIA mark out of 50)
+    double totalWithX(double x) {
+      final List<double> picks = [a, b, c, x];
+      picks.sort((x, y) => y.compareTo(x)); // descending
+      final double sumTopTwoScaled = scaleTo20(picks[0]) + scaleTo20(picks[1]);
+      return sumTopTwoScaled + assignmentMarks;
+    }
+
+    // Quick check: if even with perfect next CIA (50) we can't reach target => impossible
+    final double bestPossibleWithPerfectNext = totalWithX(50.0);
+    if (bestPossibleWithPerfectNext < target) {
+      setState(() {
+        internalsPredictorResult =
+        "Even with 50/50 in the next CIA, max possible internals = ${bestPossibleWithPerfectNext.toStringAsFixed(1)}/50. Target ${target.toStringAsFixed(1)} is not achievable.";
+      });
+      return;
+    }
+
+    // If current total already meets target (even with missing CIAs treated as 0)
+    if (currentTotal >= target) {
+      setState(() {
+        internalsPredictorResult =
+        "You already have ${currentTotal.toStringAsFixed(1)}/50 — target achieved. No extra marks needed in the next CIA.";
+      });
+      return;
+    }
+
+    // Otherwise, find the minimal x in [0,50] such that totalWithX(x) >= target.
+    // We can solve analytically in most piecewise regions, but a simple numeric search is
+    // safe and straightforward (binary search) since domain is small [0..50].
+    double lo = 0.0;
+    double hi = 50.0;
+    double mid = hi;
+    for (int i = 0; i < 40; i++) {
+      mid = (lo + hi) / 2;
+      if (totalWithX(mid) >= target) {
+        hi = mid;
+      } else {
+        lo = mid;
+      }
+    }
+    final double required = hi;
 
     setState(() {
-      if (diff <= 0) {
-        internalsPredictorResult =
-        "You already have ${current.toStringAsFixed(1)} /40. No extra marks needed!";
-      } else {
-        final diffOutOf50 = (diff / 0.4).round();
-        internalsPredictorResult =
-        "You need $diffOutOf50 more marks (out of 40) to reach $targetInternal /50.";
-      }
+      final requiredRounded = required <= 0 ? 0 : required;
+      internalsPredictorResult =
+      "You need at least ${requiredRounded.toStringAsFixed(1)}/50 in the next CIA to reach ${target.toStringAsFixed(1)}/40 internal.";
     });
   }
 
@@ -409,7 +530,7 @@ class _SubjectDetailPageState extends State<SubjectDetailPage> {
                           crossAxisAlignment: CrossAxisAlignment.end,
                           children: [
                             Text(
-                              "${internalOutOf50.toStringAsFixed(1)}/40",
+                              "${internalOutOf50.toStringAsFixed(1)}/50",
                               style: TextStyle(
                                 fontWeight: FontWeight.bold,
                                 fontSize: 16,
