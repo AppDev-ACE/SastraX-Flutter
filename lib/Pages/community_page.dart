@@ -1,12 +1,11 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'post_model.dart';
 import 'compose_post_page.dart';
 import 'comments_page.dart';
-
 
 class CommunityPage extends StatefulWidget {
   const CommunityPage({super.key});
@@ -16,195 +15,171 @@ class CommunityPage extends StatefulWidget {
 }
 
 class _CommunityPageState extends State<CommunityPage> {
-  final List<Post> _posts = [
-    Post(
-      sender: 'Alice',
-      handle: '@alice_wonder',
-      avatarInitial: 'A',
-      message: 'Hey everyone! Anyone up for a study group tonight? We could cover the last two chapters of calculus.',
-      timestamp: DateTime.now().subtract(const Duration(minutes: 15)),
-      likes: 12,
-      reposts: 2,
-    ),
-    Post(
-      sender: 'Bob the Builder',
-      handle: '@bob_builds',
-      avatarInitial: 'B',
-      message: 'Just a heads-up, the library just got a new shipment of programming books. Saw some great titles on Flutter and Dart!',
-      timestamp: DateTime.now().subtract(const Duration(hours: 1)),
-      likes: 34,
-      reposts: 9,
-    ),
-  ];
+  final CollectionReference groupChat =
+  FirebaseFirestore.instance.collection("groupChat");
+
+  String? currentUserRegNo;
+  String? currentUserName;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUserData();
+  }
+
+  Future<void> _loadUserData() async {
+    final prefs = await SharedPreferences.getInstance();
+    currentUserRegNo = prefs.getString('regNo'); // stored earlier on login
+
+    if (currentUserRegNo != null) {
+      final doc = await FirebaseFirestore.instance
+          .collection('studentDetails')
+          .doc(currentUserRegNo)
+          .get();
+
+      final profileData = doc.data()?['profile'] ?? {};
+      currentUserName = profileData['name'];
+    }
+
+    setState(() {});
+  }
+
+  Future<void> _addPostToFirestore(Post post) async {
+    final docRef = groupChat.doc(); // auto-generated ID
+    await docRef.set({
+      'message': post.message,
+      'mediaURL': post.imageFile != null ? "TODO_upload_image_url" : null,
+      'senderID': currentUserRegNo ?? 'Unknown',
+      'senderName': currentUserName ?? 'Anonymous',
+      'timestamp': FieldValue.serverTimestamp(),
+      'replyCount': 0,
+      'replies': {},
+      'likes': 0,
+      'reposts': 0,
+      'isLiked': false,
+    });
+  }
 
   void _navigateToComposePage() async {
     final newPost = await Navigator.push<Post>(
       context,
       MaterialPageRoute(builder: (context) => const ComposePostPage()),
     );
-
     if (newPost != null) {
-      setState(() {
-        _posts.insert(0, newPost);
-      });
+      await _addPostToFirestore(newPost);
     }
   }
 
-  void _navigateToCommentsPage(Post post) async {
+  void _navigateToCommentsPage(String messageId, Map<String, dynamic> data) async {
     await Navigator.push(
       context,
-      MaterialPageRoute(builder: (context) => CommentsPage(post: post)),
-    );
-    // Refresh the state when returning to update comment/like counts
-    setState(() {});
-  }
-
-  void _toggleLike(Post post) {
-    setState(() {
-      if (post.isLiked) {
-        post.likes--;
-        post.isLiked = false;
-      } else {
-        post.likes++;
-        post.isLiked = true;
-      }
-    });
-  }
-
-  void _repost(Post post) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Repost?'),
-        content: const Text('This will share the post on your profile.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () {
-              setState(() {
-                post.reposts++;
-                final repost = Post(
-                  sender: 'You',
-                  handle: '@me',
-                  avatarInitial: 'Y',
-                  message: '',
-                  timestamp: DateTime.now(),
-                  originalPost: post,
-                );
-                _posts.insert(0, repost);
-              });
-              Navigator.pop(context);
-            },
-            child: const Text('Repost'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      floatingActionButton: FloatingActionButton(
-        onPressed: _navigateToComposePage,
-        child: const Icon(Icons.add),
-      ),
-      body: ListView.separated(
-        padding: const EdgeInsets.symmetric(vertical: 8),
-        itemCount: _posts.length,
-        itemBuilder: (context, index) {
-          return _buildPostCard(_posts[index]);
-        },
-        separatorBuilder: (context, index) => Divider(
-          height: 1,
-          color: Colors.grey.shade200,
+      MaterialPageRoute(
+        builder: (context) => CommentsPage(
+          postId: messageId,
+          postData: data,
         ),
       ),
     );
   }
 
-  Widget _buildPostCard(Post post) {
+  Future<void> _toggleLike(String messageId, bool isLiked, int likes) async {
+    await groupChat.doc(messageId).update({
+      'isLiked': !isLiked,
+      'likes': isLiked ? likes - 1 : likes + 1,
+    });
+  }
+
+  Future<void> _repost(String messageId, Map<String, dynamic> data) async {
+    final repost = {
+      'message': data['message'],
+      'mediaURL': data['mediaURL'],
+      'senderID': currentUserRegNo ?? "Unknown",
+      'senderName': currentUserName ?? "You",
+      'timestamp': FieldValue.serverTimestamp(),
+      'replyCount': 0,
+      'replies': {},
+      'likes': 0,
+      'reposts': 0,
+      'isLiked': false,
+      'originalPost': messageId,
+    };
+    await groupChat.add(repost);
+    await groupChat.doc(messageId).update({
+      'reposts': (data['reposts'] ?? 0) + 1,
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(automaticallyImplyLeading: false,  toolbarHeight: MediaQuery.of(context).size.height * 0.001,),
+      floatingActionButton: FloatingActionButton(
+        onPressed: _navigateToComposePage,
+        child: const Icon(Icons.add),
+      ),
+      body: StreamBuilder<QuerySnapshot>(
+        stream: groupChat.orderBy("timestamp", descending: true).snapshots(),
+        builder: (context, snapshot) {
+          if (!snapshot.hasData) {
+            return const Center(child: CircularProgressIndicator());
+          }
+
+          final docs = snapshot.data!.docs;
+          return ListView.separated(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            itemCount: docs.length,
+            itemBuilder: (context, index) {
+              final doc = docs[index];
+              final data = doc.data() as Map<String, dynamic>;
+              return _buildPostCard(doc.id, data);
+            },
+            separatorBuilder: (context, index) => Divider(
+              height: 1,
+              color: Colors.grey.shade200,
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildPostCard(String messageId, Map<String, dynamic> data) {
     return InkWell(
-      onTap: () => _navigateToCommentsPage(post),
+      onTap: () => _navigateToCommentsPage(messageId, data),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        child: Column(
+        child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            if (post.originalPost != null)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 8.0),
-                child: Row(
-                  children: [
-                    const Icon(Icons.repeat, size: 16, color: Colors.grey),
-                    const SizedBox(width: 8),
-                    Text('${post.sender} reposted', style: const TextStyle(color: Colors.grey, fontWeight: FontWeight.bold)),
-                  ],
-                ),
+            CircleAvatar(
+              radius: 22,
+              child: Text(
+                (data['senderName'] ?? "U")[0],
               ),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                CircleAvatar(
-                  radius: 22,
-                  child: Text(post.originalPost?.avatarInitial ?? post.avatarInitial),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _buildPostHeader(post.originalPost ?? post),
-                      if ((post.originalPost ?? post).message.isNotEmpty)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 4.0),
-                          child: Text((post.originalPost ?? post).message),
-                        ),
-                      if (post.originalPost != null)
-                        Container(
-                          margin: const EdgeInsets.only(top: 12),
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            border: Border.all(color: Colors.grey.shade300),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              _buildPostHeader(post.originalPost!),
-                              if (post.originalPost!.message.isNotEmpty)
-                                Padding(
-                                  padding: const EdgeInsets.only(top: 8.0),
-                                  child: Text(post.originalPost!.message),
-                                ),
-                              if (post.originalPost!.imageFile != null)
-                                Padding(
-                                  padding: const EdgeInsets.only(top: 12.0),
-                                  child: ClipRRect(
-                                    borderRadius: BorderRadius.circular(12.0),
-                                    child: Image.file(File(post.originalPost!.imageFile!.path)),
-                                  ),
-                                ),
-                            ],
-                          ),
-                        ),
-                      if (post.originalPost == null && post.imageFile != null)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 12.0),
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(12.0),
-                            child: Image.file(File(post.imageFile!.path)),
-                          ),
-                        ),
-                      const SizedBox(height: 12),
-                      _buildActionButtons(post),
-                    ],
-                  ),
-                ),
-              ],
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildPostHeader(data),
+                  if ((data['message'] ?? "").isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 4.0),
+                      child: Text(data['message']),
+                    ),
+                  if (data['mediaURL'] != null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 12.0),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(12.0),
+                        child: Image.network(data['mediaURL']),
+                      ),
+                    ),
+                  const SizedBox(height: 12),
+                  _buildActionButtons(messageId, data),
+                ],
+              ),
             ),
           ],
         ),
@@ -212,14 +187,19 @@ class _CommunityPageState extends State<CommunityPage> {
     );
   }
 
-  Widget _buildPostHeader(Post post) {
+  Widget _buildPostHeader(Map<String, dynamic> data) {
+    final timestamp = data['timestamp'] != null
+        ? (data['timestamp'] as Timestamp).toDate()
+        : DateTime.now();
+
     return Row(
       children: [
-        Text(post.sender, style: const TextStyle(fontWeight: FontWeight.bold)),
+        Text(data['senderName'] ?? "Unknown",
+            style: const TextStyle(fontWeight: FontWeight.bold)),
         const SizedBox(width: 4),
         Expanded(
           child: Text(
-            '${post.handle} · ${DateFormat.jm().format(post.timestamp)}',
+            "· ${DateFormat.jm().format(timestamp)}",
             style: TextStyle(color: Colors.grey.shade600),
             overflow: TextOverflow.ellipsis,
           ),
@@ -228,24 +208,36 @@ class _CommunityPageState extends State<CommunityPage> {
     );
   }
 
-  Widget _buildActionButtons(Post post) {
+  Widget _buildActionButtons(String messageId, Map<String, dynamic> data) {
+    final isLiked = data['isLiked'] ?? false;
+    final likes = data['likes'] ?? 0;
+    final reposts = data['reposts'] ?? 0;
+    final replyCount = data['replyCount'] ?? 0;
+
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        _buildActionButton(Icons.chat_bubble_outline, post.comments.length.toString(), () => _navigateToCommentsPage(post)),
-        _buildActionButton(Icons.repeat, post.reposts.toString(), () => _repost(post)),
+        _buildActionButton(Icons.chat_bubble_outline, replyCount.toString(),
+                () => _navigateToCommentsPage(messageId, data)),
+        _buildActionButton(Icons.repeat, reposts.toString(),
+                () => _repost(messageId, data)),
         _buildActionButton(
-          post.isLiked ? Icons.favorite : Icons.favorite_border,
-          post.likes.toString(),
-              () => _toggleLike(post),
-          activeColor: post.isLiked ? Colors.pink : null,
+          isLiked ? Icons.favorite : Icons.favorite_border,
+          likes.toString(),
+              () => _toggleLike(messageId, isLiked, likes),
+          activeColor: isLiked ? Colors.pink : null,
         ),
         _buildActionButton(Icons.bar_chart, '156', () {}),
       ],
     );
   }
 
-  Widget _buildActionButton(IconData icon, String text, VoidCallback onPressed, {Color? activeColor}) {
+  Widget _buildActionButton(
+      IconData icon,
+      String text,
+      VoidCallback onPressed, {
+        Color? activeColor,
+      }) {
     final color = activeColor ?? Colors.grey.shade600;
     return GestureDetector(
       onTap: onPressed,
