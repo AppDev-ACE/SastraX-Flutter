@@ -76,7 +76,7 @@ class _CommentsPageState extends State<CommentsPage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Post'), toolbarHeight: MediaQuery.of(context).size.height * 0.15,
+        title: const Text('Post'), toolbarHeight: MediaQuery.of(context).size.height * 0.14,
       ),
       body: Column(
         children: [

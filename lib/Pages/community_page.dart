@@ -112,7 +112,7 @@ class _CommunityPageState extends State<CommunityPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(automaticallyImplyLeading: false,  toolbarHeight: MediaQuery.of(context).size.height * 0.001,),
+      appBar: AppBar(automaticallyImplyLeading: false,  toolbarHeight: MediaQuery.of(context).size.height * 0.0009,),
       floatingActionButton: FloatingActionButton(
         onPressed: _navigateToComposePage,
         child: const Icon(Icons.add),
