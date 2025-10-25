@@ -1,5 +1,4 @@
 // subject_detail_page.dart
-import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -23,7 +22,7 @@ class SubjectDetailPage extends StatefulWidget {
   final int? assignmentMax;
 
   const SubjectDetailPage({
-    Key? key,
+    super.key,
     required this.subjectName,
     required this.subjectCode,
     required this.maxInternals,
@@ -36,7 +35,7 @@ class SubjectDetailPage extends StatefulWidget {
     this.cia3Max,
     this.assignment,
     this.assignmentMax,
-  }) : super(key: key);
+  });
 
   @override
   State<SubjectDetailPage> createState() => _SubjectDetailPageState();
