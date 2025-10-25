@@ -107,7 +107,7 @@ class _HomePageState extends State<HomePage> {
     return Consumer<ThemeProvider>(
         builder: (_, theme, __) => Scaffold(
             backgroundColor:
-                theme.isDarkMode ? AppTheme.darkBackground : Colors.grey[100],
+            theme.isDarkMode ? AppTheme.darkBackground : Colors.grey[100],
             appBar: AppBar(
                 leadingWidth: appBarHeight * 1.2,
                 toolbarHeight: appBarHeight,
@@ -139,9 +139,9 @@ class _HomePageState extends State<HomePage> {
                 onTap: (i) => setState(() => _currentIndex = i),
                 type: BottomNavigationBarType.fixed,
                 backgroundColor:
-                    theme.isDarkMode ? AppTheme.darkSurface : Colors.white,
+                theme.isDarkMode ? AppTheme.darkSurface : Colors.white,
                 selectedItemColor:
-                    theme.isDarkMode ? AppTheme.neonBlue : AppTheme.primaryBlue,
+                theme.isDarkMode ? AppTheme.neonBlue : AppTheme.primaryBlue,
                 unselectedItemColor: Colors.grey,
                 items: const [
                   BottomNavigationBarItem(
@@ -274,9 +274,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
     // 1. Check Static Cache
     if (DashboardScreen.dashboardCache != null) {
       bool cacheComplete =
-          _checkDataCompleteness(DashboardScreen.dashboardCache!);
+      _checkDataCompleteness(DashboardScreen.dashboardCache!);
       bool triggerKeysPopulated =
-          _checkTriggerKeysPopulated(DashboardScreen.dashboardCache!);
+      _checkTriggerKeysPopulated(DashboardScreen.dashboardCache!);
 
       if (cacheComplete && triggerKeysPopulated) {
         print(
@@ -429,7 +429,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     // --- Update Local State (with added safety) ---
     setState(() {
       studentName = (data.putIfAbsent('profile', () => {}) is Map &&
-              data['profile']['name'] != null)
+          data['profile']['name'] != null)
           ? data['profile']['name'].toString()
           : 'Student';
 
@@ -465,13 +465,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
           tempTotalHrs += subjectTotal;
           tempAttendedHrs += subjectAttended;
           totalMissedClasses +=
-              (subjectTotal - subjectAttended); // Accumulate missed classes
+          (subjectTotal - subjectAttended); // Accumulate missed classes
         }
       }
       totalClasses = tempTotalHrs;
       attendedClasses = tempAttendedHrs;
       attendancePercent =
-          totalClasses > 0 ? (attendedClasses / totalClasses) * 100 : 0.0;
+      totalClasses > 0 ? (attendedClasses / totalClasses) * 100 : 0.0;
 
       // ⭐️ Step 2: Calculate 'Can Skip' Classes
       int totalAllowedSkips = 0; // P20
@@ -506,7 +506,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       isBirthday = false;
       final dobList = _getAsList(data['dob']);
       final dobData =
-          (dobList.isNotEmpty && dobList[0] is Map) ? dobList[0]['dob'] : null;
+      (dobList.isNotEmpty && dobList[0] is Map) ? dobList[0]['dob'] : null;
       if (dobData is String && dobData.isNotEmpty) {
         try {
           final parsed = DateFormat('dd-MM-yyyy').parseStrict(dobData);
@@ -579,112 +579,112 @@ class _DashboardScreenState extends State<DashboardScreen> {
       final List<Future<http.Response>> parallelFutures = [
         http
             .post(
-              Uri.parse(api.profile),
-              headers: {'Content-Type': 'application/json'},
-              body: jsonEncode({'token': effectiveToken}),
-            )
+          Uri.parse(api.profile),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({'token': effectiveToken}),
+        )
             .timeout(apiTimeout),
         http
             .post(
-              Uri.parse(api.profilePic),
-              headers: {'Content-Type': 'application/json'},
-              body: jsonEncode({'token': effectiveToken}),
-            )
+          Uri.parse(api.profilePic),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({'token': effectiveToken}),
+        )
             .timeout(apiTimeout),
         http
             .post(
-              Uri.parse(api.cgpa),
-              headers: {'Content-Type': 'application/json'},
-              body: jsonEncode({'token': effectiveToken}),
-            )
+          Uri.parse(api.cgpa),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({'token': effectiveToken}),
+        )
             .timeout(apiTimeout),
         http
             .post(
-              Uri.parse(api.subjectWiseAttendance),
-              headers: {'Content-Type': 'application/json'},
-              body: jsonEncode({'token': effectiveToken}),
-            )
+          Uri.parse(api.subjectWiseAttendance),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({'token': effectiveToken}),
+        )
             .timeout(apiTimeout),
         http
             .post(
-              Uri.parse(api.timetable),
-              headers: {'Content-Type': 'application/json'},
-              body: jsonEncode({'token': effectiveToken}),
-            )
+          Uri.parse(api.timetable),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({'token': effectiveToken}),
+        )
             .timeout(apiTimeout),
         http
             .post(
-              Uri.parse(api.hourWiseAttendance),
-              headers: {'Content-Type': 'application/json'},
-              body: jsonEncode({'token': effectiveToken}),
-            )
+          Uri.parse(api.hourWiseAttendance),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({'token': effectiveToken}),
+        )
             .timeout(apiTimeout),
         http
             .post(
-              Uri.parse(api.hostelDue),
-              headers: {'Content-Type': 'application/json'},
-              body: jsonEncode({'token': effectiveToken}),
-            )
+          Uri.parse(api.hostelDue),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({'token': effectiveToken}),
+        )
             .timeout(apiTimeout),
         http
             .post(
-              Uri.parse(api.courseMap),
-              headers: {'Content-Type': 'application/json'},
-              body: jsonEncode({'token': effectiveToken}),
-            )
+          Uri.parse(api.courseMap),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({'token': effectiveToken}),
+        )
             .timeout(apiTimeout),
         http
             .post(
-              Uri.parse(api.dob),
-              headers: {'Content-Type': 'application/json'},
-              body: jsonEncode({'token': effectiveToken}),
-            )
+          Uri.parse(api.dob),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({'token': effectiveToken}),
+        )
             .timeout(apiTimeout),
         http
             .post(
-              Uri.parse(api.semGrades),
-              headers: {'Content-Type': 'application/json'},
-              body: jsonEncode({'token': effectiveToken}),
-            )
+          Uri.parse(api.semGrades),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({'token': effectiveToken}),
+        )
             .timeout(apiTimeout),
         http
             .post(
-              Uri.parse(api.studentStatus),
-              headers: {'Content-Type': 'application/json'},
-              body: jsonEncode({'token': effectiveToken}),
-            )
+          Uri.parse(api.studentStatus),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({'token': effectiveToken}),
+        )
             .timeout(apiTimeout),
         http
             .post(
-              Uri.parse(api.attendance),
-              headers: {'Content-Type': 'application/json'},
-              body: jsonEncode({'token': effectiveToken}),
-            )
+          Uri.parse(api.attendance),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({'token': effectiveToken}),
+        )
             .timeout(apiTimeout),
         http
             .post(
-              Uri.parse(api.bunk),
-              headers: {'Content-Type': 'application/json'},
-              body: jsonEncode({'token': effectiveToken}),
-            )
+          Uri.parse(api.bunk),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({'token': effectiveToken}),
+        )
             .timeout(apiTimeout), // Added bunk call
         http
             .post(
-              Uri.parse(api.currentSemCredits),
-              headers: {'Content-Type': 'application/json'},
-              body: jsonEncode({'token': effectiveToken}),
-            )
+          Uri.parse(api.currentSemCredits),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({'token': effectiveToken}),
+        )
             .timeout(apiTimeout),
       ];
       // ⭐️ End Step 5
 
       // Handle API call errors gracefully
       final results =
-          await Future.wait(parallelFutures.map((f) => f.catchError((e) {
-                print("API Call Error: $e");
-                return http.Response(
-                    '{"error": "Timeout or connection error"}', 500);
-              })));
+      await Future.wait(parallelFutures.map((f) => f.catchError((e) {
+        print("API Call Error: $e");
+        return http.Response(
+            '{"error": "Timeout or connection error"}', 500);
+      })));
 
       bool allFailed = results.every((res) => res.statusCode != 200);
       if (allFailed) {
@@ -750,7 +750,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(SnackBar(
               content:
-                  Text(isInitialFetch ? 'Data loaded!' : 'Data refreshed!'),
+              Text(isInitialFetch ? 'Data loaded!' : 'Data refreshed!'),
               backgroundColor: Colors.green,
               duration: Duration(seconds: 2)));
         }
@@ -820,7 +820,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         print(
             "[${DateTime.now()}] DashboardScreen: Got new token. Fetching data with new token...");
         CalendarPage.firebaseEventsCache =
-            null; // Clear calendar cache on refresh
+        null; // Clear calendar cache on refresh
 
         // 1. FETCH DATA FIRST
         await _fetchAndPollData(isInitialFetch: false, updatedToken: newToken);
@@ -1142,7 +1142,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             },
             child: NeonContainer(
               borderColor:
-                  theme.isDarkMode ? AppTheme.neonBlue : AppTheme.primaryBlue,
+              theme.isDarkMode ? AppTheme.neonBlue : AppTheme.primaryBlue,
               child: Row(
                 children: [
                   CircleAvatar(
@@ -1152,7 +1152,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           : AppTheme.primaryBlue,
                       child: Icon(Icons.person,
                           color:
-                              theme.isDarkMode ? Colors.black : Colors.white)),
+                          theme.isDarkMode ? Colors.black : Colors.white)),
                   const SizedBox(width: 16),
                   Expanded(
                     child: Column(
@@ -1203,7 +1203,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               boxShadow: [
                 BoxShadow(
                   color:
-                      Colors.black.withOpacity(theme.isDarkMode ? 0.2 : 0.05),
+                  Colors.black.withOpacity(theme.isDarkMode ? 0.2 : 0.05),
                   blurRadius: 10,
                   offset: const Offset(0, 5),
                 ),
@@ -1286,12 +1286,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
             child: _specialEventLottiePath != null
                 ? _buildSpecialEventLottie(_specialEventLottiePath!)
                 : TimetableWidget(
-                    timetable: timetableData,
-                    isLoading:
-                        _isLoading && DashboardScreen.dashboardCache == null,
-                    hourWiseAttendance: hourWiseAttendanceData,
-                    courseMap: courseMapData,
-                  ),
+              timetable: timetableData,
+              isLoading:
+              _isLoading && DashboardScreen.dashboardCache == null,
+              hourWiseAttendance: hourWiseAttendanceData,
+              courseMap: courseMapData,
+            ),
           ),
         ],
       ),
@@ -1301,11 +1301,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Widget _buildConfettiIfNeeded() {
     return isBirthday
         ? Align(
-            alignment: Alignment.topCenter,
-            child: ConfettiWidget(
-                confettiController: _confettiController,
-                blastDirectionality: BlastDirectionality.explosive),
-          )
+      alignment: Alignment.topCenter,
+      child: ConfettiWidget(
+          confettiController: _confettiController,
+          blastDirectionality: BlastDirectionality.explosive),
+    )
         : const SizedBox.shrink();
   }
 
@@ -1372,57 +1372,57 @@ class _DashboardScreenState extends State<DashboardScreen> {
             duration: const Duration(milliseconds: 300),
             child: showExamSchedule
                 ? Column(
-                    key: const ValueKey('exam'),
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                        Icon(Icons.event,
-                            size: 40,
+                key: const ValueKey('exam'),
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.event,
+                      size: 40,
+                      color: isDark
+                          ? AppTheme.neonBlue
+                          : AppTheme.primaryBlue),
+                  const SizedBox(height: 10),
+                  const FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text('Exam Schedule',
+                          style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 16))),
+                  const SizedBox(height: 4),
+                  FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text(
+                        _getNextExamInfo(),
+                        style: TextStyle(
+                            fontSize: 14,
                             color: isDark
-                                ? AppTheme.neonBlue
-                                : AppTheme.primaryBlue),
-                        const SizedBox(height: 10),
-                        const FittedBox(
-                            fit: BoxFit.scaleDown,
-                            child: Text('Exam Schedule',
-                                style: TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 16))),
-                        const SizedBox(height: 4),
-                        FittedBox(
-                            fit: BoxFit.scaleDown,
-                            child: Text(
-                              _getNextExamInfo(),
-                              style: TextStyle(
-                                  fontSize: 14,
-                                  color: isDark
-                                      ? Colors.white70
-                                      : Colors.grey[600]),
-                              textAlign: TextAlign.center,
-                            )),
-                      ])
+                                ? Colors.white70
+                                : Colors.grey[600]),
+                        textAlign: TextAlign.center,
+                      )),
+                ])
                 : Column(
-                    key: const ValueKey('gpa'),
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                        Icon(Icons.grade,
-                            size: 40,
-                            color: isDark ? AppTheme.neonBlue : Colors.orange),
-                        const SizedBox(height: 10),
-                        const FittedBox(
-                            fit: BoxFit.scaleDown,
-                            child: Text('CGPA',
-                                style: TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 16))),
-                        FittedBox(
-                            fit: BoxFit.scaleDown,
-                            child: Text('$cgpa / 10',
-                                style: TextStyle(
-                                    fontSize: 14,
-                                    color: isDark
-                                        ? Colors.white70
-                                        : Colors.grey[600]))),
-                      ]),
+                key: const ValueKey('gpa'),
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.grade,
+                      size: 40,
+                      color: isDark ? AppTheme.neonBlue : Colors.orange),
+                  const SizedBox(height: 10),
+                  const FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text('CGPA',
+                          style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 16))),
+                  FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text('$cgpa / 10',
+                          style: TextStyle(
+                              fontSize: 14,
+                              color: isDark
+                                  ? Colors.white70
+                                  : Colors.grey[600]))),
+                ]),
           ),
         ),
       ),
